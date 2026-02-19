@@ -1094,8 +1094,18 @@ class OrthoIQAgentSystem {
           return res.status(503).json({ error: 'Research agent not available' });
         }
 
-        // Persist pending status to DB
-        await storeResearchPending(consultationId);
+        // Store in-memory immediately (DB is optional)
+        this.researchResults.set(consultationId, {
+          status: 'processing',
+          startedAt: new Date().toISOString(),
+        });
+
+        // Try DB, non-fatal
+        try {
+          await storeResearchPending(consultationId);
+        } catch (dbErr) {
+          logger.warn(`DB unavailable — using in-memory for ${consultationId}: ${dbErr.message}`);
+        }
 
         // Return immediately before background processing
         res.json({
@@ -1124,21 +1134,25 @@ class OrthoIQAgentSystem {
           )
         ])
           .then(async (result) => {
-            // Persist to DB
-            await storeResearchResult(consultationId, {
-              intro: result.intro,
-              citations: result.citations,
-              searchQuery: result.searchQuery,
-              studiesReviewed: result.studiesReviewed,
-              tier: userTier
-            });
-
-            // Backward compat: update in-memory map for GET polling endpoint
+            // Always update in-memory first
             this.researchResults.set(consultationId, {
               status: 'completed',
               result,
               completedAt: new Date().toISOString(),
             });
+
+            // Try DB, non-fatal
+            try {
+              await storeResearchResult(consultationId, {
+                intro: result.intro,
+                citations: result.citations,
+                searchQuery: result.searchQuery,
+                studiesReviewed: result.studiesReviewed,
+                tier: userTier
+              });
+            } catch (dbErr) {
+              logger.warn(`DB persist failed: ${dbErr.message}`);
+            }
 
             // Award tokens for successful research
             try {
@@ -1186,7 +1200,34 @@ class OrthoIQAgentSystem {
     this.app.get('/research/:consultationId', async (req, res) => {
       try {
         const { consultationId } = req.params;
-        const row = await getResearchResult(consultationId);
+
+        let row = null;
+        try {
+          row = await getResearchResult(consultationId);
+        } catch (dbErr) {
+          logger.info(`DB unavailable for poll, checking in-memory: ${dbErr.message}`);
+        }
+
+        // In-memory fallback when DB unavailable or record not yet persisted
+        if (!row) {
+          const mem = this.researchResults.get(consultationId);
+          if (mem) {
+            if (mem.status === 'processing') {
+              row = { status: 'pending', created_at: mem.startedAt };
+            } else if (mem.status === 'completed') {
+              row = {
+                status: 'complete',
+                intro: mem.result?.intro,
+                citations: JSON.stringify(mem.result?.citations || []),
+                search_query: mem.result?.searchQuery,
+                studies_reviewed: mem.result?.studiesReviewed,
+                tier: mem.result?.tier,
+              };
+            } else if (mem.status === 'failed') {
+              row = { status: 'failed', error: mem.error };
+            }
+          }
+        }
 
         if (!row) {
           return res.status(404).json({ status: 'not_found', error: 'No research request found for this consultation' });
