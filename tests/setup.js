@@ -1,4 +1,5 @@
 // Jest setup file for OrthoIQ Agents tests
+import { jest, beforeAll, afterEach } from '@jest/globals';
 
 // Mock environment variables for testing
 process.env.NODE_ENV = 'test';

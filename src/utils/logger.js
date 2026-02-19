@@ -1,6 +1,8 @@
 import winston from 'winston';
 import { agentConfig } from '../config/agent-config.js';
 
+const isProduction = agentConfig.environment.nodeEnv === 'production';
+
 const logger = winston.createLogger({
   level: agentConfig.environment.logLevel,
   format: winston.format.combine(
@@ -10,16 +12,19 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'orthoiq-agents' },
   transports: [
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'logs/combined.log' }),
+    // Always log to console (Railway captures stdout/stderr)
+    new winston.transports.Console({
+      format: isProduction
+        ? winston.format.json() // JSON for production (easier to parse in Railway)
+        : winston.format.simple() // Simple format for local development
+    }),
   ],
 });
 
-// If we're not in production, log to the console with a simple format
-if (agentConfig.environment.nodeEnv !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.simple()
-  }));
+// Only add file transports in non-production (Railway has ephemeral filesystem)
+if (!isProduction) {
+  logger.add(new winston.transports.File({ filename: 'logs/error.log', level: 'error' }));
+  logger.add(new winston.transports.File({ filename: 'logs/combined.log' }));
 }
 
 export default logger;

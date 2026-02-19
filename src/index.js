@@ -17,6 +17,8 @@ import CdpAccountManager from './utils/cdp-account-manager.js';
 import cacheManager from './utils/cache-manager.js';
 import promptManager from './utils/prompt-manager.js';
 import { validateScope } from './utils/scope-validator.js';
+import { agentConfig } from './config/agent-config.js';
+import { storeResearchPending, storeResearchResult, storeResearchError, getResearchResult } from './utils/research-storage.js';
 
 // Import all specialist agents
 import { TriageAgent } from './agents/triage-agent.js';
@@ -24,6 +26,7 @@ import { PainWhispererAgent } from './agents/pain-whisperer-agent.js';
 import { MovementDetectiveAgent } from './agents/movement-detective-agent.js';
 import { StrengthSageAgent } from './agents/strength-sage-agent.js';
 import { MindMenderAgent } from './agents/mind-mender-agent.js';
+import { ResearchAgent } from './agents/research-agent.js';
 
 // Load environment variables
 dotenv.config();
@@ -86,6 +89,22 @@ async function flagConsultationForMDReview(consultationId, qualityScore) {
   }
 }
 
+function extractBodyPart(symptoms) {
+  if (!symptoms) return null;
+  const text = Array.isArray(symptoms) ? symptoms.join(' ') : String(symptoms);
+  const bodyParts = ['knee', 'shoulder', 'hip', 'ankle', 'wrist', 'elbow', 'back', 'neck', 'spine', 'foot', 'hand'];
+  const lower = text.toLowerCase();
+  return bodyParts.find(part => lower.includes(part)) || null;
+}
+
+function summarizeAgentResponses(responses) {
+  if (!responses || !Array.isArray(responses)) return '';
+  return responses
+    .map(r => `${r.specialist || r.agent}: ${r.summary || r.recommendation || ''}`)
+    .filter(Boolean)
+    .join('; ');
+}
+
 class OrthoIQAgentSystem {
   constructor() {
     this.app = express();
@@ -100,6 +119,8 @@ class OrthoIQAgentSystem {
 
     // Agent registry
     this.agents = {};
+    this.researchAgent = null;
+    this.researchResults = new Map();
     this.isInitialized = false;
   }
 
@@ -115,7 +136,10 @@ class OrthoIQAgentSystem {
       
       // Initialize CDP account manager
       await this.initializeAccountManager();
-      
+
+      // Run database migrations
+      await this.runMigrations();
+
       // Create and register agents
       await this.createAgents();
       
@@ -188,6 +212,35 @@ class OrthoIQAgentSystem {
     }
   }
 
+  async runMigrations() {
+    const sql = (await import('./utils/db.js')).default;
+    if (!sql) {
+      logger.warn('⚠️  DATABASE_URL not set — skipping migrations');
+      return;
+    }
+    try {
+      await sql`CREATE TABLE IF NOT EXISTS research_results (
+        id SERIAL PRIMARY KEY,
+        consultation_id TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'complete', 'failed')),
+        intro TEXT,
+        citations JSONB,
+        search_query TEXT,
+        studies_reviewed INTEGER,
+        tier TEXT CHECK (tier IN ('basic', 'premium')),
+        error TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        completed_at TIMESTAMP
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_research_consultation_id ON research_results(consultation_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_research_status ON research_results(status)`;
+      logger.info('✅ Database migrations complete');
+    } catch (error) {
+      logger.error(`⚠️  Database migration failed: ${error.message}`);
+      // Non-fatal: system can still run without research persistence
+    }
+  }
+
   async createAgents() {
     try {
       logger.info('👥 Creating specialist agents');
@@ -216,6 +269,16 @@ class OrthoIQAgentSystem {
         mindMender: mindMenderAgent
       };
       
+      // Create research agent (not a clinical specialist, kept separate from this.agents)
+      if (agentConfig.research.enabled) {
+        const researchAgent = new ResearchAgent('Research Pioneer', this.accountManager);
+        await this.waitForAgentInitialization(researchAgent);
+        this.researchAgent = researchAgent;
+        logger.info(`✓ ${researchAgent.name} - medical literature research`);
+      } else {
+        logger.info('ℹ️  Research agent disabled (ENABLE_RESEARCH_AGENT=false)');
+      }
+
       // Register agents with coordinator
       Object.entries(this.agents).forEach(([type, agent]) => {
         this.coordinator.registerSpecialist(type, agent);
@@ -259,6 +322,12 @@ class OrthoIQAgentSystem {
         logger.info(`✓ Wallet initialized for ${agent.name}`);
       }
       
+      // Initialize wallet for research agent
+      if (this.researchAgent) {
+        await this.tokenManager.initializeAgentWallet(this.researchAgent);
+        logger.info(`✓ Wallet initialized for ${this.researchAgent.name}`);
+      }
+
       // Initialize token contract with first available wallet provider
       const firstAgent = Object.values(this.agents)[0];
       if (firstAgent && firstAgent.walletProvider) {
@@ -283,7 +352,12 @@ class OrthoIQAgentSystem {
         timestamp: new Date().toISOString(),
         system: 'OrthoIQ Agents',
         agents: Object.keys(this.agents).length,
-        blockchain: this.blockchainUtils ? 'connected' : 'offline'
+        blockchain: this.blockchainUtils ? 'connected' : 'offline',
+        researchAgent: {
+          enabled: !!this.researchAgent,
+          pubmedConfigured: !!agentConfig.pubmed?.apiKey,
+          walletAddress: this.researchAgent?.walletAddress || null,
+        },
       });
     });
 
@@ -321,6 +395,12 @@ class OrthoIQAgentSystem {
               }
             ])
           ),
+          researchAgent: this.researchAgent ? {
+            name: this.researchAgent.name,
+            experience: this.researchAgent.experience,
+            tokenBalance: this.researchAgent.tokenBalance,
+            statistics: this.researchAgent.getResearchStatistics(),
+          } : null,
           coordination: coordinationStats,
           tokenEconomics: networkStats,
           recovery: recoveryStats,
@@ -386,6 +466,7 @@ class OrthoIQAgentSystem {
           requestResearch,
           uploadedImages,
           athleteProfile,
+          userTier,
           ...traditionalCaseData
         } = caseData;
 
@@ -469,6 +550,46 @@ class OrthoIQAgentSystem {
 
           const consultationId = `consultation_${Date.now()}`;
 
+          // Auto-trigger research in background if not explicitly disabled
+          let researchPollEndpoint = null;
+          if (requestResearch !== false && this.researchAgent) {
+            this.researchResults.set(consultationId, {
+              status: 'processing',
+              startedAt: new Date().toISOString(),
+            });
+            researchPollEndpoint = `/research/${consultationId}`;
+
+            this.researchAgent.curateRelevantStudies(caseData, 'basic')
+              .then(async (result) => {
+                this.researchResults.set(consultationId, {
+                  status: 'completed',
+                  result,
+                  completedAt: new Date().toISOString(),
+                });
+                try {
+                  await this.tokenManager.distributeTokenReward(
+                    this.researchAgent.agentId,
+                    {
+                      success: result.success,
+                      literatureSearchCompleted: true,
+                      relevantStudiesFound: result.citations?.length > 0,
+                    },
+                    { walletProvider: this.researchAgent.walletProvider }
+                  );
+                } catch (tokenErr) {
+                  logger.warn(`Research token reward failed: ${tokenErr.message}`);
+                }
+              })
+              .catch((err) => {
+                this.researchResults.set(consultationId, {
+                  status: 'failed',
+                  error: err.message,
+                  failedAt: new Date().toISOString(),
+                });
+                logger.error(`Auto-research failed for ${consultationId}: ${err.message}`);
+              });
+          }
+
           // Return immediately to user (target: <5s)
           res.json({
             success: true,
@@ -477,6 +598,7 @@ class OrthoIQAgentSystem {
             status: 'processing',
             message: 'Immediate triage assessment complete. Full multi-specialist consultation in progress.',
             consultationId,
+            researchPollEndpoint,
             responseTime: Date.now() - startTime,
             timestamp: new Date().toISOString()
           });
@@ -563,17 +685,36 @@ class OrthoIQAgentSystem {
         
         // Cache successful result
         await cacheManager.set(caseData, consultationResult);
-        
+
+        // Trigger research asynchronously (non-blocking)
+        let researchPollEndpoint = null;
+        if (requestResearch !== false && this.researchAgent) {
+          researchPollEndpoint = `/research/${consultationResult.consultationId}`;
+          this.triggerResearchAgent(
+            consultationResult.consultationId,
+            caseData,
+            consultationResult,
+            userTier || 'basic'
+          ).catch(err => {
+            logger.error(`Research agent background error: ${err.message}`);
+          });
+        }
+
         // Trigger learning mode in background if needed
         if (mode === 'fast' && promptManager.shouldRunLearningMode(caseData, consultationResult, this.agents.triage)) {
           setImmediate(() => {
             this.runLearningMode(caseData, consultationResult);
           });
         }
-        
+
         res.json({
           success: true,
           consultation: consultationResult,
+          research: researchPollEndpoint ? {
+            status: 'pending',
+            estimatedSeconds: 15,
+            pollEndpoint: researchPollEndpoint,
+          } : undefined,
           fromCache: false,
           mode,
           responseTime: Date.now() - startTime,
@@ -940,6 +1081,156 @@ class OrthoIQAgentSystem {
       }
     });
 
+    // Research endpoints
+    this.app.post('/research/trigger', async (req, res) => {
+      try {
+        const { consultationId, caseData, consultationResult, userTier = 'basic' } = req.body;
+
+        if (!consultationId || !caseData || !consultationResult) {
+          return res.status(400).json({ error: 'consultationId, caseData, and consultationResult are required' });
+        }
+
+        if (!this.researchAgent) {
+          return res.status(503).json({ error: 'Research agent not available' });
+        }
+
+        // Persist pending status to DB
+        await storeResearchPending(consultationId);
+
+        // Return immediately before background processing
+        res.json({
+          success: true,
+          consultationId,
+          status: 'pending',
+          estimatedSeconds: 15
+        });
+
+        // Build enriched query from consultation context
+        const enrichedQuery = {
+          primaryComplaint: caseData.primaryComplaint,
+          symptoms: caseData.symptoms,
+          duration: caseData.duration,
+          bodyPart: extractBodyPart(caseData.symptoms),
+          triageContext: consultationResult.triage,
+          agentRecommendations: summarizeAgentResponses(consultationResult.responses)
+        };
+
+        // Fire-and-forget: curate studies in background with 15s timeout
+        const RESEARCH_TIMEOUT_MS = 15000;
+        Promise.race([
+          this.researchAgent.curateRelevantStudies(enrichedQuery, userTier),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Research timed out after 15 seconds')), RESEARCH_TIMEOUT_MS)
+          )
+        ])
+          .then(async (result) => {
+            // Persist to DB
+            await storeResearchResult(consultationId, {
+              intro: result.intro,
+              citations: result.citations,
+              searchQuery: result.searchQuery,
+              studiesReviewed: result.studiesReviewed,
+              tier: userTier
+            });
+
+            // Backward compat: update in-memory map for GET polling endpoint
+            this.researchResults.set(consultationId, {
+              status: 'completed',
+              result,
+              completedAt: new Date().toISOString(),
+            });
+
+            // Award tokens for successful research
+            try {
+              const outcome = {
+                success: result.success,
+                literatureSearchCompleted: true,
+                relevantStudiesFound: result.citations?.length > 0,
+                highImpactJournal: result.citations?.some(c => c.qualityScore >= 15),
+                recentEvidence: result.citations?.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
+                multipleStudyTypes: new Set(result.citations?.map(c => c.studyType)).size > 1,
+              };
+              await this.tokenManager.distributeTokenReward(
+                this.researchAgent.agentId,
+                outcome,
+                { walletProvider: this.researchAgent.walletProvider }
+              );
+            } catch (tokenErr) {
+              logger.warn(`Research token reward failed: ${tokenErr.message}`);
+            }
+
+            logger.info(`Research completed for ${consultationId}: ${result.citations?.length || 0} citations`);
+          })
+          .catch(async (err) => {
+            // Persist error to DB
+            try {
+              await storeResearchError(consultationId, err.message);
+            } catch (dbErr) {
+              logger.error(`Failed to persist research error to DB: ${dbErr.message}`);
+            }
+
+            // Backward compat: update in-memory map
+            this.researchResults.set(consultationId, {
+              status: 'failed',
+              error: err.message,
+              failedAt: new Date().toISOString(),
+            });
+            logger.error(`Research failed for ${consultationId}: ${err.message}`);
+          });
+      } catch (error) {
+        logger.error(`Research trigger API error: ${error.message}`);
+        res.status(500).json({ error: 'Research trigger failed', message: error.message });
+      }
+    });
+
+    this.app.get('/research/:consultationId', async (req, res) => {
+      try {
+        const { consultationId } = req.params;
+        const row = await getResearchResult(consultationId);
+
+        if (!row) {
+          return res.status(404).json({ status: 'not_found', error: 'No research request found for this consultation' });
+        }
+
+        if (row.status === 'pending') {
+          const elapsedSeconds = (Date.now() - new Date(row.created_at).getTime()) / 1000;
+          const estimatedSeconds = Math.max(0, 15 - Math.round(elapsedSeconds));
+          return res.json({ status: 'pending', estimatedSeconds });
+        }
+
+        if (row.status === 'complete') {
+          let citations = [];
+          try {
+            citations = JSON.parse(row.citations);
+          } catch (_) { /* default to [] */ }
+
+          return res.json({
+            status: 'complete',
+            research: {
+              intro: row.intro,
+              citations,
+              searchQuery: row.search_query,
+              studiesReviewed: row.studies_reviewed,
+              tier: row.tier,
+            },
+          });
+        }
+
+        if (row.status === 'failed') {
+          return res.json({
+            status: 'failed',
+            error: row.error,
+            fallback: 'Research unavailable - recommendations based on clinical guidelines',
+          });
+        }
+
+        res.json({ status: row.status });
+      } catch (error) {
+        logger.error(`Research poll API error: ${error.message}`);
+        res.status(500).json({ error: 'Failed to get research status', message: error.message });
+      }
+    });
+
     // API documentation endpoint
     this.app.get('/docs', (req, res) => {
       res.json({
@@ -971,6 +1262,10 @@ class OrthoIQAgentSystem {
             resolveMDReview: 'POST /predictions/resolve/md-review - Resolve predictions with MD review data',
             resolveUserModal: 'POST /predictions/resolve/user-modal - Resolve predictions with user feedback modal',
             resolveFollowUp: 'POST /predictions/resolve/follow-up - Resolve predictions with user follow-up data'
+          },
+          research: {
+            trigger: 'POST /research/trigger - Trigger async research literature curation',
+            poll: 'GET /research/:consultationId - Poll research status and results'
           }
         },
         agents: Object.fromEntries(
@@ -1087,6 +1382,68 @@ class OrthoIQAgentSystem {
     }
   }
   
+  /**
+   * Trigger research agent asynchronously - persists to DB, awards tokens.
+   * Call fire-and-forget (.catch() errors in the caller).
+   */
+  async triggerResearchAgent(consultationId, caseData, consultationResult, userTier) {
+    await storeResearchPending(consultationId);
+
+    try {
+      const RESEARCH_TIMEOUT_MS = 15000;
+      const enrichedQuery = {
+        primaryComplaint: caseData.primaryComplaint,
+        symptoms: caseData.symptoms,
+        duration: caseData.duration,
+        bodyPart: extractBodyPart(caseData.symptoms),
+        triageContext: consultationResult.triage,
+        agentRecommendations: summarizeAgentResponses(consultationResult.responses),
+      };
+
+      const result = await Promise.race([
+        this.researchAgent.curateRelevantStudies(enrichedQuery, userTier),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Research timed out after 15 seconds')), RESEARCH_TIMEOUT_MS)
+        ),
+      ]);
+
+      await storeResearchResult(consultationId, {
+        intro: result.intro,
+        citations: result.citations,
+        searchQuery: result.searchQuery,
+        studiesReviewed: result.studiesReviewed,
+        tier: userTier,
+      });
+
+      try {
+        const outcome = {
+          success: result.success,
+          literatureSearchCompleted: true,
+          relevantStudiesFound: result.citations?.length > 0,
+          highImpactJournal: result.citations?.some(c => c.qualityScore >= 15),
+          recentEvidence: result.citations?.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
+          multipleStudyTypes: new Set(result.citations?.map(c => c.studyType)).size > 1,
+        };
+        await this.tokenManager.distributeTokenReward(
+          this.researchAgent.agentId,
+          outcome,
+          { walletProvider: this.researchAgent.walletProvider }
+        );
+      } catch (tokenErr) {
+        logger.warn(`Research token reward failed: ${tokenErr.message}`);
+      }
+
+      logger.info(`Research completed for ${consultationId}: ${result.citations?.length || 0} citations`);
+    } catch (error) {
+      try {
+        await storeResearchError(consultationId, error.message);
+      } catch (dbErr) {
+        logger.error(`Failed to persist research error to DB: ${dbErr.message}`);
+      }
+      logger.error(`Research failed for ${consultationId}: ${error.message}`);
+    }
+  }
+
   /**
    * Run learning mode analysis in background
    */

@@ -1,20 +1,54 @@
 # OrthoIQ Agents - TODO
 
+## ✅ Recently Completed (v0.5.0 - 2026-01-06)
+
+### Railway Deployment & Blockchain Integration
+- [x] Generate production security secrets (JWT_SECRET, API_KEY, ENCRYPTION_KEY)
+- [x] Create comprehensive Railway deployment guide
+- [x] Document all 48 environment variables for production
+- [x] Create post-deployment test suite (10 tests)
+- [x] Develop ERC20 OrthoIQAgentToken smart contract
+- [x] Setup Hardhat infrastructure for Base Sepolia
+- [x] Write contract deployment script with Basescan verification
+- [x] Write agent authorization script
+- [x] Write balance checking script
+- [x] Update blockchain-utils.js for real blockchain integration
+- [x] Update token-manager.js for real blockchain rewards
+- [x] Add mock mode flag support (MOCK_BLOCKCHAIN_RESPONSES)
+- [x] Implement graceful fallback mechanisms
+- [x] Update package.json with Hardhat dependencies
+- [x] Add npm scripts for contract management
+- [x] Create implementation summary documentation
+- [x] Update CHANGELOG.md for v0.5.0
+
+---
+
+# OrthoIQ Agents - TODO
+
 ## High Priority
 
-### Deployment & Infrastructure
-- [ ] Deploy to Railway with mock blockchain
+### Deployment & Infrastructure (Next Steps)
+- [ ] **Deploy to Railway** - Follow `RAILWAY_DEPLOYMENT.md` guide
+- [ ] **Post-deployment testing** - Run 10 test suite from deployment guide
 - [ ] Set up production logging and monitoring
-- [ ] Configure environment variables for production
 - [ ] Set up error tracking (Sentry or similar)
 
-### Token Economics & Blockchain
-- [ ] Design OIQ token economics (supply, distribution, rewards)
-- [ ] Deploy OIQ token contract to Base Sepolia testnet
-- [ ] Create CDP AgentKit wallets for each agent
+### Base Sepolia Migration (Phase 3)
+- [ ] **Install Hardhat dependencies** - `npm install`
+- [ ] **Compile smart contract** - `npm run compile:contract`
+- [ ] **Generate deployer wallet** - Save private key securely
+- [ ] **Fund deployer wallet** - 0.1 ETH from Base Sepolia faucet
+- [ ] **Deploy token contract** - `npm run deploy:contract`
+- [ ] **Extract agent wallet addresses** - From Railway logs
+- [ ] **Fund agent wallets** - 0.05 ETH each from faucet
+- [ ] **Authorize agents as minters** - `npm run authorize:agents`
+- [ ] **Update Railway env** - Set TOKEN_CONTRACT_ADDRESS, MOCK_BLOCKCHAIN_RESPONSES=false
+- [ ] **Verify on Basescan** - Check mint transactions
 - [ ] Test token distribution and prediction staking on testnet
+
+### Future Blockchain Steps
 - [ ] Audit token contract (optional but recommended)
-- [ ] Deploy to Base Mainnet
+- [ ] Deploy to Base Mainnet for production
 
 ---
 
@@ -96,6 +130,7 @@ Create dedicated `shouldIncludeMindMender()` method with:
 - [x] MindMender keyword detection (Option 1)
 - [x] Feedback modal integration
 - [x] Milestone follow-up structure
+- [x] **Orthopedic scope validation** (v0.4.0) - Pre-agent filtering with 69 tests
 
 ---
 
@@ -118,3 +153,4 @@ Create dedicated `shouldIncludeMindMender()` method with:
 - Prediction staking requires persistent blockchain wallets
 - MindMender routing needs monitoring after Option 1 deployment
 - Consider A/B testing for specialist routing algorithms
+- **Scope Validation**: Monitor redirect logs to tune keyword dictionaries; toggle with `ENABLE_SCOPE_VALIDATION=false` if needed

@@ -3,6 +3,27 @@ import logger from './logger.js';
 import { agentConfig } from '../config/agent-config.js';
 import BlockchainUtils from './blockchain-utils.js';
 
+export const RESEARCH_TOKEN_EVENTS = {
+  // Base participation
+  LITERATURE_SEARCH_COMPLETED: 1,
+  RELEVANT_STUDIES_FOUND: 3,
+  HIGH_IMPACT_JOURNAL: 5,
+  RECENT_EVIDENCE: 2,
+  MULTIPLE_STUDY_TYPES: 3,
+
+  // User engagement
+  PREMIUM_ACCESS: 2,
+
+  // Validation
+  MD_CONFIRMS_HELPFUL: 8,
+  USER_CLICKED_CITATIONS: 1,
+
+  // Penalties
+  LOW_RELEVANCE: -2,
+  NO_STUDIES_FOUND: 0,
+  API_ERROR: 0,
+};
+
 export class TokenManager {
   constructor() {
     this.tokenTransactions = new Map();
@@ -56,7 +77,14 @@ export class TokenManager {
       // Risk mitigation
       prevented_complications: 25,
       successful_risk_mitigation: 15,
-      early_intervention: 10
+      early_intervention: 10,
+
+      // Research and evidence curation
+      literature_search_completed: 1,
+      relevant_studies_found: 3,
+      high_impact_journal: 5,
+      recent_evidence: 2,
+      multiple_study_types: 3
     };
   }
 
@@ -258,7 +286,28 @@ export class TokenManager {
     if (outcome.riskMitigation) {
       totalReward += this.rewardRules.successful_risk_mitigation;
     }
-    
+
+    // Research and evidence curation rewards
+    if (outcome.literatureSearchCompleted) {
+      totalReward += this.rewardRules.literature_search_completed;
+    }
+
+    if (outcome.relevantStudiesFound) {
+      totalReward += this.rewardRules.relevant_studies_found;
+    }
+
+    if (outcome.highImpactJournal) {
+      totalReward += this.rewardRules.high_impact_journal;
+    }
+
+    if (outcome.recentEvidence) {
+      totalReward += this.rewardRules.recent_evidence;
+    }
+
+    if (outcome.multipleStudyTypes) {
+      totalReward += this.rewardRules.multiple_study_types;
+    }
+
     // Additional multipliers
     const experienceMultiplier = additionalData.experienceMultiplier || 1.0;
     const qualityMultiplier = additionalData.qualityMultiplier || 1.0;
@@ -293,22 +342,33 @@ export class TokenManager {
   async processBlockchainReward(walletAddress, amount, transactionId, walletProvider) {
     try {
       logger.info(`Processing blockchain reward: ${amount} tokens to ${walletAddress}`);
-      
-      if (!this.tokenContractAddress || !walletProvider) {
-        logger.warn('Token contract or wallet provider not available, using simulated transaction');
+
+      // Check if blockchain is disabled or in mock mode
+      if (!agentConfig.blockchain.enabled || agentConfig.blockchain.mockResponses) {
+        logger.debug('Mock blockchain mode enabled, returning simulated transaction');
         return this.createSimulatedTransaction(walletAddress, amount);
       }
-      
-      // Mint tokens to the agent wallet
+
+      if (!this.tokenContractAddress) {
+        logger.warn('Token contract address not set, falling back to simulated transaction');
+        return this.createSimulatedTransaction(walletAddress, amount);
+      }
+
+      if (!walletProvider) {
+        logger.warn('Wallet provider not available for real minting, falling back to simulated transaction');
+        return this.createSimulatedTransaction(walletAddress, amount);
+      }
+
+      // Mint tokens to the agent wallet on real blockchain
       const mintResult = await this.blockchainUtils.mintTokensToAgent(
         this.tokenContractAddress,
         walletAddress,
         amount,
         walletProvider
       );
-      
-      logger.info(`Blockchain reward processed: ${mintResult.transactionHash}`);
-      
+
+      logger.info(`Blockchain reward processed: ${mintResult.transactionHash || 'simulated'}`);
+
       return {
         hash: mintResult.transactionHash,
         from: '0x0000000000000000000000000000000000000000', // Minting from zero address
@@ -317,7 +377,7 @@ export class TokenManager {
         gasUsed: mintResult.gasUsed || 21000,
         blockNumber: mintResult.blockNumber || 0,
         timestamp: mintResult.timestamp,
-        isMock: mintResult.isMock || false
+        isMock: mintResult.isMock !== false // Default to true if not explicitly false
       };
     } catch (error) {
       logger.error(`Blockchain reward processing failed: ${error.message}`);

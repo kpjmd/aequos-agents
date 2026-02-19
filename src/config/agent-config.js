@@ -76,6 +76,18 @@ export const agentConfig = {
     encryptionKey: process.env.ENCRYPTION_KEY,
   },
   
+  // Research Agent Configuration
+  research: {
+    enabled: process.env.ENABLE_RESEARCH_AGENT !== 'false', // default: enabled
+  },
+
+  // PubMed Research Configuration
+  pubmed: {
+    apiKey: process.env.PUBMED_API_KEY,
+    requestTimeout: parseInt(process.env.PUBMED_REQUEST_TIMEOUT) || 15000,
+    maxResults: parseInt(process.env.PUBMED_MAX_RESULTS) || 20,
+  },
+
   // Development/Testing
   environment: {
     nodeEnv: process.env.NODE_ENV || 'development',
