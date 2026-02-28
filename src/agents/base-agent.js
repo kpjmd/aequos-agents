@@ -26,7 +26,7 @@ export class BaseAgent {
   async initializeAgent() {
     try {
       // Initialize Claude LLM with model selection based on mode
-      const modelName = process.env.CLAUDE_MODEL || 'claude-4-sonnet-latest'; // Claude 4 Sonnet
+      const modelName = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6'; // Claude Sonnet 4.6
 
       this.llm = new ChatAnthropic({
         anthropicApiKey: agentConfig.claude.apiKey,
@@ -34,14 +34,16 @@ export class BaseAgent {
         temperature: 0.3, // Lower temperature for medical accuracy
         maxTokens: parseInt(process.env.MAX_TOKENS) || 2500, // Balanced for complete responses within timeout
       });
+      this.llm.topP = undefined; // Prevent LangChain default of -1 which newer models reject
 
-      // Fast mode LLM (using same model for consistency)
+      // Fast mode LLM — Haiku for fast/summary tasks
       this.fastLLM = new ChatAnthropic({
         anthropicApiKey: agentConfig.claude.apiKey,
-        modelName: process.env.FAST_MODEL || modelName, // Same Sonnet model for fast mode
+        modelName: process.env.FAST_MODEL || 'claude-haiku-4-5-20251001', // Haiku for fast/summary tasks
         temperature: 0.2, // Even lower for consistency
         maxTokens: parseInt(process.env.FAST_MAX_TOKENS) || 1000, // Increased for complete responses
       });
+      this.fastLLM.topP = undefined; // Prevent LangChain default of -1 which newer models reject
 
       // Initialize blockchain features only if enabled
       if (process.env.ENABLE_BLOCKCHAIN === 'true') {

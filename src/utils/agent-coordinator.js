@@ -186,6 +186,7 @@ export class AgentCoordinator {
       
       return {
         consultationId,
+        caseData,
         synthesizedRecommendations,
         participatingSpecialists: availableSpecialists,
         responses: Array.from(responses.values()),
