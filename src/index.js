@@ -1094,6 +1094,31 @@ class OrthoIQAgentSystem {
           return res.status(503).json({ error: 'Research agent not available' });
         }
 
+        // Idempotency check: skip if research already running or complete
+        try {
+          const existing = await getResearchResult(consultationId);
+          if (existing) {
+            if (existing.status === 'complete') {
+              logger.info(`Research already complete for ${consultationId}, skipping duplicate trigger`);
+              return res.json({ success: true, consultationId, status: 'complete' });
+            }
+            if (existing.status === 'pending') {
+              logger.info(`Research already in progress for ${consultationId}, skipping duplicate trigger`);
+              return res.json({ success: true, consultationId, status: 'pending', estimatedSeconds: 15 });
+            }
+            // status === 'failed': allow re-triggering
+          }
+        } catch (dbErr) {
+          logger.warn(`DB idempotency check failed, proceeding with trigger: ${dbErr.message}`);
+        }
+
+        // Also check in-memory (handles case where DB check fails)
+        const inMem = this.researchResults.get(consultationId);
+        if (inMem && (inMem.status === 'processing' || inMem.status === 'completed')) {
+          logger.info(`Research in-memory for ${consultationId}, skipping duplicate trigger`);
+          return res.json({ success: true, consultationId, status: 'pending', estimatedSeconds: 15 });
+        }
+
         // Store in-memory immediately (DB is optional)
         this.researchResults.set(consultationId, {
           status: 'processing',
