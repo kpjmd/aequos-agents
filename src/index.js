@@ -1177,7 +1177,7 @@ class OrthoIQAgentSystem {
                 intro: result.intro,
                 citations: result.citations,
                 searchQuery: result.searchQuery,
-                studiesReviewed: result.studiesReviewed,
+                studiesReviewed: result.totalFound,
                 tier: userTier
               });
             } catch (dbErr) {
@@ -1272,7 +1272,9 @@ class OrthoIQAgentSystem {
         if (row.status === 'complete') {
           let citations = [];
           try {
-            citations = JSON.parse(row.citations);
+            // citations column is JSONB — postgres.js auto-deserializes on SELECT,
+            // so row.citations arrives as a JS Array, not a JSON string.
+            citations = Array.isArray(row.citations) ? row.citations : JSON.parse(row.citations);
           } catch (_) { /* default to [] */ }
 
           return res.json({
@@ -1493,7 +1495,7 @@ class OrthoIQAgentSystem {
           intro: result.intro,
           citations: result.citations,
           searchQuery: result.searchQuery,
-          studiesReviewed: result.studiesReviewed,
+          studiesReviewed: result.totalFound,
           tier: userTier,
         });
       } catch (dbErr) {
