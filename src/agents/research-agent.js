@@ -107,10 +107,18 @@ Guidelines:
       logger.info(`PubMed search query: ${searchQuery}`);
 
       // Search PubMed for relevant PMIDs
-      const pmids = await this.searchPubMed(searchQuery);
+      let pmids = await this.searchPubMed(searchQuery);
+
+      // Fallback: if no results with strict query, retry without study-type filter
+      if (!pmids || pmids.length === 0) {
+        logger.info('No PubMed results with structured query — retrying with broader search');
+        const broaderQuery = this.buildBroaderQuery(clinicalQuery);
+        logger.info(`Broader PubMed query: ${broaderQuery}`);
+        pmids = await this.searchPubMed(broaderQuery);
+      }
 
       if (!pmids || pmids.length === 0) {
-        logger.info('No PubMed results found');
+        logger.info('No PubMed results found after fallback search');
         return {
           success: true,
           citations: [],
@@ -203,6 +211,25 @@ Guidelines:
       'ohss': 'overhead shoulder syndrome',
       'slap': 'superior labrum anterior posterior',
       'rct': 'rotator cuff tear',
+      // Wrist / hand
+      'tfcc': 'triangular fibrocartilage complex',
+      'druj': 'distal radioulnar joint',
+      // Shoulder
+      'rsa': 'reverse shoulder arthroplasty',
+      'tsa': 'total shoulder arthroplasty',
+      // Spine
+      'ivd': 'intervertebral disc',
+      'ddd': 'degenerative disc disease',
+      // Ankle / foot
+      'atfl': 'anterior talofibular ligament',
+      'cfl': 'calcaneofibular ligament',
+      // Hip
+      'fai': 'femoroacetabular impingement',
+      // General
+      'oa': 'osteoarthritis',
+      'ra': 'rheumatoid arthritis',
+      'nsaid': 'nonsteroidal anti-inflammatory',
+      'orif': 'open reduction internal fixation',
     };
 
     for (const [abbr, expanded] of Object.entries(abbreviations)) {
@@ -213,15 +240,193 @@ Guidelines:
       }
     }
 
-    // Add PubMed filters
+    // Extract focused clinical terms instead of sending raw natural language to PubMed
+    const clinicalTerms = this.extractClinicalTerms(queryText, clinicalQuery);
+
+    // Build structured PubMed query
     const filters = [];
-    filters.push(`(${queryText})`);
+
+    if (clinicalTerms.length > 0) {
+      filters.push(`(${clinicalTerms.join(' AND ')})`);
+    } else {
+      // Fallback: try structured bodyPart/location before using raw text
+      const structuredBodyPart =
+        typeof clinicalQuery === 'object'
+          ? (clinicalQuery.bodyPart || clinicalQuery.location || '').toLowerCase().trim()
+          : '';
+      if (structuredBodyPart) {
+        filters.push(`(${structuredBodyPart})`);
+      } else {
+        // Last resort: raw text — truncated to first 8 words to avoid over-constraining PubMed
+        const shortFallback = queryText.split(' ').slice(0, 8).join(' ');
+        filters.push(`(${shortFallback})`);
+      }
+    }
+
+    // Note: no MeSH scope filter here — clinical terms already ensure orthopedic focus,
+    // and the scope filter combined with date+studytype filters was too restrictive (0 results).
+    // The relevance scoring in filterByQuality catches any stray off-topic results.
     filters.push('("2020"[Date - Publication] : "2025"[Date - Publication])');
     filters.push('(Meta-Analysis[pt] OR Systematic Review[pt] OR Randomized Controlled Trial[pt] OR Clinical Trial[pt] OR Review[pt])');
     filters.push('English[la]');
     filters.push('Humans[MeSH]');
 
     return filters.join(' AND ');
+  }
+
+  /**
+   * Broader fallback query — drops study-type filter to cast a wider net.
+   * Used when the primary query returns 0 results.
+   */
+  buildBroaderQuery(clinicalQuery) {
+    let queryText = '';
+    if (typeof clinicalQuery === 'string') {
+      queryText = clinicalQuery;
+    } else {
+      const parts = [];
+      if (clinicalQuery.primaryComplaint) parts.push(clinicalQuery.primaryComplaint);
+      if (clinicalQuery.symptoms && clinicalQuery.symptoms !== clinicalQuery.primaryComplaint) parts.push(clinicalQuery.symptoms);
+      queryText = parts.join(' ');
+    }
+    queryText = queryText.toLowerCase().trim();
+
+    const clinicalTerms = this.extractClinicalTerms(queryText, clinicalQuery);
+    let termClause;
+    if (clinicalTerms.length > 0) {
+      termClause = `(${clinicalTerms.join(' AND ')})`;
+    } else {
+      const structuredBodyPart =
+        typeof clinicalQuery === 'object'
+          ? (clinicalQuery.bodyPart || clinicalQuery.location || '').toLowerCase().trim()
+          : '';
+      if (structuredBodyPart) {
+        termClause = `(${structuredBodyPart})`;
+      } else {
+        const shortFallback = queryText.split(' ').slice(0, 8).join(' ');
+        termClause = `(${shortFallback})`;
+      }
+    }
+
+    return [
+      termClause,
+      '("2018"[Date - Publication] : "2025"[Date - Publication])',
+      'English[la]',
+      'Humans[MeSH]',
+    ].join(' AND ');
+  }
+
+  /**
+   * Extract focused clinical terms from free text for PubMed search.
+   * Uses simple unquoted keywords so PubMed automatic term mapping works correctly.
+   * Returns max 3 terms to avoid over-constraining the query.
+   */
+  extractClinicalTerms(queryText, clinicalQuery) {
+    const terms = [];
+
+    // 1. Body part / anatomical term — simple unquoted keywords for PubMed auto-mapping
+    const bodyPartMap = {
+      'wrist': 'wrist',
+      'knee': 'knee',
+      'shoulder': 'shoulder',
+      'hip': 'hip',
+      'ankle': 'ankle',
+      'elbow': 'elbow',
+      'back': 'lumbar',
+      'lower back': 'lumbar',
+      'neck': 'cervical',
+      'spine': 'spine',
+      'foot': 'foot',
+      'hand': 'hand',
+      'finger': 'finger',
+      'thumb': 'thumb',
+      'forearm': 'forearm',
+    };
+
+    // Prefer structured bodyPart/location field
+    const structuredPart =
+      (typeof clinicalQuery === 'object' && (clinicalQuery.bodyPart || clinicalQuery.location)) || '';
+    const searchText = (structuredPart + ' ' + queryText).toLowerCase();
+
+    for (const [keyword, meshTerm] of Object.entries(bodyPartMap)) {
+      if (searchText.includes(keyword)) {
+        terms.push(meshTerm);
+        break; // one body part is enough
+      }
+    }
+
+    // 2. Condition / diagnosis terms — use simple keywords, NOT quoted MeSH descriptors.
+    // Quoted MeSH phrases (e.g. "fractures, bone") require exact phrase match in free text.
+    // Simple keywords let PubMed's automatic term mapping do the right thing.
+    const conditionMap = {
+      'triangular fibrocartilage': 'triangular fibrocartilage',
+      'triangular fibrocartilage complex': 'triangular fibrocartilage',
+      'anterior cruciate ligament': '"anterior cruciate ligament"',
+      'posterior cruciate ligament': '"posterior cruciate ligament"',
+      'medial collateral ligament': '"medial collateral ligament"',
+      'rotator cuff': '"rotator cuff"',
+      'meniscus': 'meniscus',
+      'meniscal': 'meniscus',
+      'labrum': 'labrum',
+      'labral': 'labrum',
+      'tendinitis': 'tendinitis',
+      'tendinopathy': 'tendinopathy',
+      'tendon': 'tendon',
+      'fracture': 'fracture',
+      'dislocation': 'dislocation',
+      'sprain': 'sprain',
+      'strain': 'strain',
+      'osteoarthritis': 'osteoarthritis',
+      'bursitis': 'bursitis',
+      'impingement': 'impingement',
+      'plantar fasciitis': '"plantar fasciitis"',
+      'carpal tunnel': '"carpal tunnel"',
+      'sciatica': 'sciatica',
+      'herniated disc': '"disc herniation"',
+      'disc herniation': '"disc herniation"',
+      'scoliosis': 'scoliosis',
+      'frozen shoulder': '"frozen shoulder"',
+      'adhesive capsulitis': '"adhesive capsulitis"',
+      'tennis elbow': '"tennis elbow"',
+      'lateral epicondylitis': 'epicondylitis',
+      'medial epicondylitis': 'epicondylitis',
+      'achilles': 'achilles tendon',
+      'femoroacetabular': '"femoroacetabular impingement"',
+      'distal radioulnar': '"distal radioulnar joint"',
+    };
+
+    for (const [keyword, term] of Object.entries(conditionMap)) {
+      if (searchText.includes(keyword)) {
+        terms.push(term);
+        break; // one condition term is enough
+      }
+    }
+
+    // 3. Treatment / intervention term (optional third term) — simple keywords only
+    const treatmentMap = {
+      'arthroscopy': 'arthroscopy',
+      'arthroscopic': 'arthroscopy',
+      'arthroplasty': 'arthroplasty',
+      'replacement': 'replacement',
+      'surgery': 'surgery',
+      'surgical': 'surgery',
+      'rehabilitation': 'rehabilitation',
+      'physical therapy': '"physical therapy"',
+      'exercise': 'exercise',
+      'injection': 'injection',
+      'prp': '"platelet rich plasma"',
+      'stem cell': '"stem cell"',
+    };
+
+    if (terms.length < 3) {
+      for (const [keyword, term] of Object.entries(treatmentMap)) {
+        if (searchText.includes(keyword)) {
+          terms.push(term);
+          break;
+        }
+      }
+    }
+
+    return terms.slice(0, 3);
   }
 
   async searchPubMed(query) {
@@ -506,17 +711,21 @@ Guidelines:
       // Cap at 10
       const qualityScore = Math.min(score, 10);
 
-      // Relevance scoring
-      const relevanceScore = this.scoreRelevance(study.title, clinicalQuery);
+      // Relevance scoring (pass full study object for abstract access)
+      const relevanceScore = this.scoreRelevance(study, clinicalQuery);
 
-      return { ...study, qualityScore, relevanceScore };
+      // Combined score: 40% quality, 60% relevance
+      const combinedScore = (qualityScore * 0.4) + (relevanceScore * 0.6);
+
+      return { ...study, qualityScore, relevanceScore, combinedScore };
     });
 
     // Filter, sort, and limit
     const maxCitations = tier === 'premium' ? 5 : 3;
     return scored
       .filter(s => s.qualityScore >= 6)
-      .sort((a, b) => b.qualityScore - a.qualityScore || b.relevanceScore - a.relevanceScore)
+      .filter(s => s.relevanceScore >= 3) // Require minimum topic relevance — prevents off-topic high-prestige papers
+      .sort((a, b) => b.combinedScore - a.combinedScore)
       .slice(0, maxCitations);
   }
 
@@ -534,32 +743,93 @@ Guidelines:
     return 0;
   }
 
-  scoreRelevance(title, clinicalQuery) {
+  scoreRelevance(study, clinicalQuery) {
+    // Accept both old-style (title string, query) and new-style (study object, query) call signatures
+    const title = typeof study === 'string' ? study : (study?.title || '');
+    const abstract = typeof study === 'object' ? (study?.abstract || '') : '';
+
     if (!title || !clinicalQuery) return 0;
 
-    // Extract query text
+    // Build query text from structured or plain query
     let queryText = '';
     if (typeof clinicalQuery === 'string') {
       queryText = clinicalQuery;
     } else {
       const parts = [];
       if (clinicalQuery.primaryComplaint) parts.push(clinicalQuery.primaryComplaint);
-      if (clinicalQuery.symptoms) parts.push(clinicalQuery.symptoms);
+      if (clinicalQuery.symptoms && clinicalQuery.symptoms !== clinicalQuery.primaryComplaint) parts.push(clinicalQuery.symptoms);
       if (clinicalQuery.diagnosis) parts.push(clinicalQuery.diagnosis);
       if (clinicalQuery.procedure) parts.push(clinicalQuery.procedure);
+      if (clinicalQuery.location) parts.push(clinicalQuery.location);
+      if (clinicalQuery.bodyPart) parts.push(clinicalQuery.bodyPart);
       queryText = parts.join(' ');
     }
 
     if (!queryText) return 0;
 
-    const stopWords = new Set(['the','a','an','and','or','of','in','to','for','with','is','on','at','by','from']);
-    const queryTerms = queryText.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
+    // Expand abbreviations for richer matching
+    let expandedQuery = queryText.toLowerCase();
+    const abbrMap = {
+      'tfcc': 'triangular fibrocartilage complex',
+      'acl': 'anterior cruciate ligament',
+      'pcl': 'posterior cruciate ligament',
+      'mcl': 'medial collateral ligament',
+      'slap': 'superior labrum anterior posterior',
+      'rct': 'rotator cuff tear',
+      'fai': 'femoroacetabular impingement',
+      'oa': 'osteoarthritis',
+    };
+    for (const [abbr, full] of Object.entries(abbrMap)) {
+      if (new RegExp(`\\b${abbr}\\b`, 'i').test(expandedQuery)) {
+        expandedQuery += ' ' + full;
+      }
+    }
+
+    // Generic medical stop words to avoid false positives
+    const stopWords = new Set([
+      'the','a','an','and','or','of','in','to','for','with','is','on','at','by','from',
+      'pain','injury','treatment','patients','study','clinical','after','been','have',
+      'this','that','can','are','was','were','has','had','may','will','would',
+      'should','could','about','into','over','than','them','they','what','when',
+      'which','who','how','its','not','but','also','one','two','three','all',
+      'our','their','your','use','used','using','between','within','through',
+    ]);
+
+    const queryTerms = expandedQuery.split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
     if (queryTerms.length === 0) return 0;
 
     const titleLower = title.toLowerCase();
-    const matches = queryTerms.filter(term => titleLower.includes(term)).length;
+    const abstractLower = abstract.toLowerCase();
 
-    return Math.min(Math.round((matches / queryTerms.length) * 10), 10);
+    // Title matches worth 2×, abstract matches worth 1×
+    const titleMatches = queryTerms.filter(t => titleLower.includes(t)).length;
+    const abstractMatches = queryTerms.filter(t => abstractLower.includes(t)).length;
+    const termScore = ((titleMatches * 2) + abstractMatches) / (queryTerms.length * 2);
+    let score = termScore * 6; // up to 6 points from term matching
+
+    // Bonus: multi-word clinical phrase matches in title or abstract (up to 4 points)
+    const clinicalPhrases = [
+      'triangular fibrocartilage', 'anterior cruciate', 'posterior cruciate',
+      'rotator cuff', 'carpal tunnel', 'plantar fasciitis', 'frozen shoulder',
+      'adhesive capsulitis', 'tennis elbow', 'lateral epicondylitis',
+      'achilles tendon', 'meniscal tear', 'labral tear', 'disc herniation',
+      'spinal stenosis', 'total knee', 'total hip', 'total shoulder',
+      'femoroacetabular impingement', 'distal radioulnar',
+    ];
+    const matchedPhrases = clinicalPhrases.filter(p => expandedQuery.includes(p));
+    if (matchedPhrases.length > 0) {
+      const phraseMatches = matchedPhrases.filter(p => (titleLower + ' ' + abstractLower).includes(p)).length;
+      score += (phraseMatches / matchedPhrases.length) * 4;
+    } else {
+      // Fallback: body part presence gives partial credit
+      const bodyParts = ['knee','shoulder','hip','ankle','wrist','elbow','back','neck','spine','foot','hand'];
+      const queryBodyPart = bodyParts.find(bp => expandedQuery.includes(bp));
+      if (queryBodyPart && (titleLower.includes(queryBodyPart) || abstractLower.includes(queryBodyPart))) {
+        score += 3;
+      }
+    }
+
+    return Math.min(Math.round(score), 10);
   }
 
   async generateResearchIntro(studies, clinicalQuery) {

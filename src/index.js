@@ -1115,14 +1115,19 @@ class OrthoIQAgentSystem {
           estimatedSeconds: 15
         });
 
-        // Build enriched query from consultation context
+        // Build enriched query — fall back to consultationResult.caseData when frontend
+        // sends minimal caseData (only primaryComplaint)
+        const fallbackCase = consultationResult?.caseData || {};
         const enrichedQuery = {
-          primaryComplaint: caseData.primaryComplaint,
-          symptoms: caseData.symptoms,
-          duration: caseData.duration,
-          bodyPart: extractBodyPart(caseData.symptoms),
-          triageContext: consultationResult.triage,
-          agentRecommendations: summarizeAgentResponses(consultationResult.responses)
+          primaryComplaint: caseData.primaryComplaint || fallbackCase.primaryComplaint || '',
+          symptoms: caseData.symptoms || fallbackCase.symptoms,
+          duration: caseData.duration || fallbackCase.duration,
+          location: caseData.location || fallbackCase.location,
+          bodyPart: extractBodyPart(caseData.symptoms || fallbackCase.symptoms || caseData.primaryComplaint || fallbackCase.primaryComplaint),
+          triageContext: consultationResult?.triage ||
+            consultationResult?.responses?.find(r => r.response?.specialistType === 'triage')?.response,
+          agentRecommendations: summarizeAgentResponses(consultationResult?.responses),
+          rawQuery: caseData.rawQuery || fallbackCase.rawQuery,
         };
 
         // Fire-and-forget: curate studies in background with 15s timeout
@@ -1428,17 +1433,26 @@ class OrthoIQAgentSystem {
    * Call fire-and-forget (.catch() errors in the caller).
    */
   async triggerResearchAgent(consultationId, caseData, consultationResult, userTier) {
-    await storeResearchPending(consultationId);
+    // Non-fatal: DB may not be configured on agents side — in-memory fallback handles polling
+    try {
+      await storeResearchPending(consultationId);
+    } catch (dbErr) {
+      logger.warn(`DB unavailable for research pending (${consultationId}): ${dbErr.message}`);
+    }
 
     try {
       const RESEARCH_TIMEOUT_MS = 15000;
+      const fallbackCase = consultationResult?.caseData || {};
       const enrichedQuery = {
-        primaryComplaint: caseData.primaryComplaint,
-        symptoms: caseData.symptoms,
-        duration: caseData.duration,
-        bodyPart: extractBodyPart(caseData.symptoms),
-        triageContext: consultationResult.triage,
-        agentRecommendations: summarizeAgentResponses(consultationResult.responses),
+        primaryComplaint: caseData.primaryComplaint || fallbackCase.primaryComplaint || '',
+        symptoms: caseData.symptoms || fallbackCase.symptoms,
+        duration: caseData.duration || fallbackCase.duration,
+        location: caseData.location || fallbackCase.location,
+        bodyPart: extractBodyPart(caseData.symptoms || fallbackCase.symptoms || caseData.primaryComplaint || fallbackCase.primaryComplaint),
+        triageContext: consultationResult?.triage ||
+          consultationResult?.responses?.find(r => r.response?.specialistType === 'triage')?.response,
+        agentRecommendations: summarizeAgentResponses(consultationResult?.responses),
+        rawQuery: caseData.rawQuery || fallbackCase.rawQuery,
       };
 
       const result = await Promise.race([
@@ -1448,13 +1462,18 @@ class OrthoIQAgentSystem {
         ),
       ]);
 
-      await storeResearchResult(consultationId, {
-        intro: result.intro,
-        citations: result.citations,
-        searchQuery: result.searchQuery,
-        studiesReviewed: result.studiesReviewed,
-        tier: userTier,
-      });
+      // Non-fatal: persist to DB if available
+      try {
+        await storeResearchResult(consultationId, {
+          intro: result.intro,
+          citations: result.citations,
+          searchQuery: result.searchQuery,
+          studiesReviewed: result.studiesReviewed,
+          tier: userTier,
+        });
+      } catch (dbErr) {
+        logger.warn(`DB unavailable for research result (${consultationId}): ${dbErr.message}`);
+      }
 
       try {
         const outcome = {
