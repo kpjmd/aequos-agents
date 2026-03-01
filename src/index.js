@@ -559,7 +559,9 @@ class OrthoIQAgentSystem {
             });
             researchPollEndpoint = `/research/${consultationId}`;
 
-            this.researchAgent.curateRelevantStudies(caseData, 'basic')
+            // Include triage output so research agent can build more specific queries
+            const researchCaseData = { ...caseData, triageContext: triageResponse };
+            this.researchAgent.curateRelevantStudies(researchCaseData, 'basic')
               .then(async (result) => {
                 this.researchResults.set(consultationId, {
                   status: 'completed',

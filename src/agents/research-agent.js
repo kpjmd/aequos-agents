@@ -323,6 +323,19 @@ Guidelines:
   extractClinicalTerms(queryText, clinicalQuery) {
     const terms = [];
 
+    // Priority 0: pull in triage-identified diagnosis terms.
+    // When a user provides vague symptoms, triage converts them to specific conditions
+    // (e.g. "knee pain + slipping after basketball" → ["anterior cruciate ligament", "meniscus"]).
+    // Adding those terms to the search text lets the condition/body-part maps below find
+    // specific PubMed terms instead of falling back to generic keywords.
+    let triageText = '';
+    if (typeof clinicalQuery === 'object' && clinicalQuery.triageContext) {
+      const ctx = clinicalQuery.triageContext;
+      const diagnosisTerms = Array.isArray(ctx.suggestedDiagnoses) ? ctx.suggestedDiagnoses : [];
+      const findingTerms = Array.isArray(ctx.assessment?.primaryFindings) ? ctx.assessment.primaryFindings : [];
+      triageText = [...diagnosisTerms, ...findingTerms].join(' ').toLowerCase();
+    }
+
     // 1. Body part / anatomical term — simple unquoted keywords for PubMed auto-mapping
     const bodyPartMap = {
       'wrist': 'wrist',
@@ -342,10 +355,10 @@ Guidelines:
       'forearm': 'forearm',
     };
 
-    // Prefer structured bodyPart/location field
+    // Prefer structured bodyPart/location field; append triage diagnosis terms for specificity
     const structuredPart =
       (typeof clinicalQuery === 'object' && (clinicalQuery.bodyPart || clinicalQuery.location)) || '';
-    const searchText = (structuredPart + ' ' + queryText).toLowerCase();
+    const searchText = (structuredPart + ' ' + queryText + ' ' + triageText).toLowerCase();
 
     for (const [keyword, meshTerm] of Object.entries(bodyPartMap)) {
       if (searchText.includes(keyword)) {

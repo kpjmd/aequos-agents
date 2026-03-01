@@ -218,6 +218,7 @@ export class TriageAgent extends OrthopedicSpecialist {
         urgencyLevel: structuredResponse.urgencyLevel || this.extractUrgencyLevel(triageResult),
         specialistRecommendations: structuredResponse.specialistRecommendations ||
                                    this.extractSpecialistRecommendations(triageResult),
+        suggestedDiagnoses: this.extractSuggestedDiagnoses(triageResult),
         caseId: caseId
       };
 
@@ -766,6 +767,56 @@ export class TriageAgent extends OrthopedicSpecialist {
     }
 
     return specialists;
+  }
+
+  extractSuggestedDiagnoses(triageResult) {
+    const text = triageResult.toLowerCase();
+    const diagnoses = [];
+
+    // Map keywords (including abbreviations) to expanded medical terms that the
+    // research agent's conditionMap will recognise for PubMed query building.
+    const diagnosisMap = {
+      'anterior cruciate ligament': 'anterior cruciate ligament',
+      'acl': 'anterior cruciate ligament',
+      'posterior cruciate ligament': 'posterior cruciate ligament',
+      'pcl': 'posterior cruciate ligament',
+      'medial collateral ligament': 'medial collateral ligament',
+      'mcl': 'medial collateral ligament',
+      'lateral collateral ligament': 'lateral collateral ligament',
+      'lcl': 'lateral collateral ligament',
+      'meniscal': 'meniscus',
+      'meniscus': 'meniscus',
+      'rotator cuff': 'rotator cuff',
+      'labral': 'labrum',
+      'labrum': 'labrum',
+      'fracture': 'fracture',
+      'dislocation': 'dislocation',
+      'osteoarthritis': 'osteoarthritis',
+      'tendinitis': 'tendinitis',
+      'tendinopathy': 'tendinopathy',
+      'bursitis': 'bursitis',
+      'impingement': 'impingement',
+      'plantar fasciitis': 'plantar fasciitis',
+      'carpal tunnel': 'carpal tunnel syndrome',
+      'sciatica': 'sciatica',
+      'disc herniation': 'disc herniation',
+      'herniated disc': 'disc herniation',
+      'frozen shoulder': 'frozen shoulder',
+      'adhesive capsulitis': 'adhesive capsulitis',
+      'tennis elbow': 'tennis elbow',
+      'achilles': 'achilles tendon',
+      'femoroacetabular': 'femoroacetabular impingement',
+      'sprain': 'sprain',
+      'strain': 'strain',
+    };
+
+    for (const [keyword, diagnosis] of Object.entries(diagnosisMap)) {
+      if (text.includes(keyword) && !diagnoses.includes(diagnosis)) {
+        diagnoses.push(diagnosis);
+      }
+    }
+
+    return diagnoses.slice(0, 3);
   }
 
   calculateTimeSinceTriage(caseData) {
