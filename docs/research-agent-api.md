@@ -3,6 +3,8 @@
 ## Table of Contents
 
 1. [Overview](#1-overview)
+   - [Triage-Informed Query Building](#triage-informed-query-building)
+   - [Tier System](#tier-system)
 2. [Endpoints](#2-endpoints)
    - [POST /research/trigger](#post-researchtrigger)
    - [GET /research/:consultationId](#get-researchconsultationid)
@@ -29,6 +31,26 @@ No authentication headers are required. CORS is enabled for all origins.
 
 The Research Agent subsystem enriches orthopedic consultations with curated, evidence-based literature sourced from PubMed. It operates as a **fire-and-forget** service: the trigger endpoint returns immediately with a `pending` status while literature retrieval and curation run asynchronously in the background (up to 15 seconds). Callers poll a separate status endpoint until research is complete.
 
+### Triage-Informed Query Building
+
+A key feature of the Research Agent is that it uses the **Triage Agent's output** to construct specific PubMed search queries — even when the user's original question was vague.
+
+**Example:**
+
+| User Query | Without Triage | With Triage |
+|-----------|---------------|-------------|
+| "34yo male, knee pain, swelling and giving way after basketball" | `(knee AND pain)` | `(knee AND "anterior cruciate ligament")` |
+| "shoulder pain lifting overhead, 3 months" | `(shoulder AND pain)` | `(shoulder AND "rotator cuff")` |
+
+**How it works:**
+
+1. Triage Agent processes the user's symptoms and generates a `suggestedDiagnoses` array (e.g., `["anterior cruciate ligament", "meniscus"]`) via `extractSuggestedDiagnoses()` in `src/agents/triage-agent.js`
+2. In fast mode, the triage result (including `suggestedDiagnoses`) is passed as `triageContext` to `curateRelevantStudies()` before PubMed is queried
+3. `extractClinicalTerms()` in the Research Agent prepends those diagnosis terms to the search text so the condition/body-part maps produce specific PubMed terms
+4. The abbreviation table ensures shorthand in triage output (e.g., "ACL") is already expanded before storage
+
+This means the research quality automatically improves as triage confidence improves — no user action required.
+
 ### Async Model
 
 ```
@@ -54,12 +76,15 @@ Client                 API Server              PubMed
 
 ### Tier System
 
-| Tier | Max Citations Returned | Token Bonus |
-|------|----------------------|-------------|
-| `basic` (default) | 3 | — |
-| `premium` | 5 | +2 (`PREMIUM_ACCESS`) |
+| Tier | Max Citations | Query Method | Token Bonus |
+|------|--------------|--------------|-------------|
+| `basic` (default) | 3 | Keyword extraction from symptoms + triage output | — |
+| `premium` | 5 | Keyword extraction from symptoms + triage output | +2 (`PREMIUM_ACCESS`) |
+| `premium` *(planned)* | 10 | LLM-generated optimized queries + multi-query deduplication | +2 (`PREMIUM_ACCESS`) |
 
 All citations pass a minimum quality score threshold of **6/10** before being returned. Results are sorted descending by quality score, then by relevance score.
+
+> **Planned Premium Enhancement**: A future upgrade will add LLM-generated PubMed query construction for premium users. A Haiku call will translate the triage diagnosis and symptoms into 2–3 optimized PubMed search strings, which run in parallel and are deduplicated by PMID before quality filtering. This will raise the citation cap to 10 and produce more condition-specific literature. See TODO.md for implementation details.
 
 ### PubMed Configuration
 
@@ -109,7 +134,9 @@ Additional `caseData` fields are passed through to specialist agents during cons
 
 | Field | Path | Description |
 |-------|------|-------------|
-| `triage` | `consultationResult.triage` | Triage context injected into the enriched query |
+| `triage` | `consultationResult.triage` | Full triage assessment injected as `triageContext` into the enriched query |
+| `triage.suggestedDiagnoses` | `consultationResult.triage.suggestedDiagnoses` | Array of expanded diagnosis terms extracted by triage (e.g., `["anterior cruciate ligament", "meniscus"]`). **Primary driver of PubMed search specificity.** |
+| `triage.assessment.primaryFindings` | `consultationResult.triage.assessment.primaryFindings` | Fallback text mining source if `suggestedDiagnoses` is empty |
 | `responses` | `consultationResult.responses` | Agent responses summarized for query enrichment |
 
 **Example Request**
@@ -125,11 +152,20 @@ POST /research/trigger
     "duration": "2 weeks"
   },
   "consultationResult": {
-    "triage": { "urgency": "moderate", "recommendedSpecialists": ["movement", "strength"] },
+    "triage": {
+      "urgencyLevel": "semi-urgent",
+      "suggestedDiagnoses": ["anterior cruciate ligament", "meniscus"],
+      "assessment": {
+        "primaryFindings": ["ACL tear suspected", "meniscal injury possible", "mechanical instability"]
+      },
+      "specialistRecommendations": ["movementDetective", "strengthSage"]
+    },
     "responses": { "movement": "Assess for ligamentous laxity..." }
   }
 }
 ```
+
+> **Note:** The `triage.suggestedDiagnoses` array is generated automatically by `TriageAgent.extractSuggestedDiagnoses()` and is included in the triage object returned by `/consultation` and `/triage`. In fast mode, it is also passed to the auto-triggered research job directly on the server side — the frontend does not need to construct this manually.
 
 #### Response
 
