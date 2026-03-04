@@ -529,6 +529,55 @@ export class RecoveryMetrics {
     return Math.round(((final - initial) / (100 - initial)) * 100);
   }
 
+  calculateStrengthRecovery(initial, final) {
+    if (!initial || !final) return 0;
+    return Math.round(((final - initial) / initial) * 100);
+  }
+
+  calculateQOLImprovement(initial, final) {
+    if (!initial || initial >= 10) return 0;
+    return Math.round(((final - initial) / (10 - initial)) * 100);
+  }
+
+  identifySuccessFactors(record, finalMetrics) {
+    const factors = [];
+    if (finalMetrics.totalPainReduction >= 70) factors.push('significant_pain_reduction');
+    if (finalMetrics.totalFunctionalImprovement >= 70) factors.push('functional_restoration');
+    if (finalMetrics.patientSatisfaction >= 8) factors.push('high_patient_satisfaction');
+    if (finalMetrics.returnToActivity) factors.push('return_to_activity');
+    return factors;
+  }
+
+  identifyImprovementOpportunities(record, finalMetrics) {
+    const opportunities = [];
+    if (finalMetrics.totalPainReduction < 50) opportunities.push('enhanced_pain_management');
+    if (finalMetrics.totalFunctionalImprovement < 60) opportunities.push('intensified_rehabilitation');
+    if (finalMetrics.patientSatisfaction < 7) opportunities.push('improved_patient_engagement');
+    return opportunities;
+  }
+
+  storeOutcomeMetrics(patientId, record) {
+    if (!this.outcomeMetrics) this.outcomeMetrics = new Map();
+    this.outcomeMetrics.set(patientId, {
+      ...record.finalMetrics,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  generateQualityIndicators(record) {
+    return {
+      painManagement: record.finalMetrics?.totalPainReduction || 0,
+      functionalRestoration: record.finalMetrics?.totalFunctionalImprovement || 0,
+      patientSatisfaction: record.finalMetrics?.patientSatisfaction || 0,
+      timelineAdherence: record.outcomeAnalysis?.timelineAdherence || false,
+      complicationFree: (record.complications || []).length === 0
+    };
+  }
+
+  calculateTotalDuration(startDate, endDate = null) {
+    return this.calculateWeeksElapsed(startDate, endDate);
+  }
+
   calculateWeeksElapsed(startDate, endDate = null) {
     const end = endDate ? new Date(endDate) : new Date();
     const start = new Date(startDate);

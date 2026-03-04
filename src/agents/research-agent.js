@@ -902,9 +902,21 @@ Guidelines:
     const titleLower = title.toLowerCase();
     const abstractLower = abstract.toLowerCase();
 
+    // Expand abbreviations in title/abstract too, for richer matching
+    let expandedTitle = titleLower;
+    let expandedAbstract = abstractLower;
+    for (const [abbr, full] of Object.entries(abbrMap)) {
+      if (new RegExp(`\\b${abbr}\\b`, 'i').test(expandedTitle)) {
+        expandedTitle += ' ' + full;
+      }
+      if (new RegExp(`\\b${abbr}\\b`, 'i').test(expandedAbstract)) {
+        expandedAbstract += ' ' + full;
+      }
+    }
+
     // Title matches worth 2×, abstract matches worth 1×
-    const titleMatches = queryTerms.filter(t => titleLower.includes(t)).length;
-    const abstractMatches = queryTerms.filter(t => abstractLower.includes(t)).length;
+    const titleMatches = queryTerms.filter(t => expandedTitle.includes(t)).length;
+    const abstractMatches = queryTerms.filter(t => expandedAbstract.includes(t)).length;
     const termScore = ((titleMatches * 2) + abstractMatches) / (queryTerms.length * 2);
     let score = termScore * 6; // up to 6 points from term matching
 
@@ -932,7 +944,7 @@ Guidelines:
     ];
     const matchedPhrases = clinicalPhrases.filter(p => expandedQuery.includes(p));
     if (matchedPhrases.length > 0) {
-      const phraseMatches = matchedPhrases.filter(p => (titleLower + ' ' + abstractLower).includes(p)).length;
+      const phraseMatches = matchedPhrases.filter(p => (expandedTitle + ' ' + expandedAbstract).includes(p)).length;
       score += (phraseMatches / matchedPhrases.length) * 4;
     } else {
       // Fallback: body part presence gives partial credit
@@ -949,7 +961,7 @@ Guidelines:
         'intertrochanteric','proximal humerus','greater tuberosity',
       ];
       const queryBodyPart = bodyParts.find(bp => expandedQuery.includes(bp));
-      if (queryBodyPart && (titleLower.includes(queryBodyPart) || abstractLower.includes(queryBodyPart))) {
+      if (queryBodyPart && (expandedTitle.includes(queryBodyPart) || expandedAbstract.includes(queryBodyPart))) {
         score += 3;
       }
     }

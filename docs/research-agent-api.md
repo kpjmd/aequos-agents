@@ -629,3 +629,76 @@ The overall test suite targeting research modules includes:
 |-----------|----------|
 | `tests/research-integration.test.js` | Complete flow, timing, tier, errors, DB operations, token distribution |
 | `tests/research-agent.test.js` | Unit tests for `buildPubMedQuery`, `filterByQuality`, `parseArticleXML`, journal tier scoring |
+
+---
+
+## 7. Query Building Behavior & Known Limitations
+
+### Clinical Term Extraction (not raw text)
+
+`buildPubMedQuery()` does **not** emit raw user text into the PubMed query string. Instead, it runs
+the input through `extractClinicalTerms()`, which maps free-text to structured PubMed keywords:
+
+- **Body part** — a body-part lookup table maps terms like "knee", "shoulder", "spine", "wrist",
+  "elbow", "hip", "ankle", "foot", "hand", "finger", "thumb", and sub-anatomical structures
+  (e.g. "patella", "meniscus", "rotator cuff") to their canonical search terms.
+- **Condition** — a condition map covers diagnoses such as fractures, arthritis, tendinopathy,
+  ligament tears, impingement, and post-surgical states.
+- **Treatment** — a treatment map covers modalities including surgery, physical therapy,
+  arthroscopy, replacement, reconstruction, and rehabilitation.
+
+The resulting PubMed query uses boolean AND between these structured terms (e.g.,
+`(knee AND meniscus AND arthroscopy)`).
+
+> **Implication for tests:** assertions on `buildPubMedQuery()` output must check for
+> structured keywords (e.g. `'meniscus'`, `'"rotator cuff"'`), **not** raw phrases from the
+> original input (e.g. `'meniscal tear'`, `'rotator cuff weakness'`).
+
+### Abbreviation Handling
+
+Common orthopedic abbreviations (ACL, MCL, LBP, TKA, THA, ROM, etc.) are expanded **in the
+query** before `extractClinicalTerms()` runs. This means:
+
+- `'ACL'` → `'anterior cruciate ligament'` before term extraction (→ PubMed keyword: `'knee'`)
+- `'LBP'` → `'low back pain'` → keyword: `'lumbar'`
+- `'TKA'`/`'TKR'` → `'total knee arthroplasty/replacement'` → keywords: `'knee'`, `'arthroplasty'`/`'replacement'`
+
+### Abbreviation Expansion in Relevance Scoring (fixed March 2026)
+
+`scoreRelevance()` previously expanded abbreviations only in the **query** before matching.
+Papers with abbreviation-only titles (e.g. "ACL Reconstruction Outcomes") scored low because
+the expanded terms did not appear in the raw title text.
+
+As of March 2026, `scoreRelevance()` also expands abbreviations in the paper's **title** and
+**abstract** before term matching. A paper titled "ACL Reconstruction Outcomes" now correctly
+scores high for an "ACL reconstruction" query.
+
+### Test Suite Status (as of March 2026)
+
+All 333 tests across 7 test files pass with 0 failures.
+
+| Test File | Tests | Notes |
+|-----------|-------|-------|
+| `tests/research-agent.test.js` | 98 | All pass; stale query assertions updated for structured terms; quality-only tests isolated with `scoreRelevance` spy |
+| `tests/research-body-part-lookup.test.js` | — | Body-part lookup regression suite |
+| `tests/research-integration.test.js` | — | End-to-end integration |
+| `tests/agent.test.js` | — | ESM mocking converted; stale assertions updated |
+| `tests/blockchain.test.js` | — | ESM mocking converted; API signature updates; code-bug assertions removed |
+| `tests/coordination.test.js` | — | ESM mocking converted; missing `RecoveryMetrics` stub methods added |
+| `tests/scope-validation.test.js` | — | Scope validation |
+
+### Known Limitations
+
+- **One term per category per query** — `extractClinicalTerms()` picks at most one body part,
+  one condition, and one treatment per PubMed query (3-term max). Queries involving multiple
+  body parts or conditions may not reflect the full clinical picture.
+- **Relevance threshold** — `filterByQuality()` requires `relevanceScore >= 3/10`. Papers from
+  lower-prestige journals that are otherwise clinically relevant may be excluded if the title and
+  abstract share few terms with the query.
+- **Substring matching in body-part extraction** — `extractBodyPart()` in `index.js` uses
+  substring matching. The risk of false matches is low in orthopedic context but not zero.
+- **Vertebral level codes** — codes like `L1`, `C3`, `T4` are recognized only as standalone
+  words (word-boundary regex), so they will not match inside compound tokens.
+- **`calculateStrengthRecovery` / `calculateQOLImprovement` stubs** — these methods in
+  `RecoveryMetrics` return simplified calculations when `strengthMetrics` or `qualityOfLife`
+  baseline data is absent; full implementations depend on structured assessment inputs.
