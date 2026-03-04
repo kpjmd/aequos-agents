@@ -336,41 +336,111 @@ Guidelines:
       triageText = [...diagnosisTerms, ...findingTerms].join(' ').toLowerCase();
     }
 
-    // 1. Body part / anatomical term — simple unquoted keywords for PubMed auto-mapping
+    // 1. Body part / anatomical term — simple unquoted keywords for PubMed auto-mapping.
+    //
+    // Ordering rules (both matter because the loop breaks on the first match):
+    //   a) Multi-word phrases before their single-word substrings
+    //      ("tibial plateau" before "tibia" — "tibial" contains the substring "tibia")
+    //   b) Specific sub-anatomical structures before their parent joint name
+    //      ("navicular" before "foot"; "scaphoid" before "wrist")
+    //      so that "navicular fracture foot pain" resolves to "navicular", not "foot".
     const bodyPartMap = {
-      'wrist': 'wrist',
-      'knee': 'knee',
+      // ── Shoulder region (specific → generic) ──
+      'humeral head': 'proximal humerus',
+      'greater tuberosity': 'greater tuberosity',
+      'lesser tuberosity': 'lesser tuberosity',
+      'proximal humerus': 'proximal humerus',
+      'acromioclavicular': 'acromioclavicular',
+      'glenohumeral': 'glenohumeral',
+      'glenoid': 'glenoid',
+      'acromion': 'shoulder',
+      'coracoid': 'shoulder',
       'shoulder': 'shoulder',
-      'hip': 'hip',
-      'ankle': 'ankle',
+      // ── Elbow region (specific → generic) ──
+      'radial head': 'radial head',
+      'lateral epicondyle': 'elbow',
+      'medial epicondyle': 'elbow',
+      'olecranon': 'olecranon',
+      'capitellum': 'elbow',
+      'coronoid': 'elbow',
       'elbow': 'elbow',
-      'back': 'lumbar',
-      'lower back': 'lumbar',
-      'neck': 'cervical',
-      'spine': 'spine',
-      'foot': 'foot',
+      // ── Wrist / hand region (specific → generic) ──
+      'distal radius': 'radius',
+      'scaphoid': 'scaphoid',
+      'lunate': 'wrist',
+      'hamate': 'wrist',
+      'capitate': 'wrist',
+      'carpal': 'wrist',
+      'metacarpal': 'hand',
+      'phalanx': 'hand',
+      'phalanges': 'hand',
+      'wrist': 'wrist',
       'hand': 'hand',
       'finger': 'finger',
       'thumb': 'thumb',
       'forearm': 'forearm',
-      // Bones and additional anatomical terms
+      // ── Hip region (specific → generic) ──
+      'femoral neck': 'femoral neck',
+      'femoral head': 'femoral head',
+      'intertrochanteric': 'intertrochanteric',
+      'subtrochanteric': 'subtrochanteric',
+      'greater trochanter': 'femur',
+      'lesser trochanter': 'femur',
+      'acetabulum': 'acetabulum',
+      'hip': 'hip',
+      // ── Knee region (specific → generic) ──
+      'tibial plateau': 'tibial plateau',
+      'lateral plateau': 'tibial plateau',
+      'medial plateau': 'tibial plateau',
+      'femoral condyle': 'femur',
+      'lateral condyle': 'knee',
+      'medial condyle': 'knee',
+      'patella': 'patella',
+      'knee': 'knee',
+      // ── Ankle / foot region (specific → generic) ──
+      'lateral malleolus': 'ankle',
+      'medial malleolus': 'ankle',
+      'distal fibula': 'fibula',
+      'distal tibia': 'tibia',
+      'talus': 'talus',
+      'calcaneus': 'calcaneus',
+      'navicular': 'navicular',
+      'metatarsal': 'metatarsal',
+      'malleolus': 'ankle',
+      'cuboid': 'foot',
+      'ankle': 'ankle',
+      'foot': 'foot',
+      'toe': 'toe',
+      'heel': 'calcaneus',
+      // ── Spine region (specific → generic) ──
+      'lower back': 'lumbar',
+      'lumbar': 'lumbar',
+      'cervical': 'cervical',
+      'thoracic': 'thoracic',
+      'vertebra': 'spine',
+      'vertebrae': 'spine',
+      'sacral': 'sacrum',
+      'coccyx': 'sacrum',
+      'back': 'lumbar',
+      'neck': 'cervical',
+      'spine': 'spine',
+      // ── Long bones (after regions to avoid shadowing sub-structures) ──
       'clavicle': 'clavicle',
       'collarbone': 'clavicle',
       'clavicular': 'clavicle',
       'scapula': 'scapula',
       'humerus': 'humerus',
+      'proximal tibia': 'tibia',
+      'distal femur': 'femur',
       'tibia': 'tibia',
       'fibula': 'fibula',
       'femur': 'femur',
-      'patella': 'patella',
       'radius': 'radius',
       'ulna': 'ulna',
       'sternum': 'sternum',
       'rib': 'rib',
       'pelvis': 'pelvis',
       'sacrum': 'sacrum',
-      'heel': 'calcaneus',
-      'toe': 'toe',
     };
 
     // Prefer structured bodyPart/location field; append triage diagnosis terms for specificity
@@ -852,6 +922,13 @@ Guidelines:
       'tibial fracture', 'femoral fracture', 'patellar fracture',
       'radial fracture', 'ulnar fracture', 'rib fracture',
       'stress fracture', 'open reduction', 'internal fixation',
+      // Sub-anatomical structure phrases
+      'talus fracture', 'talar fracture', 'calcaneus fracture', 'calcaneal fracture',
+      'tibial plateau fracture', 'radial head fracture', 'olecranon fracture',
+      'glenoid fracture', 'greater tuberosity fracture', 'proximal humerus fracture',
+      'femoral neck fracture', 'intertrochanteric fracture', 'acetabular fracture',
+      'scaphoid fracture', 'distal radius fracture', 'metatarsal fracture',
+      'navicular fracture', 'capitellum fracture',
     ];
     const matchedPhrases = clinicalPhrases.filter(p => expandedQuery.includes(p));
     if (matchedPhrases.length > 0) {
@@ -860,9 +937,16 @@ Guidelines:
     } else {
       // Fallback: body part presence gives partial credit
       const bodyParts = [
+        // Joint names
         'knee','shoulder','hip','ankle','wrist','elbow','back','neck','spine','foot','hand',
-        'clavicle','collarbone','scapula','humerus','tibia','fibula','femur','patella',
-        'radius','ulna','sternum','rib','pelvis','sacrum','forearm','heel',
+        // Long bones
+        'clavicle','scapula','humerus','tibia','fibula','femur','patella','radius','ulna',
+        'sternum','rib','pelvis','sacrum','forearm',
+        // Sub-anatomical structures
+        'talus','calcaneus','navicular','metatarsal','malleolus',
+        'glenoid','glenohumeral','olecranon','capitellum','radial head',
+        'scaphoid','acetabulum','tibial plateau','femoral neck','femoral head',
+        'intertrochanteric','proximal humerus','greater tuberosity',
       ];
       const queryBodyPart = bodyParts.find(bp => expandedQuery.includes(bp));
       if (queryBodyPart && (titleLower.includes(queryBodyPart) || abstractLower.includes(queryBodyPart))) {

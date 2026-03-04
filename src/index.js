@@ -93,10 +93,32 @@ function extractBodyPart(symptoms) {
   if (!symptoms) return null;
   const text = Array.isArray(symptoms) ? symptoms.join(' ') : String(symptoms);
   const bodyParts = [
+    // Multi-word terms first so they match before their single-word substrings
+    'lower back', 'humeral head', 'greater tuberosity', 'lesser tuberosity',
+    'proximal humerus', 'acromioclavicular', 'radial head', 'lateral epicondyle',
+    'medial epicondyle', 'distal radius', 'femoral neck', 'femoral head',
+    'intertrochanteric', 'subtrochanteric', 'greater trochanter', 'lesser trochanter',
+    'tibial plateau', 'femoral condyle', 'lateral condyle', 'medial condyle',
+    'proximal tibia', 'distal femur', 'lateral plateau', 'medial plateau',
+    'lateral malleolus', 'medial malleolus', 'distal fibula', 'distal tibia',
+    // Joint names
     'knee', 'shoulder', 'hip', 'ankle', 'wrist', 'elbow', 'back', 'neck', 'spine', 'foot', 'hand',
+    // Long bones
     'clavicle', 'collarbone', 'clavicular', 'scapula', 'humerus',
     'tibia', 'fibula', 'femur', 'patella', 'radius', 'ulna',
     'sternum', 'rib', 'pelvis', 'sacrum', 'forearm', 'thumb', 'finger', 'toe', 'heel',
+    // Shoulder sub-structures
+    'glenohumeral', 'glenoid', 'acromion', 'coracoid',
+    // Elbow sub-structures
+    'olecranon', 'capitellum', 'coronoid',
+    // Wrist/hand sub-structures
+    'scaphoid', 'lunate', 'hamate', 'capitate', 'carpal', 'metacarpal', 'phalanx', 'phalanges',
+    // Hip sub-structures
+    'acetabulum',
+    // Ankle/foot sub-structures
+    'talus', 'calcaneus', 'navicular', 'cuboid', 'metatarsal', 'malleolus',
+    // Spine sub-structures
+    'lumbar', 'cervical', 'thoracic', 'vertebra', 'vertebrae', 'sacral', 'coccyx',
   ];
   const lower = text.toLowerCase();
   return bodyParts.find(part => lower.includes(part)) || null;
