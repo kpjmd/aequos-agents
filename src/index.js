@@ -92,7 +92,12 @@ async function flagConsultationForMDReview(consultationId, qualityScore) {
 function extractBodyPart(symptoms) {
   if (!symptoms) return null;
   const text = Array.isArray(symptoms) ? symptoms.join(' ') : String(symptoms);
-  const bodyParts = ['knee', 'shoulder', 'hip', 'ankle', 'wrist', 'elbow', 'back', 'neck', 'spine', 'foot', 'hand'];
+  const bodyParts = [
+    'knee', 'shoulder', 'hip', 'ankle', 'wrist', 'elbow', 'back', 'neck', 'spine', 'foot', 'hand',
+    'clavicle', 'collarbone', 'clavicular', 'scapula', 'humerus',
+    'tibia', 'fibula', 'femur', 'patella', 'radius', 'ulna',
+    'sternum', 'rib', 'pelvis', 'sacrum', 'forearm', 'thumb', 'finger', 'toe', 'heel',
+  ];
   const lower = text.toLowerCase();
   return bodyParts.find(part => lower.includes(part)) || null;
 }

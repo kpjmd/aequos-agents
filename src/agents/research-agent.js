@@ -353,6 +353,24 @@ Guidelines:
       'finger': 'finger',
       'thumb': 'thumb',
       'forearm': 'forearm',
+      // Bones and additional anatomical terms
+      'clavicle': 'clavicle',
+      'collarbone': 'clavicle',
+      'clavicular': 'clavicle',
+      'scapula': 'scapula',
+      'humerus': 'humerus',
+      'tibia': 'tibia',
+      'fibula': 'fibula',
+      'femur': 'femur',
+      'patella': 'patella',
+      'radius': 'radius',
+      'ulna': 'ulna',
+      'sternum': 'sternum',
+      'rib': 'rib',
+      'pelvis': 'pelvis',
+      'sacrum': 'sacrum',
+      'heel': 'calcaneus',
+      'toe': 'toe',
     };
 
     // Prefer structured bodyPart/location field; append triage diagnosis terms for specificity
@@ -828,6 +846,12 @@ Guidelines:
       'achilles tendon', 'meniscal tear', 'labral tear', 'disc herniation',
       'spinal stenosis', 'total knee', 'total hip', 'total shoulder',
       'femoroacetabular impingement', 'distal radioulnar',
+      // Fracture-specific phrases
+      'clavicle fracture', 'collarbone fracture', 'displaced fracture',
+      'butterfly fragment', 'scapula fracture', 'humeral fracture',
+      'tibial fracture', 'femoral fracture', 'patellar fracture',
+      'radial fracture', 'ulnar fracture', 'rib fracture',
+      'stress fracture', 'open reduction', 'internal fixation',
     ];
     const matchedPhrases = clinicalPhrases.filter(p => expandedQuery.includes(p));
     if (matchedPhrases.length > 0) {
@@ -835,7 +859,11 @@ Guidelines:
       score += (phraseMatches / matchedPhrases.length) * 4;
     } else {
       // Fallback: body part presence gives partial credit
-      const bodyParts = ['knee','shoulder','hip','ankle','wrist','elbow','back','neck','spine','foot','hand'];
+      const bodyParts = [
+        'knee','shoulder','hip','ankle','wrist','elbow','back','neck','spine','foot','hand',
+        'clavicle','collarbone','scapula','humerus','tibia','fibula','femur','patella',
+        'radius','ulna','sternum','rib','pelvis','sacrum','forearm','heel',
+      ];
       const queryBodyPart = bodyParts.find(bp => expandedQuery.includes(bp));
       if (queryBodyPart && (titleLower.includes(queryBodyPart) || abstractLower.includes(queryBodyPart))) {
         score += 3;
