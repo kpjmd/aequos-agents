@@ -200,10 +200,12 @@ export class TriageAgent extends OrthopedicSpecialist {
         ],
 
         // Follow-up questions
-        followUpQuestions: structuredResponse.followUpQuestions || [
-          'When did the symptoms first start?',
-          'Have you had similar issues before?'
-        ],
+        followUpQuestions: structuredResponse.followUpQuestions?.length > 0
+          ? structuredResponse.followUpQuestions
+          : [
+              'When did the symptoms first start?',
+              'Have you had similar issues before?'
+            ],
 
         // Triage-specific: no agreement field needed as triage is the coordinator
         agreementWithTriage: 'self',
