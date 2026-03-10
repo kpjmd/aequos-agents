@@ -145,6 +145,7 @@ export class TokenManager {
         amount: rewardAmount,
         outcome,
         additionalData,
+        track: additionalData.track || 'clinical',
         timestamp: new Date().toISOString(),
         blockchainTx: null,
         status: 'pending'
@@ -184,6 +185,7 @@ export class TokenManager {
         agentName: agentBalance.name,
         amount: rewardAmount,
         reason: this.summarizeOutcome(outcome),
+        track: additionalData.track || 'clinical',
         timestamp: new Date().toISOString()
       });
       

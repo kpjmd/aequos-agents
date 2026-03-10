@@ -561,6 +561,12 @@ class OrthoIQAgentSystem {
         
         logger.info(`Smart routing to specialists: ${smartSpecialists.join(', ')}`);
 
+        // Heuristic pre-classification for query type
+        const heuristicClassification = this.agents.triage.classifyQueryType(caseData);
+        logger.info(`Heuristic classification: ${heuristicClassification.queryType} ` +
+          `(confidence: ${heuristicClassification.confidence}, ` +
+          `signals: ${JSON.stringify(heuristicClassification.signals)})`);
+
         // Fast mode: Return immediate triage response, continue full coordination in background
         if (mode === 'fast') {
           logger.info('Fast mode: Returning immediate triage, continuing coordination in background');
@@ -574,6 +580,19 @@ class OrthoIQAgentSystem {
             isReturningUser,
             platformContext
           });
+
+          // Check if informational — use LLM classification with heuristic fallback
+          const effectiveQueryType = triageResponse.queryType || heuristicClassification.queryType;
+          if (effectiveQueryType === 'informational') {
+            logger.info('Fast mode: Informational query detected, skipping specialist pipeline');
+            return this.handleInformationalQuery(res, {
+              triageResponse,
+              caseData,
+              startTime,
+              userTier,
+              rawQuery
+            });
+          }
 
           const consultationId = `consultation_${Date.now()}`;
 
@@ -671,6 +690,23 @@ class OrthoIQAgentSystem {
 
           // Exit early - response already sent
           return;
+        }
+
+        // Normal mode: Run triage for query type classification
+        const triageForClassification = await this.agents.triage.triageCase(caseData, {
+          rawQuery, enableDualTrack
+        });
+
+        const effectiveQueryTypeNormal = triageForClassification.queryType || heuristicClassification.queryType;
+        if (effectiveQueryTypeNormal === 'informational') {
+          logger.info('Normal mode: Informational query detected, skipping specialist pipeline');
+          return this.handleInformationalQuery(res, {
+            triageResponse: triageForClassification,
+            caseData,
+            startTime,
+            userTier,
+            rawQuery
+          });
         }
 
         // Normal mode: Complete multi-specialist consultation before responding
@@ -1558,6 +1594,82 @@ class OrthoIQAgentSystem {
       }
       logger.error(`Research failed for ${consultationId}: ${error.message}`);
     }
+  }
+
+  /**
+   * Handle informational queries — triage + research only, no specialists/prediction market.
+   * Shared by both fast and normal mode.
+   */
+  handleInformationalQuery(res, { triageResponse, caseData, startTime, userTier, rawQuery }) {
+    const consultationId = `info_${Date.now()}`;
+
+    // Trigger research agent async (fire-and-forget)
+    let researchPollEndpoint = null;
+    if (this.researchAgent) {
+      researchPollEndpoint = `/research/${consultationId}`;
+      this.researchResults.set(consultationId, {
+        status: 'processing',
+        startedAt: new Date().toISOString(),
+      });
+
+      const researchCaseData = { ...caseData, triageContext: triageResponse };
+      this.researchAgent.curateRelevantStudies(researchCaseData, userTier || 'basic')
+        .then(async (result) => {
+          this.researchResults.set(consultationId, {
+            status: 'completed',
+            result,
+            completedAt: new Date().toISOString(),
+          });
+          try {
+            await this.tokenManager.distributeTokenReward(
+              this.researchAgent.agentId,
+              {
+                success: result.success,
+                literatureSearchCompleted: true,
+                relevantStudiesFound: result.citations?.length > 0,
+                highImpactJournal: result.citations?.some(c => c.qualityScore >= 15),
+                recentEvidence: result.citations?.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
+                multipleStudyTypes: new Set(result.citations?.map(c => c.studyType)).size > 1,
+              },
+              { walletProvider: this.researchAgent.walletProvider, track: 'informational' }
+            );
+          } catch (tokenErr) {
+            logger.warn(`Informational research token reward failed: ${tokenErr.message}`);
+          }
+        })
+        .catch((err) => {
+          this.researchResults.set(consultationId, {
+            status: 'failed',
+            error: err.message,
+            failedAt: new Date().toISOString(),
+          });
+          logger.error(`Informational research failed for ${consultationId}: ${err.message}`);
+        });
+    }
+
+    // Award flat triage token for classification
+    this.tokenManager.distributeTokenReward(this.agents.triage.agentId, {
+      success: true,
+      reason: 'informational_triage'
+    }, {
+      walletProvider: this.agents.triage.walletProvider,
+      track: 'informational'
+    }).catch(err => {
+      logger.warn(`Informational triage token reward failed: ${err.message}`);
+    });
+
+    return res.json({
+      success: true,
+      mode: 'informational',
+      queryType: 'informational',
+      querySubtype: triageResponse.querySubtype || null,
+      triage: triageResponse,
+      consultationId,
+      researchPollEndpoint,
+      message: 'Informational query — triage assessment with research literature.',
+      responseTime: Date.now() - startTime,
+      timestamp: new Date().toISOString()
+    });
   }
 
   /**

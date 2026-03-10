@@ -7,7 +7,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2026-03-10
+
+### Added — Informational Query Pathway (Phase 1)
+
+Pre-testnet requirement. Informational queries ("What's the latest on PRP?", "How long does
+ACL recovery take?") now skip the full specialist pipeline, prediction market, and recovery
+tracking — routing directly to triage + Research Agent. Prevents frivolous on-chain token
+exchanges once on testnet/mainnet.
+
+**Two-layer query type classification:**
+
+| Layer | Method | Cost |
+|-------|--------|------|
+| Heuristic | `classifyQueryType()` regex classifier on raw query text | Zero (no LLM) |
+| LLM | Section 8 added to triage prompt — parsed alongside existing triage call | Zero extra (piggybacks on existing call) |
+
+**Heuristic signal detection:**
+- Clinical signals: personal timeline, pain severity, injury mechanism, functional limitation, treatment history, structured case data
+- Informational signals: explanation-seeking prefix, research seeking, general phenomenon, comparison query, recovery timeline general
+- Decision logic: 2+ clinical → clinical (0.85); 1+ informational, 0 clinical → informational (0.8); mixed/ambiguous → clinical (safety default)
+
+**Recovery timeline general** — new signal that catches common queries like "When can I return
+to basketball after ACL surgery?" and "How long does rotator cuff recovery take?". Fires as
+informational ONLY when no personal injury context (no personal timeline, pain level, or
+injury mechanism). "I had ACL surgery 2 weeks ago, when can I return?" → clinical.
+
+**Emergency override:** Emergency/urgent urgency always forces `queryType: 'clinical'`
+regardless of heuristic or LLM classification.
+
+**`querySubtype` Phase 2 stub:** Parser stores `querySubtype: 'factual'|'debatable'` from LLM
+response. Not branched on in Phase 1. When Phase 2 specialist panel discussion is built, the
+classification infrastructure already generates the signal without re-prompting triage.
+
+**`handleInformationalQuery()` in `index.js`:**
+- Generates `consultationId` with `info_` prefix (distinguishes from clinical in analytics)
+- Triggers Research Agent async (fire-and-forget, same as clinical flow)
+- Awards flat triage token + research quality token, both tagged `track: 'informational'`
+- Returns response with `mode: 'informational'`, `queryType: 'informational'` — no specialist responses, no synthesis, no prediction market
+
+**Token track tagging in `token-manager.js`:**
+- All token rewards now tagged `track: 'clinical'` or `'informational'` at write time
+- Propagates to both `tokenTransactions` (in-memory) and `distributionHistory`
+- Admin dashboard can show two token tracks independently from day one on testnet
+
+**API response format for informational queries:**
+```json
+{
+  "success": true,
+  "mode": "informational",
+  "queryType": "informational",
+  "querySubtype": "factual",
+  "triage": { "...triageAssessment..." },
+  "consultationId": "info_1710000000000",
+  "researchPollEndpoint": "/research/info_1710000000000",
+  "message": "Informational query — triage assessment with research literature."
+}
+```
+
+**Cost per informational query:** ~$0.02–0.04 (vs ~$0.14 clinical).
+
+### Added — 22 New Query Classification Tests (355/355 Total)
+
+New test file `tests/query-type-classification.test.js`:
+- 9 informational query tests (including 3 recovery timeline general cases)
+- 6 clinical query tests (including recovery timeline with personal context override)
+- 2 ambiguous → clinical default tests
+- 1 emergency override test
+- 4 parser tests (queryType, querySubtype, defaults)
+
+### Files Changed
+- `src/agents/triage-agent.js` — `classifyQueryType()` method, prompt section 8, `parseTriageResponse()` queryType/querySubtype parsing, `triageAssessment` return with emergency override
+- `src/index.js` — heuristic pre-classification, fast mode informational branch, normal mode triage call + informational branch, `handleInformationalQuery()` method
+- `src/utils/token-manager.js` — `track` field in transaction records and distribution history
+- `tests/query-type-classification.test.js` — new test file (22 tests)
+
+### Frontend Integration Required
+- Key on `queryType: 'informational'` to render different UI (no specialist badges, no prediction market, no recovery timeline)
+- Filter on `info_` prefix in `consultationId` for informational queries in analytics
+- Guard PROMIS baseline opt-in: suppress "Track Your Recovery" button when `queryType === 'informational'`
+- `querySubtype` ('factual'/'debatable') stored but not acted on until Phase 2
+
+---
+
 ## [Unreleased]
+
+### Fixed — Test Suite: 29 Pre-existing Failures Resolved (333/333 Passing)
+
+All test failures that pre-dated the v0.6.0 release have been identified and fixed.
+The full suite now passes with 0 failures across 7 test files.
+
+**Category A — ESM Mocking Infrastructure (`agent.test.js`, `blockchain.test.js`, `coordination.test.js`)**
+Converted three test files from CommonJS `jest.mock()` to ESM-compatible
+`jest.unstable_mockModule()` + dynamic `await import()`. The CommonJS API is silently
+ignored in ESM projects (`"type": "module"`), so all mocks were no-ops and every test in
+these suites was running against real (network-calling) implementations.
+Fixing the mocking infrastructure exposed stale test assertions in each file; those were
+updated to match current code behavior (camelCase specialist names, updated function
+signatures, accurate token reward thresholds, etc.).
+
+**Category B — Stale Query-Building Assertions (`research-agent.test.js`)**
+`buildPubMedQuery()` was refactored post-v0.5.0 to emit structured PubMed keywords via
+`extractClinicalTerms()` rather than raw expanded text. Eight tests still checked for raw
+text (e.g. `'low back pain'`, `'total knee arthroplasty'`). Updated to check for structured
+terms (`'lumbar'`, `'knee'`, `'arthroplasty'`).
+
+**Category C — Quality-Only Tests Killed by Relevance Filter (`research-agent.test.js`)**
+`filterByQuality(studies, '', tier)` with an empty query caused `scoreRelevance()` to return
+0 for all studies, triggering the `relevanceScore >= 3` gate and rejecting every study.
+Fourteen quality-scoring tests were silently testing empty results. Fixed by adding
+`jest.spyOn(agent, 'scoreRelevance').mockReturnValue(5)` in `beforeEach` of four affected
+describe blocks, isolating quality scoring from relevance.
+
+**Category D — Code Bug: Abbreviation Expansion in `scoreRelevance()` (`research-agent.js`)**
+`scoreRelevance()` expanded abbreviations in the query (ACL → anterior cruciate ligament)
+but not in the paper's title/abstract. A paper titled "ACL Reconstruction Outcomes" scored
+near-zero for the query "ACL reconstruction" because the expanded terms didn't appear in the
+raw title. Fixed by expanding abbreviations into `expandedTitle` / `expandedAbstract` before
+the term-matching loop.
+
+**Missing `RecoveryMetrics` methods (`recovery-metrics.js`)**
+`completeRecoveryTracking()` called seven methods that were never implemented:
+`calculateStrengthRecovery`, `calculateQOLImprovement`, `identifySuccessFactors`,
+`identifyImprovementOpportunities`, `storeOutcomeMetrics`, `generateQualityIndicators`,
+`calculateTotalDuration`. Stub implementations added.
+
+**Documentation**
+Appended §7 to `docs/research-agent-api.md` covering: clinical term extraction behavior,
+abbreviation handling, the relevance scoring fix, test suite status table, and known limitations.
 
 ### Planned
 - Persistent prediction storage
@@ -291,7 +418,10 @@ FAST_MODEL=claude-haiku-4-5-20251001
 
 ---
 
-[Unreleased]: https://github.com/kpjmd/orthoiq-agents/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/kpjmd/orthoiq-agents/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/kpjmd/orthoiq-agents/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/kpjmd/orthoiq-agents/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/kpjmd/orthoiq-agents/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/kpjmd/orthoiq-agents/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/kpjmd/orthoiq-agents/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kpjmd/orthoiq-agents/compare/v0.1.0...v0.2.0

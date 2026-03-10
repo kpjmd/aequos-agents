@@ -124,6 +124,28 @@ export class TriageAgent extends OrthopedicSpecialist {
         7. FOLLOW-UP QUESTIONS FOR PATIENT:
            - What additional information would help assessment?
 
+        8. QUERY TYPE CLASSIFICATION:
+           - CLINICAL: Personal health case with symptoms, timeline, pain, injury, or
+             functional limitations. Has a trackable recovery trajectory.
+           - INFORMATIONAL: General knowledge or educational question. Seeks explanation,
+             research, or comparison — not clinical assessment of a personal condition.
+             Includes general recovery timeline questions without personal injury context.
+
+           RULES:
+           - Emergency/urgent → always CLINICAL.
+           - "Why does [body part] [symptom]?" with no timeline, severity, or personal
+             context → INFORMATIONAL.
+           - Generic recovery questions ("How long does ACL recovery take?") without
+             personal injury context → INFORMATIONAL.
+           - If uncertain → CLINICAL.
+
+           Output:
+           QUERY_TYPE: [CLINICAL or INFORMATIONAL]
+           QUERY_SUBTYPE: [FACTUAL or DEBATABLE]
+             FACTUAL = has a clear evidence-based answer (anatomy, recovery norms, definitions)
+             DEBATABLE = multiple valid clinical perspectives exist (treatment comparisons,
+             intervention efficacy, surgical vs conservative)
+
         Provide clear, actionable triage decision with confidence levels.
       `;
 
@@ -221,7 +243,14 @@ export class TriageAgent extends OrthopedicSpecialist {
         specialistRecommendations: structuredResponse.specialistRecommendations ||
                                    this.extractSpecialistRecommendations(triageResult),
         suggestedDiagnoses: this.extractSuggestedDiagnoses(triageResult),
-        caseId: caseId
+        caseId: caseId,
+
+        // Query type classification — emergency/urgent always forces clinical
+        queryType: (structuredResponse.urgencyLevel === 'emergency' ||
+                    structuredResponse.urgencyLevel === 'urgent')
+          ? 'clinical'
+          : (structuredResponse.queryType || 'clinical'),
+        querySubtype: structuredResponse.querySubtype || null
       };
 
       // Generate user-friendly markdown response
@@ -283,7 +312,9 @@ export class TriageAgent extends OrthopedicSpecialist {
       followUpQuestions: [],
       urgencyLevel: 'routine',
       clinicalImportance: 'medium',
-      specialistRecommendations: []
+      specialistRecommendations: [],
+      queryType: 'clinical',
+      querySubtype: null
     };
 
     try {
@@ -443,6 +474,17 @@ export class TriageAgent extends OrthopedicSpecialist {
           .filter(line => line.trim().startsWith('-'))
           .map(line => line.replace(/^-\s*/, '').trim())
           .filter(q => q.length > 0);
+      }
+
+      // Parse QUERY TYPE classification (section 8)
+      const queryTypeMatch = response.match(/QUERY[_ ]TYPE:\s*(CLINICAL|INFORMATIONAL)/i);
+      if (queryTypeMatch) {
+        structured.queryType = queryTypeMatch[1].toLowerCase();
+      }
+
+      const querySubtypeMatch = response.match(/QUERY[_ ]SUBTYPE:\s*(FACTUAL|DEBATABLE)/i);
+      if (querySubtypeMatch) {
+        structured.querySubtype = querySubtypeMatch[1].toLowerCase();
       }
 
     } catch (error) {
@@ -1112,6 +1154,112 @@ export class TriageAgent extends OrthopedicSpecialist {
     const hasContext = !!(caseData.history || caseData.duration || caseData.location);
     
     return hasSymptoms && (hasPainInfo || hasContext);
+  }
+
+  /**
+   * Heuristic query type classifier — no LLM call.
+   * Returns { queryType: 'clinical'|'informational', confidence, signals }
+   */
+  classifyQueryType(caseData) {
+    const query = (caseData.rawQuery || caseData.primaryComplaint || '').toLowerCase();
+    const clinicalSignals = [];
+    const informationalSignals = [];
+
+    // --- Clinical signal detection ---
+
+    // Personal timeline: "for 3 weeks", "since last Monday", "2 weeks ago"
+    if (/\b(for\s+\d+\s+(day|week|month|year)s?|since\s+(last\s+)?\w+day|\d+\s+(day|week|month|year)s?\s+ago)\b/i.test(query)) {
+      clinicalSignals.push('personal_timeline');
+    }
+
+    // Pain severity: painLevel field or "pain 7/10" in text
+    if (caseData.painLevel !== undefined || /\bpain\s+\d+\s*\/\s*10\b/i.test(query) || /\b\d+\s*\/\s*10\s*(pain)?\b/i.test(query)) {
+      clinicalSignals.push('pain_severity');
+    }
+
+    // Injury mechanism: "I fell", "I twisted", "accident"
+    if (/\b(i\s+(fell|twisted|slipped|tripped|landed|hit|crashed|dislocated)|accident|injury|injured)\b/i.test(query)) {
+      clinicalSignals.push('injury_mechanism');
+    }
+
+    // Functional limitation: "I can't walk", "unable to", "swollen"
+    if (/\b(i\s+can'?t|unable\s+to|cannot|swollen|swelling|limping|can'?t\s+(walk|move|lift|bend|sleep))\b/i.test(query)) {
+      clinicalSignals.push('functional_limitation');
+    }
+
+    // Treatment history: "my doctor", "prescribed", "post-op", "surgery ... ago"
+    if (/\b(my\s+(doctor|surgeon|physio|therapist|orthopedist)|prescribed|post-op|post\s*operative|had\s+surgery)\b/i.test(query)) {
+      clinicalSignals.push('treatment_history');
+    }
+
+    // Structured case data: age, duration, location fields present
+    if (caseData.age !== undefined && caseData.duration && caseData.location) {
+      clinicalSignals.push('structured_case_data');
+    }
+
+    // --- Informational signal detection ---
+
+    // Explanation-seeking prefix
+    if (/^(why\s+does|what\s+is|what\s+causes|how\s+does|is\s+it\s+normal)\b/i.test(query)) {
+      informationalSignals.push('explanation_seeking_prefix');
+    }
+
+    // Research seeking
+    if (/\b(latest|research|studies|evidence|guidelines|literature|meta-analysis)\b/i.test(query)) {
+      informationalSignals.push('research_seeking');
+    }
+
+    // General phenomenon (without first-person)
+    if (/\b(people|patients|generally|typically|common|average)\b/i.test(query) && !/\b(i|my|me|i'm|i've)\b/i.test(query)) {
+      informationalSignals.push('general_phenomenon');
+    }
+
+    // Comparison query
+    if (/\b(vs\.?|versus|compared\s+to|difference\s+between)\b/i.test(query)) {
+      informationalSignals.push('comparison_query');
+    }
+
+    // Recovery timeline general — fires ONLY without personal injury context
+    if (/\b(how\s+long\s+(does|until|before|will|for)|when\s+can\s+(i|you)\s+return|recovery\s+time|return\s+to\s+(sport|activity|play|work|running|basketball|football|soccer|tennis))\b/i.test(query)) {
+      // Only informational if no clinical signals already detected
+      if (clinicalSignals.length === 0) {
+        informationalSignals.push('recovery_timeline_general');
+      }
+    }
+
+    // --- Decision logic ---
+    const numClinical = clinicalSignals.length;
+    const numInformational = informationalSignals.length;
+
+    let queryType, confidence;
+
+    if (numClinical >= 2) {
+      queryType = 'clinical';
+      confidence = 0.85;
+    } else if (numClinical === 1 && numInformational === 0) {
+      queryType = 'clinical';
+      confidence = 0.7;
+    } else if (numInformational >= 1 && numClinical === 0) {
+      queryType = 'informational';
+      confidence = 0.8;
+    } else if (numClinical > 0 && numInformational > 0) {
+      // Mixed signals → clinical (safety default)
+      queryType = 'clinical';
+      confidence = 0.55;
+    } else {
+      // No signals → clinical (safety default)
+      queryType = 'clinical';
+      confidence = 0.5;
+    }
+
+    return {
+      queryType,
+      confidence,
+      signals: {
+        clinical: clinicalSignals,
+        informational: informationalSignals
+      }
+    };
   }
 
   calculateTriageConfidence(completeness, specialistCount) {

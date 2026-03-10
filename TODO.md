@@ -1,5 +1,17 @@
 # OrthoIQ Agents - TODO
 
+## ✅ Recently Completed (2026-03-04 — Test Suite Hardening)
+
+### Test Suite: 333/333 Passing (0 Failures)
+- [x] Convert `agent.test.js`, `blockchain.test.js`, `coordination.test.js` from CommonJS `jest.mock()` to ESM `jest.unstable_mockModule()` + dynamic `import()` (Category A)
+- [x] Update stale query-building assertions in `research-agent.test.js` to match `extractClinicalTerms()` structured output (Category B)
+- [x] Isolate quality-scoring tests from relevance filter via `jest.spyOn(agent, 'scoreRelevance')` in 4 describe blocks (Category C)
+- [x] Fix `scoreRelevance()` to expand abbreviations in paper title/abstract before term matching — "ACL Reconstruction" now scores correctly (Category D code fix)
+- [x] Add 7 missing stub methods to `RecoveryMetrics`: `calculateStrengthRecovery`, `calculateQOLImprovement`, `identifySuccessFactors`, `identifyImprovementOpportunities`, `storeOutcomeMetrics`, `generateQualityIndicators`, `calculateTotalDuration`
+- [x] Append §7 to `docs/research-agent-api.md` (query behavior, abbreviation fix, test status, known limitations)
+
+---
+
 ## ✅ Recently Completed (v0.6.0 - 2026-03-01)
 
 ### Research Agent & Model Migration
@@ -44,24 +56,70 @@
 
 ## High Priority
 
-### Deployment & Infrastructure (Next Steps)
-- [ ] **Deploy to Railway** - Follow `RAILWAY_DEPLOYMENT.md` guide
-- [ ] **Post-deployment testing** - Run 10 test suite from deployment guide
+### Deployment & Infrastructure
+- [x] **Deploy to Railway** - Completed; env vars verified in Railway dashboard
+- [x] **Post-deployment testing** - Validated correct model routing (Sonnet 4.6 / Haiku 4.5)
 - [ ] Set up production logging and monitoring
 - [ ] Set up error tracking (Sentry or similar)
 
 ### Base Sepolia Migration (Phase 3)
+
+**Prerequisite — Persistent Agent Wallets** *(must be done before contract deployment)*
+- [ ] **Implement persistent CDP-managed wallets** - Each of the 6 agents currently creates a new
+      ephemeral wallet on every server restart; wallet addresses must be stable for on-chain token
+      balances to survive. Use deterministic CDP account names per agent (e.g. `orthoiq-triage-agent-v1`)
+      so CDP's MPC infrastructure returns the same wallet on each startup. No private keys stored
+      server-side. Files: `src/utils/cdp-account-manager.js`, `src/agents/base-agent.js`
+- [ ] **Disable mock blockchain mode** - Set `MOCK_BLOCKCHAIN_RESPONSES=false` in Railway once
+      persistent wallets are in place
+
+**Contract Deployment**
 - [ ] **Install Hardhat dependencies** - `npm install`
 - [ ] **Compile smart contract** - `npm run compile:contract`
 - [ ] **Generate deployer wallet** - Save private key securely
 - [ ] **Fund deployer wallet** - 0.1 ETH from Base Sepolia faucet
-- [ ] **Deploy token contract** - `npm run deploy:contract`
-- [ ] **Extract agent wallet addresses** - From Railway logs
-- [ ] **Fund agent wallets** - 0.05 ETH each from faucet
-- [ ] **Authorize agents as minters** - `npm run authorize:agents`
-- [ ] **Update Railway env** - Set TOKEN_CONTRACT_ADDRESS, MOCK_BLOCKCHAIN_RESPONSES=false
-- [ ] **Verify on Basescan** - Check mint transactions
+- [ ] **Deploy OrthoIQAgentToken (OAT)** - `npm run deploy:contract`; capture deployed address
+- [ ] **Update Railway env** - Set `TOKEN_CONTRACT_ADDRESS=0x...`, `MOCK_BLOCKCHAIN_RESPONSES=false`
+
+**Agent Authorization & Funding**
+- [ ] **Fund agent wallets** - 0.05 ETH each from Base Sepolia faucet (gas for mint/transfer txns)
+- [ ] **Authorize all 6 agents as minters** - `npm run authorize:agents` (calls `addMinter()` per wallet)
+- [ ] **Verify on Basescan** - Confirm mint transactions appear on Base Sepolia explorer
 - [ ] Test token distribution and prediction staking on testnet
+
+### Informational Query Pathway — Pre-Testnet Requirement
+
+**Phase 1 — Standard Informational: COMPLETE (2026-03-10)** ✅
+
+See CHANGELOG.md for full details. Summary:
+- [x] **Two-layer query type classification** — Heuristic regex classifier + LLM section 8 in triage prompt.
+      Detects informational vs clinical queries with recovery timeline general support.
+- [x] **Informational branch in consultation endpoint** — Both fast and normal modes detect
+      `queryType: "informational"` and route to `handleInformationalQuery()`, skipping specialists,
+      prediction market, and recovery tracking entirely.
+- [x] **Token track tagging** — All token rewards tagged with `track: 'clinical'` or `'informational'`
+      at write time for analytics separation.
+- [x] **22 new tests** — Heuristic classifier + parser tests. Full suite: 355/355 passing.
+
+**Phase 2 — Specialist Panel Discussion (post-testnet, premium feature)**
+- [ ] **Panel mode for debatable topics** — Triage identifies informational queries where multiple
+      valid clinical perspectives exist (e.g., PRP efficacy, surgical vs. conservative management).
+      Generates targeted questions for 2–3 relevant specialists who respond with their perspective.
+      User sees a "conference room" discussion play out on screen.
+- [ ] **Surface specialist disagreements** — Different specialists legitimately weigh evidence
+      differently (PainWhisperer favors pain reduction data; StrengthSage evaluates functional
+      outcomes). Disagreements are expected and valuable to users.
+- [ ] **Consensus prediction market** — New market mechanic: specialists stake tokens on their
+      perspective ("PRP shows clinically meaningful pain reduction for knee OA"). Settlement via
+      new research evidence (Research Agent periodically re-queries PubMed), aggregate user
+      feedback, or platform expert review. Distinct from recovery outcome market.
+- [ ] **Run panel on Haiku** — Specialists giving perspective on research topics don't need
+      Sonnet-level reasoning. Haiku brings panel cost to ~$0.04–0.06 vs. ~$0.14 on Sonnet.
+
+**Cost context** (measured 2026-03-09):
+- Full clinical consultation: ~$0.14 (34k tokens: 25k Haiku + 9k Sonnet)
+- Standard informational (Phase 1, research-only): ~$0.02–0.04
+- Panel discussion (Phase 2, specialists on Haiku): ~$0.04–0.06
 
 ### Future Blockchain Steps
 - [ ] Audit token contract (optional but recommended)
@@ -169,6 +227,7 @@ Create dedicated `shouldIncludeMindMender()` method with:
 - [x] **Orthopedic scope validation** (v0.4.0) - Pre-agent filtering with 69 tests
 - [x] **Research Agent** (v0.6.0) - PubMed integration, triage-informed queries, quality scoring
 - [x] **Hybrid model migration** (v0.6.0) - Haiku 4.5 / Sonnet 4.6 cost optimization
+- [x] **Informational query pathway Phase 1** (v0.7.0) - Query type classification, informational routing, token track tagging
 
 ---
 
@@ -192,3 +251,6 @@ Create dedicated `shouldIncludeMindMender()` method with:
 - MindMender routing needs monitoring after Option 1 deployment
 - Consider A/B testing for specialist routing algorithms
 - **Scope Validation**: Monitor redirect logs to tune keyword dictionaries; toggle with `ENABLE_SCOPE_VALIDATION=false` if needed
+- **Pre-testnet gate**: Informational query pathway (Phase 1) + persistent wallets must both ship before testnet launch to prevent frivolous on-chain token exchanges
+- **Cost baseline** (2026-03-09): ~$0.14/comprehensive consult, ~$42/month at 10/day. See `memory/cost-analysis.md` for full breakdown
+- **Truncation risk**: `MAX_TOKENS=2500` can truncate complex specialist responses. Raise to 4096 in Railway env if truncation observed. Backend issue, not frontend
