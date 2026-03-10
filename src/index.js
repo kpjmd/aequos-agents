@@ -1660,7 +1660,6 @@ class OrthoIQAgentSystem {
 
     // Award flat triage token for classification
     this.tokenManager.distributeTokenReward(this.agents.triage.agentId, {
-      success: true,
       reason: 'informational_triage'
     }, {
       walletProvider: this.agents.triage.walletProvider,
