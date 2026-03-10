@@ -477,12 +477,14 @@ export class TriageAgent extends OrthopedicSpecialist {
       }
 
       // Parse QUERY TYPE classification (section 8)
-      const queryTypeMatch = response.match(/QUERY[_ ]TYPE:\s*(CLINICAL|INFORMATIONAL)/i);
+      // Resilient regex: handles QUERY_TYPE, QUERY TYPE, QUERYTYPE, markdown bold,
+      // extra whitespace around colon, and optional ** around the value
+      const queryTypeMatch = response.match(/QUERY[_ ]?TYPE\s*:\s*\*{0,2}\s*(CLINICAL|INFORMATIONAL)/i);
       if (queryTypeMatch) {
         structured.queryType = queryTypeMatch[1].toLowerCase();
       }
 
-      const querySubtypeMatch = response.match(/QUERY[_ ]SUBTYPE:\s*(FACTUAL|DEBATABLE)/i);
+      const querySubtypeMatch = response.match(/QUERY[_ ]?SUBTYPE\s*:\s*\*{0,2}\s*(FACTUAL|DEBATABLE)/i);
       if (querySubtypeMatch) {
         structured.querySubtype = querySubtypeMatch[1].toLowerCase();
       }

@@ -581,8 +581,14 @@ class OrthoIQAgentSystem {
             platformContext
           });
 
-          // Check if informational — use LLM classification with heuristic fallback
-          const effectiveQueryType = triageResponse.queryType || heuristicClassification.queryType;
+          // Check if informational — either classifier saying informational is a confident signal
+          // (both default to clinical when uncertain, so informational from either is trustworthy)
+          const effectiveQueryType =
+            (triageResponse.queryType === 'informational' || heuristicClassification.queryType === 'informational')
+              ? 'informational'
+              : 'clinical';
+          logger.info(`Effective query type: ${effectiveQueryType} ` +
+            `(triage: ${triageResponse.queryType}, heuristic: ${heuristicClassification.queryType})`);
           if (effectiveQueryType === 'informational') {
             logger.info('Fast mode: Informational query detected, skipping specialist pipeline');
             return this.handleInformationalQuery(res, {
@@ -697,7 +703,12 @@ class OrthoIQAgentSystem {
           rawQuery, enableDualTrack
         });
 
-        const effectiveQueryTypeNormal = triageForClassification.queryType || heuristicClassification.queryType;
+        const effectiveQueryTypeNormal =
+          (triageForClassification.queryType === 'informational' || heuristicClassification.queryType === 'informational')
+            ? 'informational'
+            : 'clinical';
+        logger.info(`Effective query type: ${effectiveQueryTypeNormal} ` +
+          `(triage: ${triageForClassification.queryType}, heuristic: ${heuristicClassification.queryType})`);
         if (effectiveQueryTypeNormal === 'informational') {
           logger.info('Normal mode: Informational query detected, skipping specialist pipeline');
           return this.handleInformationalQuery(res, {

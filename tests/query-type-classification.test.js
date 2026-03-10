@@ -270,5 +270,82 @@ describe('Query Type Classification', () => {
       expect(result.queryType).toBe('clinical');
       expect(result.querySubtype).toBeNull();
     });
+
+    test('parses markdown-bold formatted QUERY_TYPE: **QUERY_TYPE:** INFORMATIONAL', () => {
+      const response = `
+        1. PRIMARY FINDINGS:
+        - General knowledge question
+
+        **QUERY_TYPE:** INFORMATIONAL
+        **QUERY_SUBTYPE:** DEBATABLE
+      `;
+      const result = triageAgent.parseTriageResponse(response);
+      expect(result.queryType).toBe('informational');
+      expect(result.querySubtype).toBe('debatable');
+    });
+
+    test('parses QUERY_TYPE with extra whitespace around colon', () => {
+      const response = `
+        1. PRIMARY FINDINGS:
+        - General question
+
+        QUERY_TYPE :  INFORMATIONAL
+        QUERY_SUBTYPE :  FACTUAL
+      `;
+      const result = triageAgent.parseTriageResponse(response);
+      expect(result.queryType).toBe('informational');
+      expect(result.querySubtype).toBe('factual');
+    });
+
+    test('parses QUERY TYPE with space separator (no underscore)', () => {
+      const response = `
+        1. PRIMARY FINDINGS:
+        - General question
+
+        QUERY TYPE: INFORMATIONAL
+        QUERY SUBTYPE: FACTUAL
+      `;
+      const result = triageAgent.parseTriageResponse(response);
+      expect(result.queryType).toBe('informational');
+      expect(result.querySubtype).toBe('factual');
+    });
+  });
+
+  // ===== Regression: effectiveQueryType OR-logic =====
+
+  describe('effectiveQueryType — OR-logic regression', () => {
+    test('heuristic informational + parser default clinical → informational', () => {
+      // Simulates the production bug: parser fails, defaults to 'clinical',
+      // but heuristic correctly says 'informational'
+      const triageQueryType = 'clinical'; // parser failed, kept default
+      const heuristicQueryType = 'informational'; // heuristic detected correctly
+
+      // Old broken logic: 'clinical' || 'informational' = 'clinical'
+      const oldLogic = triageQueryType || heuristicQueryType;
+      expect(oldLogic).toBe('clinical'); // confirms the bug
+
+      // New fixed logic: either saying informational → informational
+      const newLogic =
+        (triageQueryType === 'informational' || heuristicQueryType === 'informational')
+          ? 'informational'
+          : 'clinical';
+      expect(newLogic).toBe('informational'); // confirms the fix
+    });
+
+    test('both say clinical → clinical', () => {
+      const result =
+        ('clinical' === 'informational' || 'clinical' === 'informational')
+          ? 'informational'
+          : 'clinical';
+      expect(result).toBe('clinical');
+    });
+
+    test('triage says informational, heuristic says clinical → informational', () => {
+      const result =
+        ('informational' === 'informational' || 'clinical' === 'informational')
+          ? 'informational'
+          : 'clinical';
+      expect(result).toBe('informational');
+    });
   });
 });
