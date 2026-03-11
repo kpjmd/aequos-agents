@@ -466,14 +466,35 @@ export class TriageAgent extends OrthopedicSpecialist {
         }
       }
 
-      // Parse FOLLOW-UP QUESTIONS section
-      const followUpMatch = response.match(/FOLLOW-UP QUESTIONS.*?:([\s\S]*?)(?=\n\d\.|$)/i);
-      if (followUpMatch) {
-        structured.followUpQuestions = followUpMatch[1]
-          .split(/\n/)
-          .filter(line => line.trim().startsWith('-'))
-          .map(line => line.replace(/^-\s*/, '').trim())
-          .filter(q => q.length > 0);
+      // Parse FOLLOW-UP QUESTIONS section (handles multiple question formats)
+      const followUpSection = response.match(/\d+\.\s*FOLLOW-UP QUESTIONS[^\n]*([\s\S]*?)(?=\n\d+\.\s+[A-Z]|$)/i);
+      if (followUpSection) {
+        const questions = [];
+        for (const rawLine of followUpSection[1].split(/\n/)) {
+          const line = rawLine.trim();
+          if (!line) continue;
+          if (line.startsWith('-')) {
+            // Format 1: bullet dash (- Question text)
+            const q = line.replace(/^-\s*/, '').trim();
+            if (q.length > 5) questions.push(q);
+          } else if (/^\d+\.\s/.test(line)) {
+            // Format 2: numbered list (1. Question text)
+            const q = line.replace(/^\d+\.\s*/, '').trim();
+            if (q.length > 5) questions.push(q);
+          } else if (/^If\s+[^:]+:\s*.+\?$/i.test(line)) {
+            // Format 3: conditional "If X: Question?" — extract just the question
+            const q = line.replace(/^If\s+[^:]+:\s*/i, '').trim();
+            if (q.length > 5) questions.push(q);
+          } else if (line.endsWith('?') && line.length > 10) {
+            // Format 4: plain question line ending with ?
+            questions.push(line);
+          }
+          // Context sub-headers like "If transitioning to clinical assessment:" are skipped
+          // (they end with ':' not '?' so they don't match any format above)
+        }
+        if (questions.length > 0) {
+          structured.followUpQuestions = questions;
+        }
       }
 
       // Parse QUERY TYPE classification (section 8)
