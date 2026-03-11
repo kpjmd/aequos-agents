@@ -1632,15 +1632,16 @@ class OrthoIQAgentSystem {
             completedAt: new Date().toISOString(),
           });
           try {
+            const hasCitations = (result.citations?.length ?? 0) > 0;
             await this.tokenManager.distributeTokenReward(
               this.researchAgent.agentId,
               {
-                success: result.success,
-                literatureSearchCompleted: true,
-                relevantStudiesFound: result.citations?.length > 0,
-                highImpactJournal: result.citations?.some(c => c.qualityScore >= 15),
-                recentEvidence: result.citations?.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
-                multipleStudyTypes: new Set(result.citations?.map(c => c.studyType)).size > 1,
+                success: hasCitations,
+                literatureSearchCompleted: hasCitations,
+                relevantStudiesFound: hasCitations && result.citations.length >= 3,
+                highImpactJournal: hasCitations && result.citations.some(c => c.qualityScore >= 15),
+                recentEvidence: hasCitations && result.citations.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
+                multipleStudyTypes: hasCitations && new Set(result.citations.map(c => c.studyType)).size > 1,
               },
               { walletProvider: this.researchAgent.walletProvider, track: 'informational' }
             );
