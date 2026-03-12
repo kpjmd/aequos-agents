@@ -81,18 +81,57 @@ export class ResearchAgent extends BaseAgent {
   getSystemPrompt() {
     return `You are ${this.name}, a medical literature research specialist in the OrthoIQ recovery ecosystem.
 
-Your role is to curate and summarize relevant medical literature to support evidence-based orthopedic care.
+Your role is to curate and present medical literature evidence to support evidence-based orthopedic care decisions, tailored to each patient's context.
 
 Experience level: ${this.experience} points
 Token balance: ${this.tokenBalance}
 
-Guidelines:
-- Summarize research findings in patient-friendly language (8th grade reading level)
-- Always cite specific studies with authors, journal, and year
-- Distinguish between strong evidence (RCTs, meta-analyses) and weaker evidence (case reports, reviews)
-- Be honest about limitations and conflicting evidence
-- Focus on clinically actionable findings relevant to the patient's condition
+## Evidence Hierarchy & Grading
+
+Assign a grade to each citation based on study design and quality:
+
+| Grade | Evidence Level | Study Types |
+|-------|---------------|-------------|
+| A | Level 1–2, population-matched | Systematic reviews, meta-analyses, high-quality RCTs |
+| B | Level 2–3, or Level 1–2 with population mismatch | Lower-quality RCTs, prospective cohort, case-control studies |
+| C | Level 4–5 | Retrospective studies, case series, narrative reviews, expert opinion |
+| X | Conflicts guidelines or flagged concern | Studies contradicting AAOS/AOSSM/APTA guidelines; note why |
+
+Do not mix evidence levels without flagging it. If presenting both Level 1 and Level 4 evidence together, state explicitly why the lower-level evidence is included.
+
+## Population Relevance Filters
+
+Flag mismatches between study population and patient context:
+- **Age brackets**: Pediatric (<18) — adult studies are NOT applicable; Young adult (18–35); Middle-aged (35–55); Older adult (55+) — flag if a study excluded patients >65
+- **Activity level**: Competitive vs. recreational vs. sedentary — flag when study population differs meaningfully
+- **Treatment type**: If the question is about conservative management but most evidence is surgical, state: "Note: The majority of high-quality evidence for this condition is surgical. Conservative management evidence is limited."
+- **Anatomical specificity**: Confirm the study matches the specific structure in question (e.g., medial vs. lateral meniscus, ACL vs. PCL)
+
+## Key Guideline Sources (Static Reference)
+
+Cross-reference findings against these guidelines. Note alignment or conflict explicitly:
+- **AAOS** (American Academy of Orthopaedic Surgeons) — surgical indications, implant selection, rehab timelines
+- **AOSSM** (American Orthopaedic Society for Sports Medicine) — return-to-sport criteria, overuse injuries, biologics
+- **APTA** (American Physical Therapy Association) — conservative management and PT protocols
+- **NICE / Cochrane** — systematic reviews for conservative MSK management
+
+If a citation contradicts current guidelines → assign Grade X and explain the discrepancy.
+If guidelines are silent on the specific question → note this as a gap in Evidence Gaps section.
+
+## Emerging Topic Flags
+
+Apply these notes in the Evidence Gaps section when relevant:
+- **Biologics** (PRP, stem cells, exosomes): Always note current FDA regulatory status. PRP evidence is protocol-dependent (leukocyte-rich vs. leukocyte-poor produce different outcomes). Exosomes are largely preclinical as of 2025–2026.
+- **Return-to-sport (RTS)**: Time-based criteria alone are insufficient — note whether study RTS criteria are time-based or functional/criteria-based.
+- **Techniques <5 years old**: Flag limited long-term follow-up data; note learning curve effects if reported.
+- **Conflicting studies**: Present both; note conflict may reflect patient selection or outcome measure differences — do not adjudicate.
+
+## Core Standards
+
+- Present findings in plain language (8th-grade reading level)
+- Always cite specific studies with authors, journal, year, and PubMed ID
 - Never overstate conclusions beyond what the evidence supports
+- Be honest about limitations and conflicting evidence
 - Present both surgical and conservative treatment evidence when applicable`;
   }
 
@@ -975,20 +1014,100 @@ Guidelines:
     }
 
     try {
-      const studySummaries = studies.map(s =>
-        `- "${s.title}" (${s.journal}, ${s.year}) - ${s.studyType}`
-      ).join('\n');
+      const gradeFromStudy = (s) => {
+        const type = s.studyType || '';
+        const score = s.qualityScore || 0;
+        if (type === 'Systematic Review' || type === 'Meta-Analysis') return 'A';
+        if (type === 'Randomized Controlled Trial') return score >= 7 ? 'A' : 'B';
+        if (type === 'Prospective Cohort' || type === 'Cohort Study') return 'B';
+        if (type === 'Retrospective Cohort' || type === 'Case-Control') return 'B';
+        return 'C';
+      };
+
+      const tierLabel = (s) => {
+        const t = this.getJournalTierScore(s.journal);
+        if (t === 3) return 'Tier 1 (top-tier journal)';
+        if (t === 2) return 'Tier 2 (strong specialty journal)';
+        if (t === 1) return 'Tier 3 (rehabilitation/MSK journal)';
+        return 'unranked journal';
+      };
+
+      const studySummaries = studies.map(s => {
+        const abstractSnippet = s.abstract
+          ? s.abstract.substring(0, 200).replace(/\n/g, ' ') + (s.abstract.length > 200 ? '…' : '')
+          : 'No abstract available.';
+        const firstAuthor = Array.isArray(s.authors) && s.authors.length > 0
+          ? s.authors[0]
+          : (s.authors || 'Unknown');
+        return [
+          `PMID: ${s.pmid || 'N/A'}`,
+          `Authors: ${firstAuthor}${Array.isArray(s.authors) && s.authors.length > 1 ? ' et al.' : ''}`,
+          `Title: ${s.title}`,
+          `Journal: ${s.journal} (${tierLabel(s)})`,
+          `Year: ${s.year}`,
+          `Study type: ${s.studyType} — Suggested grade: ${gradeFromStudy(s)}`,
+          `Quality score: ${s.qualityScore}/10`,
+          `Abstract: ${abstractSnippet}`,
+        ].join('\n');
+      }).join('\n\n');
 
       const queryDescription = typeof clinicalQuery === 'string'
         ? clinicalQuery
         : JSON.stringify(clinicalQuery);
 
-      const prompt = `Based on these studies found for a patient with: ${queryDescription}
+      const highestLevel = (() => {
+        const types = studies.map(s => s.studyType || '');
+        if (types.some(t => t === 'Systematic Review' || t === 'Meta-Analysis')) return 1;
+        if (types.some(t => t === 'Randomized Controlled Trial')) return 2;
+        if (types.some(t => t === 'Prospective Cohort' || t === 'Cohort Study')) return 3;
+        if (types.some(t => t === 'Retrospective Cohort' || t === 'Case-Control')) return 4;
+        return 5;
+      })();
 
-Studies:
+      const prompt = `You are a medical literature specialist. Structure a research summary using the exact format below.
+
+Clinical query: ${queryDescription}
+
+Studies (${studies.length} total; highest evidence level: Level ${highestLevel}):
+
 ${studySummaries}
 
-Write a 2-3 paragraph patient-friendly summary (8th grade reading level) of what the current research says about this condition. Be specific about what the evidence shows. Do not use medical jargon without explanation.`;
+Produce the response in this exact structure:
+
+## Research Summary: [fill in condition/question from the clinical query]
+
+**Clinical Question**: [Restate the query in PICO format: Population, Intervention, Comparison, Outcome — plain language, 1–2 sentences]
+**Evidence Base**: [${studies.length} ${studies.length === 1 ? 'study' : 'studies'} found; highest level: Level ${highestLevel}]
+
+---
+
+### Key Findings
+
+[2–4 sentences. Synthesize the most actionable finding first. Plain language, 8th-grade reading level. Do not just list abstracts — synthesize what the body of evidence says.]
+
+---
+
+### Citations
+
+[For each study, output:]
+**[Grade X]** [First author et al., Year] — [Journal]
+*[One sentence: what was studied, what was found, why it is relevant to this question. If grade is B or C, briefly note why (population mismatch, study design limitation, etc.).]*
+PubMed ID: [PMID]
+
+---
+
+### Evidence Gaps & Caveats
+
+- [Note any age, activity level, or surgical vs. conservative population mismatches]
+- [Note alignment or conflict with AAOS, AOSSM, or APTA guidelines — if unknown, write "Guideline alignment: not verified in this search"]
+- [For biologics: note FDA status. For techniques <5 years old: flag limited follow-up data.]
+- [Other limitations or weak evidence areas]
+
+---
+
+### Suggested Follow-Up Searches
+
+[1–2 related PubMed queries the user may want to run for adjacent evidence]`;
 
       const intro = await this.processMessage(prompt);
       return typeof intro === 'string' ? intro : String(intro);

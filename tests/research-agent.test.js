@@ -82,7 +82,7 @@ describe('ResearchAgent - Initialization', () => {
     const prompt = agent.getSystemPrompt();
     expect(prompt).toBeDefined();
     expect(prompt).toContain('Research Pioneer');
-    expect(prompt).toContain('patient-friendly');
+    expect(prompt).toContain('plain language');
     expect(prompt).toContain('evidence');
     expect(prompt).toContain('limitations');
   });
