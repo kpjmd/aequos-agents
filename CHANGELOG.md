@@ -90,6 +90,89 @@ New test file `tests/query-type-classification.test.js`:
 
 ---
 
+## [0.8.0] - 2026-03-11
+
+### Added — Research Agent: Structured Output & Evidence Grading (Skill Methodology)
+
+The research agent's response quality has been significantly upgraded by injecting the `orthoiq-research` skill methodology directly into its prompts. The `intro` field now returns a clinically structured summary rather than a flat paragraph block.
+
+**New `intro` format (six sections):**
+
+```
+## Research Summary: [Condition]
+**Clinical Question**: [PICO restatement]
+**Evidence Base**: [N studies; highest level: Level N]
+
+### Key Findings
+[2–4 sentences, most actionable first, plain language]
+
+### Citations
+**[Grade A/B/C/X]** Author et al., Year — Journal
+*One sentence: what studied, found, why relevant*
+PubMed ID: XXXXXXXX
+
+### Evidence Gaps & Caveats
+- Population mismatches, guideline alignment, biologic FDA status, etc.
+
+### Suggested Follow-Up Searches
+[1–2 related queries]
+```
+
+**Evidence grading system:**
+
+| Grade | Evidence Level | Study Types |
+|-------|---------------|-------------|
+| A | Level 1–2 | Systematic reviews, meta-analyses, high-quality RCTs (qualityScore ≥ 7) |
+| B | Level 2–3 | Lower-quality RCTs, prospective cohort, case-control studies |
+| C | Level 4–5 | Retrospective studies, case series, narrative reviews, expert opinion |
+| X | Flagged conflict | Contradicts AAOS/AOSSM/APTA guidelines — explanation included |
+
+**Richer study data passed to Haiku:** Each study in the `generateResearchIntro()` prompt now includes PMID, first author, journal tier label, study type, quality score, and a 200-character abstract snippet (previously: title + journal + year + study type only). Pre-computed evidence grade is included so the LLM can focus on clinical synthesis rather than grade inference.
+
+**Population relevance filters in system prompt:** Age brackets (pediatric/young adult/middle-aged/older adult), activity level mismatch flagging, surgical vs. conservative evidence base notes, anatomical specificity checks.
+
+**Emerging topic flags (applied to Evidence Gaps section):**
+- Biologics (PRP, stem cells, exosomes) → FDA regulatory status note
+- Return-to-sport → time-based vs. functional criteria flag
+- Techniques <5 years old → limited follow-up data flag
+
+**Guideline cross-reference (static reference embedded in system prompt):** AAOS, AOSSM, APTA, NICE/Cochrane — alignment noted; conflicts assigned Grade X.
+
+### Added — `skills/` Directory
+
+New top-level directory for versioned skill definitions, designed for future MCP server exposure. Currently contains the `orthoiq-research` skill package:
+
+```
+skills/
+└── orthoiq-research/
+    ├── SKILL.md                        # Full 6-step methodology
+    └── references/
+        ├── emerging-topics.md          # PRP, biologics, RTS, <5yr surgical techniques, wearables
+        └── guideline-sources.md        # AAOS/AOSSM/APTA/NICE URLs, conflict protocol, known gaps
+```
+
+Future skills (pain assessment, wearable agent, etc.) follow the same `skills/<skill-name>/SKILL.md` pattern. An MCP server layer can serve these as tool resources without restructuring the repo.
+
+### Changed
+
+- `getSystemPrompt()` — replaced 7-bullet flat list with structured methodology: evidence hierarchy table, population filters, guideline sources, emerging topic flags
+- `generateResearchIntro()` — complete rewrite of study data serialization and prompt structure; output is now structured Markdown, not free-form paragraphs
+- `tests/research-agent.test.js` — updated system prompt assertion (`'patient-friendly'` → `'plain language'`) to match new wording; all 167 research tests pass
+
+### Files Changed
+- `src/agents/research-agent.js` — `getSystemPrompt()`, `generateResearchIntro()`
+- `tests/research-agent.test.js` — system prompt test assertion
+- `skills/orthoiq-research/SKILL.md` — new
+- `skills/orthoiq-research/references/emerging-topics.md` — new
+- `skills/orthoiq-research/references/guideline-sources.md` — new
+
+### Token Cost Impact
+- System prompt: +~400 tokens/call (Haiku input, ~$0.0003 impact per call)
+- Study data enrichment: +~300 tokens (abstract snippets × 3–5 studies)
+- Response length: increases proportionally with structured format (acceptable)
+
+---
+
 ## [Unreleased]
 
 ### Fixed — Test Suite: 29 Pre-existing Failures Resolved (333/333 Passing)
@@ -418,7 +501,8 @@ FAST_MODEL=claude-haiku-4-5-20251001
 
 ---
 
-[Unreleased]: https://github.com/kpjmd/orthoiq-agents/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/kpjmd/orthoiq-agents/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/kpjmd/orthoiq-agents/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kpjmd/orthoiq-agents/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/kpjmd/orthoiq-agents/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kpjmd/orthoiq-agents/compare/v0.4.0...v0.5.0
