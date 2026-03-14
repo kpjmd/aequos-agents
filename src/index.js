@@ -722,7 +722,7 @@ class OrthoIQAgentSystem {
 
         // Normal mode: Complete multi-specialist consultation before responding
         // Set timeout for normal mode - 90s to accommodate parallel coordination + synthesis
-        const timeout = 90000;
+        const timeout = 120000;
         const consultationPromise = this.coordinator.coordinateMultiSpecialistConsultation(
           caseData,
           smartSpecialists,

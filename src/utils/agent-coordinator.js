@@ -117,7 +117,7 @@ export class AgentCoordinator {
       // Collect responses with appropriate mode settings - optimized for reliability
       const collectionOptions = {
         fastMode: mode === 'fast',
-        timeout: mode === 'fast' ? 35000 : 50000, // 35s fast, 50s normal to accommodate Claude + coordination
+        timeout: mode === 'fast' ? 35000 : 75000, // 35s fast, 75s normal to accommodate Sonnet 4.6 + coordination
         minResponses: mode === 'fast' ? 2 : availableSpecialists.length,
         rawQuery,
         enableDualTrack
@@ -279,7 +279,7 @@ export class AgentCoordinator {
   async collectSpecialistResponses(consultation, options = {}) {
     const responses = new Map();
     const { 
-      timeout = 50000,  // 50 second default timeout per agent (optimized for reliability)
+      timeout = 75000,  // 75 second default timeout per agent (Sonnet 4.6 needs headroom)
       fastMode = false, // Fast mode returns when minimum agents respond
       minResponses = 3  // Minimum responses needed in fast mode
     } = options;
