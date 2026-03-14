@@ -129,6 +129,7 @@ Key environment variables:
 - `PUBMED_API_KEY`: NCBI API key — raises PubMed rate limit from 3 to 10 req/s
 - `ENABLE_RESEARCH_AGENT`: Toggle research agent (`true`/`false`)
 - `RESEARCH_TIMEOUT_SECONDS`: Max seconds for PubMed retrieval (default: `15`)
+- `MD_REVIEW_API_URL`: Base URL for MD review service (optional — flag-for-review calls skipped when unset)
 
 ## API Endpoints
 

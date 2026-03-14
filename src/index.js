@@ -67,10 +67,16 @@ function shouldFlagForMDReview(result) {
   return { flag: false };
 }
 
-// API call to flag consultation for MD review (fails silently)
+// API call to flag consultation for MD review (skips when MD_REVIEW_API_URL not configured)
 async function flagConsultationForMDReview(consultationId, qualityScore) {
+  const baseUrl = process.env.MD_REVIEW_API_URL;
+  if (!baseUrl) {
+    logger.debug(`MD review skipped for ${consultationId} — MD_REVIEW_API_URL not configured`);
+    return;
+  }
+
   try {
-    const response = await fetch(`http://localhost:3001/api/consultations/${consultationId}/flag-for-review`, {
+    const response = await fetch(`${baseUrl}/api/consultations/${consultationId}/flag-for-review`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -85,7 +91,7 @@ async function flagConsultationForMDReview(consultationId, qualityScore) {
       logger.info(`Consultation ${consultationId} flagged for MD review (quality: ${qualityScore.toFixed(2)})`);
     }
   } catch (error) {
-    logger.error(`Error flagging consultation for MD review: ${error.message}`);
+    logger.warn(`MD review service unavailable for ${consultationId}: ${error.message}`);
   }
 }
 
@@ -574,6 +580,7 @@ class OrthoIQAgentSystem {
           // Get immediate triage-only response
           const triageAgent = this.agents.triage;
           const triageResponse = await triageAgent.triageCase(caseData, {
+            mode: 'normal',  // Use Sonnet for complete triage — user-facing primary output
             rawQuery,
             enableDualTrack,
             userId,
@@ -700,6 +707,7 @@ class OrthoIQAgentSystem {
 
         // Normal mode: Run triage for query type classification
         const triageForClassification = await this.agents.triage.triageCase(caseData, {
+          mode: 'normal',  // Use Sonnet for complete triage with all 8 sections
           rawQuery, enableDualTrack
         });
 
@@ -807,7 +815,12 @@ class OrthoIQAgentSystem {
             mode: req.body.mode
           });
         } else {
-          res.status(500).json({ error: 'Consultation failed', message: error.message });
+          res.status(500).json({
+            error: 'Consultation failed',
+            message: process.env.NODE_ENV === 'production'
+              ? 'An error occurred processing your consultation. Please try again.'
+              : error.message
+          });
         }
       }
     });
