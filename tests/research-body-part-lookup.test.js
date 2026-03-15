@@ -181,6 +181,18 @@ describe('ResearchAgent - Body Part Lookup: Hip/Knee Sub-structures', () => {
   test('intertrochanteric fracture → "intertrochanteric"', () => {
     expect(agent.extractClinicalTerms('intertrochanteric hip fracture elderly', {})).toContain('intertrochanteric');
   });
+
+  test('groin pain → "hip" (synonym mapping)', () => {
+    expect(agent.extractClinicalTerms('34yo cyclist with groin pain for 4 months', {})).toContain('hip');
+  });
+
+  test('adductor strain → "hip" (synonym mapping)', () => {
+    expect(agent.extractClinicalTerms('adductor strain after running', {})).toContain('hip');
+  });
+
+  test('inner thigh pain → "hip" (synonym mapping)', () => {
+    expect(agent.extractClinicalTerms('inner thigh pain worsening with activity', {})).toContain('hip');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -173,7 +173,23 @@ Apply these notes in the Evidence Gaps section when relevant:
       const articles = await this.fetchArticleDetails(pmids);
 
       // Filter, score, and limit by quality
-      const citations = this.filterByQuality(articles, clinicalQuery, tier);
+      let citations = this.filterByQuality(articles, clinicalQuery, tier);
+
+      // Post-quality-filter fallback: if PMIDs were found but none survived
+      // quality filtering, retry with a broader (OR-joined) query
+      if (citations.length === 0 && pmids.length > 0) {
+        logger.info(`0 citations survived quality filter from ${pmids.length} results — retrying with broader query`);
+        const broaderQuery = this.buildBroaderQuery(clinicalQuery);
+        logger.info(`Broader PubMed query: ${broaderQuery}`);
+        const broaderPmids = await this.searchPubMed(broaderQuery);
+        if (broaderPmids && broaderPmids.length > 0) {
+          const broaderArticles = await this.fetchArticleDetails(broaderPmids);
+          const broaderCitations = this.filterByQuality(broaderArticles, clinicalQuery, tier);
+          if (broaderCitations.length > 0) {
+            citations = broaderCitations;
+          }
+        }
+      }
 
       // Generate research intro summary
       const intro = await this.generateResearchIntro(citations, clinicalQuery);
@@ -332,7 +348,7 @@ Apply these notes in the Evidence Gaps section when relevant:
     const clinicalTerms = this.extractClinicalTerms(queryText, clinicalQuery);
     let termClause;
     if (clinicalTerms.length > 0) {
-      termClause = `(${clinicalTerms.join(' AND ')})`;
+      termClause = `(${clinicalTerms.join(' OR ')})`;
     } else {
       const structuredBodyPart =
         typeof clinicalQuery === 'object'
@@ -419,6 +435,9 @@ Apply these notes in the Evidence Gaps section when relevant:
       'thumb': 'thumb',
       'forearm': 'forearm',
       // ── Hip region (specific → generic) ──
+      'groin': 'hip',
+      'adductor': 'hip',
+      'inner thigh': 'hip',
       'femoral neck': 'femoral neck',
       'femoral head': 'femoral head',
       'intertrochanteric': 'intertrochanteric',
