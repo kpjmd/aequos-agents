@@ -581,6 +581,7 @@ class OrthoIQAgentSystem {
           const triageAgent = this.agents.triage;
           const triageResponse = await triageAgent.triageCase(caseData, {
             mode: 'normal',  // Use Sonnet for complete triage — user-facing primary output
+            timeout: 75000,  // Match coordinator normal-mode timeout for Sonnet
             rawQuery,
             enableDualTrack,
             userId,
@@ -708,6 +709,7 @@ class OrthoIQAgentSystem {
         // Normal mode: Run triage for query type classification
         const triageForClassification = await this.agents.triage.triageCase(caseData, {
           mode: 'normal',  // Use Sonnet for complete triage with all 8 sections
+          timeout: 75000,  // Match coordinator normal-mode timeout for Sonnet
           rawQuery, enableDualTrack
         });
 
