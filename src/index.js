@@ -485,7 +485,8 @@ class OrthoIQAgentSystem {
           caseData,
           requiredSpecialists,
           mode = 'fast',
-          platformContext
+          platformContext,
+          queryType       // optional user override: 'informational' | 'clinical'
         } = req.body;
         const startTime = Date.now();
 
@@ -589,14 +590,16 @@ class OrthoIQAgentSystem {
             platformContext
           });
 
-          // Check if informational — either classifier saying informational is a confident signal
-          // (both default to clinical when uncertain, so informational from either is trustworthy)
-          const effectiveQueryType =
-            (triageResponse.queryType === 'informational' || heuristicClassification.queryType === 'informational')
+          // Check if informational — user override takes precedence; otherwise either classifier
+          // saying informational is a confident signal (both default to clinical when uncertain)
+          const userOverride = (queryType === 'informational' || queryType === 'clinical') ? queryType : null;
+          if (userOverride) logger.info(`Query type override by user: ${userOverride}`);
+          const effectiveQueryType = userOverride
+            || ((triageResponse.queryType === 'informational' || heuristicClassification.queryType === 'informational')
               ? 'informational'
-              : 'clinical';
+              : 'clinical');
           logger.info(`Effective query type: ${effectiveQueryType} ` +
-            `(triage: ${triageResponse.queryType}, heuristic: ${heuristicClassification.queryType})`);
+            `(triage: ${triageResponse.queryType}, heuristic: ${heuristicClassification.queryType}${userOverride ? ', user override: ' + userOverride : ''})`);
           if (effectiveQueryType === 'informational') {
             logger.info('Fast mode: Informational query detected, skipping specialist pipeline');
             return this.handleInformationalQuery(res, {
@@ -713,12 +716,12 @@ class OrthoIQAgentSystem {
           rawQuery, enableDualTrack
         });
 
-        const effectiveQueryTypeNormal =
-          (triageForClassification.queryType === 'informational' || heuristicClassification.queryType === 'informational')
+        const effectiveQueryTypeNormal = userOverride
+          || ((triageForClassification.queryType === 'informational' || heuristicClassification.queryType === 'informational')
             ? 'informational'
-            : 'clinical';
+            : 'clinical');
         logger.info(`Effective query type: ${effectiveQueryTypeNormal} ` +
-          `(triage: ${triageForClassification.queryType}, heuristic: ${heuristicClassification.queryType})`);
+          `(triage: ${triageForClassification.queryType}, heuristic: ${heuristicClassification.queryType}${userOverride ? ', user override: ' + userOverride : ''})`);
         if (effectiveQueryTypeNormal === 'informational') {
           logger.info('Normal mode: Informational query detected, skipping specialist pipeline');
           return this.handleInformationalQuery(res, {
