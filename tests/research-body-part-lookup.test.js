@@ -261,6 +261,17 @@ describe('ResearchAgent - buildPubMedQuery: anatomical term in query string', ()
     expect(query).toContain('English[la]');
     expect(query).toContain('Humans[MeSH]');
   });
+
+  test('posterolateral corner query contains "posterolateral corner", not "anterior cruciate ligament"', () => {
+    const query = agent.buildPubMedQuery('What is a posterolateral corner knee injury?');
+    expect(query).toContain('posterolateral corner');
+    expect(query).not.toContain('anterior cruciate ligament');
+  });
+
+  test('PLC abbreviation expands to posterolateral corner in query', () => {
+    const query = agent.buildPubMedQuery('PLC reconstruction surgery outcomes');
+    expect(query).toContain('posterolateral corner');
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,5 +382,39 @@ describe('ResearchAgent - Regression: 0 citations for specific bones', () => {
     const results = agent.filterByQuality(papers, query, 'basic');
     expect(results.length).toBeGreaterThanOrEqual(1);
     expect(results[0].title).toContain('Clavicle');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Suite 9 — Posterolateral corner (motivating bug: ACL returned instead of PLC)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('ResearchAgent - Posterolateral Corner: condition map and abbreviation', () => {
+  let agent;
+  beforeEach(() => { agent = new ResearchAgent(); });
+
+  test('extractClinicalTerms: "posterolateral corner" → includes posterolateral corner term', () => {
+    const terms = agent.extractClinicalTerms('posterolateral corner knee injury', {});
+    expect(terms.some(t => t.includes('posterolateral corner'))).toBe(true);
+  });
+
+  test('buildPubMedQuery: PLC abbreviation expands to posterolateral corner', () => {
+    // Abbreviation expansion happens in buildPubMedQuery before extractClinicalTerms is called
+    const query = agent.buildPubMedQuery('PLC reconstruction surgery outcomes');
+    expect(query).toContain('posterolateral corner');
+  });
+
+  test('extractClinicalTerms: "posterolateral corner" does NOT produce "anterior cruciate ligament"', () => {
+    const terms = agent.extractClinicalTerms('posterolateral corner knee injury', {});
+    expect(terms).not.toContain('"anterior cruciate ligament"');
+  });
+
+  test('PLC paper scores ≥3 for posterolateral corner query', () => {
+    const study = mockStudy(
+      'Posterolateral Corner Reconstruction: Outcomes and Complications',
+      'The posterolateral corner (PLC) is a complex anatomical structure. This review evaluates PLC reconstruction outcomes in 180 patients.'
+    );
+    const query = { primaryComplaint: 'What is a posterolateral corner knee injury?', bodyPart: 'knee' };
+    expect(agent.scoreRelevance(study, query)).toBeGreaterThanOrEqual(3);
   });
 });

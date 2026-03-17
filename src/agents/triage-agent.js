@@ -94,6 +94,10 @@ export class TriageAgent extends OrthopedicSpecialist {
            - Semi-urgent (within 48-72 hours)
            - Routine (within 1-2 weeks)
 
+           CRITICAL RULE: Explanation-seeking queries ("What is", "What causes", "Why does",
+           "How does") with no first-person injury context ("I", "my", "I'm", "I have") are
+           NEVER emergency or urgent — classify as ROUTINE regardless of medical terms present.
+
         3. RED FLAG SCREENING:
            - Neurological deficits
            - Vascular compromise
@@ -132,7 +136,9 @@ export class TriageAgent extends OrthopedicSpecialist {
              Includes general recovery timeline questions without personal injury context.
 
            RULES:
-           - Emergency/urgent → always CLINICAL.
+           - "What is", "What causes", "Why does", "How does" + no first-person context
+             → INFORMATIONAL + ROUTINE urgency, regardless of medical terms.
+           - Emergency/urgent with first-person context ("I fell", "my pain") → always CLINICAL.
            - "Why does [body part] [symptom]?" with no timeline, severity, or personal
              context → INFORMATIONAL.
            - Generic recovery questions ("How long does ACL recovery take?") without
@@ -245,11 +251,14 @@ export class TriageAgent extends OrthopedicSpecialist {
         suggestedDiagnoses: this.extractSuggestedDiagnoses(triageResult),
         caseId: caseId,
 
-        // Query type classification — emergency/urgent always forces clinical
-        queryType: (structuredResponse.urgencyLevel === 'emergency' ||
-                    structuredResponse.urgencyLevel === 'urgent')
-          ? 'clinical'
-          : (structuredResponse.queryType || 'clinical'),
+        // Query type classification — informational LLM verdict wins; emergency/urgent
+        // only forces clinical when the LLM did NOT already say informational
+        queryType: structuredResponse.queryType === 'informational'
+          ? 'informational'
+          : (structuredResponse.urgencyLevel === 'emergency' ||
+             structuredResponse.urgencyLevel === 'urgent')
+            ? 'clinical'
+            : (structuredResponse.queryType || 'clinical'),
         querySubtype: structuredResponse.querySubtype || null
       };
 

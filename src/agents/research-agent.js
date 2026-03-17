@@ -278,6 +278,8 @@ Apply these notes in the Evidence Gaps section when relevant:
       // Ankle / foot
       'atfl': 'anterior talofibular ligament',
       'cfl': 'calcaneofibular ligament',
+      // Knee
+      'plc': 'posterolateral corner',
       // Hip
       'fai': 'femoroacetabular impingement',
       // General
@@ -519,8 +521,11 @@ Apply these notes in the Evidence Gaps section when relevant:
     const conditionMap = {
       'triangular fibrocartilage': 'triangular fibrocartilage',
       'triangular fibrocartilage complex': 'triangular fibrocartilage',
+      'anterolateral ligament': '"anterolateral ligament"',
+      'posterolateral corner': '"posterolateral corner"',
       'anterior cruciate ligament': '"anterior cruciate ligament"',
       'posterior cruciate ligament': '"posterior cruciate ligament"',
+      'lateral collateral ligament': '"lateral collateral ligament"',
       'medial collateral ligament': '"medial collateral ligament"',
       'rotator cuff': '"rotator cuff"',
       'meniscus': 'meniscus',
@@ -933,6 +938,8 @@ Apply these notes in the Evidence Gaps section when relevant:
       'acl': 'anterior cruciate ligament',
       'pcl': 'posterior cruciate ligament',
       'mcl': 'medial collateral ligament',
+      'lcl': 'lateral collateral ligament',
+      'plc': 'posterolateral corner',
       'slap': 'superior labrum anterior posterior',
       'rct': 'rotator cuff tear',
       'fai': 'femoroacetabular impingement',
@@ -981,6 +988,7 @@ Apply these notes in the Evidence Gaps section when relevant:
     // Bonus: multi-word clinical phrase matches in title or abstract (up to 4 points)
     const clinicalPhrases = [
       'triangular fibrocartilage', 'anterior cruciate', 'posterior cruciate',
+      'posterolateral corner', 'lateral collateral ligament',
       'rotator cuff', 'carpal tunnel', 'plantar fasciitis', 'frozen shoulder',
       'adhesive capsulitis', 'tennis elbow', 'lateral epicondylitis',
       'achilles tendon', 'meniscal tear', 'labral tear', 'disc herniation',
