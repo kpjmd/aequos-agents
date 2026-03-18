@@ -574,6 +574,10 @@ class OrthoIQAgentSystem {
           `(confidence: ${heuristicClassification.confidence}, ` +
           `signals: ${JSON.stringify(heuristicClassification.signals)})`);
 
+        // User-supplied query type override takes precedence over classifiers (both fast and normal mode)
+        const userOverride = (queryType === 'informational' || queryType === 'clinical') ? queryType : null;
+        if (userOverride) logger.info(`Query type override by user: ${userOverride}`);
+
         // Fast mode: Return immediate triage response, continue full coordination in background
         if (mode === 'fast') {
           logger.info('Fast mode: Returning immediate triage, continuing coordination in background');
@@ -592,8 +596,6 @@ class OrthoIQAgentSystem {
 
           // Check if informational — user override takes precedence; otherwise either classifier
           // saying informational is a confident signal (both default to clinical when uncertain)
-          const userOverride = (queryType === 'informational' || queryType === 'clinical') ? queryType : null;
-          if (userOverride) logger.info(`Query type override by user: ${userOverride}`);
           const effectiveQueryType = userOverride
             || ((triageResponse.queryType === 'informational' || heuristicClassification.queryType === 'informational')
               ? 'informational'
