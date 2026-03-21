@@ -154,6 +154,7 @@ class OrthoIQAgentSystem {
     this.agents = {};
     this.researchAgent = null;
     this.researchResults = new Map();
+    this.consultationResults = new Map(); // consultationId → { status, result, error, startTime, completedAt }
     this.isInitialized = false;
   }
 
@@ -735,14 +736,18 @@ class OrthoIQAgentSystem {
           });
         }
 
-        // Normal mode: Complete multi-specialist consultation before responding
-        // Set timeout for normal mode - 90s to accommodate parallel coordination + synthesis
-        const timeout = 120000;
-        const consultationPromise = this.coordinator.coordinateMultiSpecialistConsultation(
+        // Normal mode: Fire background consultation, return consultationId immediately for polling.
+        // This avoids Farcaster WebView's ~90s hard timeout on the frontend→Next.js leg.
+        const consultationId = `consultation_${Date.now()}`;
+        this.consultationResults.set(consultationId, { status: 'processing', startTime });
+
+        // Fire-and-forget — do NOT await
+        this.coordinator.coordinateMultiSpecialistConsultation(
           caseData,
           smartSpecialists,
           {
             mode,
+            consultationId,
             rawQuery,
             enableDualTrack,
             userId,
@@ -753,62 +758,60 @@ class OrthoIQAgentSystem {
             athleteProfile,
             platformContext
           }
-        );
-
-        // Race against timeout
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Consultation timeout')), timeout)
-        );
-
-        const consultationResult = await Promise.race([
-          consultationPromise,
-          timeoutPromise
-        ]);
-        
-        // Enhance result with triage metadata
-        consultationResult.dataCompleteness = triageAssessment.completeness;
-        consultationResult.suggestedFollowUp = triageAssessment.suggestedFollowUp;
-        consultationResult.triageConfidence = triageAssessment.confidence;
-        consultationResult.specialistCoverage = this.agents.triage.getSpecialistCoverage(
-          caseData, 
-          consultationResult.participatingSpecialists
-        );
-        
-        // Cache successful result
-        await cacheManager.set(caseData, consultationResult);
-
-        // Trigger research asynchronously (non-blocking)
-        let researchPollEndpoint = null;
-        if (requestResearch !== false && this.researchAgent) {
-          researchPollEndpoint = `/research/${consultationResult.consultationId}`;
-          this.triggerResearchAgent(
-            consultationResult.consultationId,
+        ).then(async (consultationResult) => {
+          // Inject ID and triage metadata
+          consultationResult.consultationId = consultationId;
+          consultationResult.dataCompleteness = triageAssessment.completeness;
+          consultationResult.suggestedFollowUp = triageAssessment.suggestedFollowUp;
+          consultationResult.triageConfidence = triageAssessment.confidence;
+          consultationResult.specialistCoverage = this.agents.triage.getSpecialistCoverage(
             caseData,
-            consultationResult,
-            userTier || 'basic'
-          ).catch(err => {
-            logger.error(`Research agent background error: ${err.message}`);
-          });
-        }
+            consultationResult.participatingSpecialists
+          );
 
-        // Trigger learning mode in background if needed
-        if (mode === 'fast' && promptManager.shouldRunLearningMode(caseData, consultationResult, this.agents.triage)) {
-          setImmediate(() => {
-            this.runLearningMode(caseData, consultationResult);
-          });
-        }
+          // Cache for future requests
+          await cacheManager.set(caseData, consultationResult);
 
-        res.json({
+          // Check quality thresholds for MD review
+          const mdReviewCheck = shouldFlagForMDReview(consultationResult);
+          if (mdReviewCheck.flag) {
+            await flagConsultationForMDReview(consultationId, mdReviewCheck.qualityScore);
+          }
+
+          this.consultationResults.set(consultationId, {
+            status: 'completed',
+            result: consultationResult,
+            startTime,
+            completedAt: Date.now()
+          });
+
+          // Trigger research asynchronously
+          if (requestResearch !== false && this.researchAgent) {
+            this.triggerResearchAgent(consultationId, caseData, consultationResult, userTier || 'basic')
+              .catch(err => logger.error(`Research background error [${consultationId}]: ${err.message}`));
+          }
+
+          // Cleanup after 30 minutes
+          setTimeout(() => this.consultationResults.delete(consultationId), 30 * 60 * 1000);
+          logger.info(`Background consultation complete for ${consultationId}`);
+
+        }).catch(error => {
+          logger.error(`Background consultation error [${consultationId}]: ${error.message}`);
+          this.consultationResults.set(consultationId, {
+            status: 'error',
+            error: error.message,
+            completedAt: Date.now()
+          });
+          // Cleanup after 5 minutes on error
+          setTimeout(() => this.consultationResults.delete(consultationId), 5 * 60 * 1000);
+        });
+
+        // Return immediately — frontend polls /consultation/:id/status
+        return res.json({
           success: true,
-          consultation: consultationResult,
-          research: researchPollEndpoint ? {
-            status: 'pending',
-            estimatedSeconds: 15,
-            pollEndpoint: researchPollEndpoint,
-          } : undefined,
-          fromCache: false,
+          consultationId,
+          status: 'processing',
           mode,
-          responseTime: Date.now() - startTime,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
@@ -830,6 +833,41 @@ class OrthoIQAgentSystem {
           });
         }
       }
+    });
+
+    // Async consultation status endpoint — polls result of normal-mode background consultations
+    this.app.get('/consultation/:consultationId/status', async (req, res) => {
+      const { consultationId } = req.params;
+      const entry = this.consultationResults.get(consultationId);
+
+      if (!entry) {
+        return res.status(404).json({ status: 'not_found', consultationId });
+      }
+      if (entry.status === 'processing') {
+        return res.json({ status: 'processing', consultationId });
+      }
+      if (entry.status === 'error') {
+        return res.status(500).json({ status: 'error', error: entry.error, consultationId });
+      }
+
+      // Completed — return same response shape as the old synchronous POST
+      const consultationResult = entry.result;
+      const researchPollEndpoint = this.researchAgent ? `/research/${consultationId}` : null;
+
+      return res.json({
+        success: true,
+        status: 'completed',
+        consultation: consultationResult,
+        research: researchPollEndpoint ? {
+          status: 'pending',
+          estimatedSeconds: 15,
+          pollEndpoint: researchPollEndpoint,
+        } : undefined,
+        fromCache: false,
+        mode: consultationResult.mode || 'normal',
+        responseTime: entry.completedAt - (entry.startTime || entry.completedAt),
+        timestamp: new Date().toISOString()
+      });
     });
 
     // Recovery tracking endpoints
