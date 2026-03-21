@@ -200,7 +200,11 @@ Create dedicated `shouldIncludeMindMender()` method with:
 - [ ] Add architecture diagrams
 
 ### Features
-- [ ] Add real-time consultation status updates (WebSockets)
+- [x] **Async consultation polling** (v0.9.0, 2026-03-21) — `POST /consultation` (normal mode)
+      returns `consultationId` in <2s; frontend polls `GET /consultation/:id/status` every 4s.
+      Eliminated Farcaster WebView ~90s timeout abort. HTTP polling chosen over WebSockets for
+      simplicity and Railway compatibility; WebSockets remain a future upgrade path.
+- [ ] Add real-time consultation status updates via WebSockets (upgrade from HTTP polling)
 - [ ] Implement consultation history search
 - [ ] Add agent performance leaderboard
 - [ ] Create admin dashboard for system monitoring
@@ -228,6 +232,7 @@ Create dedicated `shouldIncludeMindMender()` method with:
 - [x] **Research Agent** (v0.6.0) - PubMed integration, triage-informed queries, quality scoring
 - [x] **Hybrid model migration** (v0.6.0) - Haiku 4.5 / Sonnet 4.6 cost optimization
 - [x] **Informational query pathway Phase 1** (v0.7.0) - Query type classification, informational routing, token track tagging
+- [x] **Async consultation polling** (v0.9.0) - Fire-and-forget normal mode, `GET /consultation/:id/status` endpoint
 
 ---
 

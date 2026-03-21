@@ -90,6 +90,45 @@ New test file `tests/query-type-classification.test.js`:
 
 ---
 
+## [0.9.0] - 2026-03-21
+
+### Added — Async Consultation Polling Architecture
+
+**Motivation**: Farcaster WebView enforces a hard ~90-second HTTP timeout. Comprehensive
+consultations take ~85–95s end-to-end, causing the frontend→Next.js leg to abort before
+results arrived. Users saw "Fetch is aborted" with no results.
+
+**Solution**: The `POST /consultation` (mode: `normal`) handler now returns a `consultationId`
+in <2s; the frontend polls `GET /consultation/:id/status` every 4s until `status: 'completed'`.
+
+**New endpoint — `GET /consultation/:consultationId/status`**:
+- Returns `{ status: 'processing', consultationId }` while the background job runs
+- Returns `{ status: 'completed', consultation: {...}, responseTime: N }` when done
+- Returns `{ status: 'error', error: '...' }` on failure
+- Returns HTTP 404 + `{ status: 'not_found' }` if `consultationId` is unknown
+
+**Normal mode `POST /consultation` (updated)**:
+- Now returns immediately with `{ success: true, status: 'processing', consultationId, mode: 'normal' }`
+- Fires `coordinateMultiSpecialistConsultation` as a background promise (no `await`)
+- On completion: writes result to `this.consultationResults` Map, runs cache write, MD review
+  flag check, and research agent trigger — all inside `.then()` handler
+- On error: writes `{ status: 'error', error: ... }` to Map
+
+**In-memory result store (`this.consultationResults` Map)**:
+- Initialized in constructor alongside existing `this.researchResults`
+- TTL: 30 minutes after completion (via `setTimeout` + `Map.delete`); 5 minutes after error
+- Mirrors the existing research results pattern
+
+**Fast mode (`mode: 'fast`) unchanged** — synchronous triage + background comprehensive
+coordination, same as before. Returns `{ status: 'processing', triage: {...}, ... }` with
+the triage result immediately available to the frontend.
+
+### Files Changed
+- `src/index.js` — `this.consultationResults` Map init, normal-mode fire-and-forget block,
+  new `GET /consultation/:consultationId/status` endpoint
+
+---
+
 ## [0.8.0] - 2026-03-11
 
 ### Added — Research Agent: Structured Output & Evidence Grading (Skill Methodology)
