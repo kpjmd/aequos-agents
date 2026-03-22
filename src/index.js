@@ -616,6 +616,9 @@ class OrthoIQAgentSystem {
 
           const consultationId = `consultation_${Date.now()}`;
 
+          // Register in consultationResults so status endpoint can serve it
+          this.consultationResults.set(consultationId, { status: 'processing', startTime });
+
           // Auto-trigger research in background if not explicitly disabled
           let researchPollEndpoint = null;
           if (requestResearch !== false && this.researchAgent) {
@@ -693,6 +696,15 @@ class OrthoIQAgentSystem {
           // Handle background completion (no await - fire and forget)
           backgroundPromise
             .then(async result => {
+              // Inject metadata (same fields normal mode adds)
+              result.consultationId = consultationId;
+              result.dataCompleteness = triageAssessment.completeness;
+              result.suggestedFollowUp = triageResponse.followUpQuestions || [];
+              result.triageConfidence = triageResponse.confidence;
+              result.specialistCoverage = this.agents.triage.getSpecialistCoverage(
+                caseData, result.participatingSpecialists
+              );
+
               // Cache for training and future use
               await cacheManager.set(caseData, result);
 
@@ -702,10 +714,19 @@ class OrthoIQAgentSystem {
                 await flagConsultationForMDReview(consultationId, mdReviewCheck.qualityScore);
               }
 
-              logger.info(`Background coordination complete for ${consultationId}, cached successfully`);
+              // Write to consultationResults for status polling
+              this.consultationResults.set(consultationId, {
+                status: 'completed', result, startTime, completedAt: Date.now()
+              });
+              setTimeout(() => this.consultationResults.delete(consultationId), 30 * 60 * 1000);
+              logger.info(`Background coordination complete for ${consultationId}, cached and stored`);
             })
             .catch(err => {
               logger.error(`Background coordination failed for ${consultationId}:`, err.message);
+              this.consultationResults.set(consultationId, {
+                status: 'error', error: err.message, completedAt: Date.now()
+              });
+              setTimeout(() => this.consultationResults.delete(consultationId), 5 * 60 * 1000);
             });
 
           // Exit early - response already sent
