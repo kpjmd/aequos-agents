@@ -38,7 +38,6 @@ export class StrengthSageAgent extends OrthopedicSpecialist {
     - Cardiovascular conditioning
     
     Experience level: ${this.experience} points
-    Token balance: ${this.tokenBalance}
     Rehabilitation programs: ${this.rehabilitationPrograms.size}
     Wallet: ${this.walletAddress}
     
@@ -482,18 +481,6 @@ ${sport ? `🏈 INCLUDE: ${sport}-specific return-to-play criteria and readiness
       const strengthImprovement = this.calculateStrengthImprovement(progressData);
       const functionalGains = this.calculateFunctionalGains(progressData);
       
-      if (strengthImprovement >= 80 || functionalGains >= 85) {
-        await this.updateExperienceWithTokens({
-          success: true,
-          reason: 'significant_functional_improvement',
-          functionalImprovement: functionalGains >= 85,
-          strengthGains: strengthImprovement,
-          mdApproval: strengthImprovement >= 90,
-          userSatisfaction: progressData.satisfaction || 9,
-          speedOfResolution: this.calculateRehabSpeed(programId)
-        });
-      }
-      
       return {
         programId,
         progressAssessment,
@@ -808,7 +795,6 @@ ${sport ? `🏈 INCLUDE: ${sport}-specific return-to-play criteria and readiness
       totalProtocols,
       functionalLevelDistribution: levelDistribution,
       restorePotentialDistribution: potentialDistribution,
-      tokenBalance: this.tokenBalance,
       experience: this.experience
     };
   }

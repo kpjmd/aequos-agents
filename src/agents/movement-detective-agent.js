@@ -38,7 +38,6 @@ export class MovementDetectiveAgent extends OrthopedicSpecialist {
     - Stability and balance testing
     
     Experience level: ${this.experience} points
-    Token balance: ${this.tokenBalance}
     Movement assessments: ${this.biomechanicalAssessments.length}
     Wallet: ${this.walletAddress}
     
@@ -409,17 +408,6 @@ Movement Data: ${JSON.stringify(movementData)}
       // Calculate movement improvement for token rewards
       const movementImprovement = this.calculateMovementImprovement(progressData);
       const functionalGains = this.calculateFunctionalGains(progressData);
-      
-      if (movementImprovement >= 75 || functionalGains >= 80) {
-        await this.updateExperienceWithTokens({
-          success: true,
-          reason: 'significant_movement_improvement',
-          functionalImprovement: functionalGains >= 80,
-          movementCorrection: movementImprovement,
-          mdApproval: movementImprovement >= 85,
-          userSatisfaction: progressData.satisfaction || 9
-        });
-      }
       
       return {
         planId,
@@ -841,7 +829,6 @@ Movement Data: ${JSON.stringify(movementData)}
       compensatoryPatterns: Array.from(this.compensatoryPatterns),
       dysfunctionDistribution,
       riskDistribution,
-      tokenBalance: this.tokenBalance,
       experience: this.experience
     };
   }

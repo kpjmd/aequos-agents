@@ -25,7 +25,7 @@ export class AgentCoordinator {
       successRate: 0,
       averageResponseTime: 0,
       patientSatisfaction: 0,
-      tokenBalance: agent.tokenBalance,
+      tokenBalance: 0, // populated lazily from TokenManager on read
       experience: agent.experience
     });
     
@@ -655,9 +655,12 @@ export class AgentCoordinator {
       if (specialistType.includes('triage') || specialistType === 'triage') {
         consultationPrompt = `
           TRIAGE COORDINATION CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As the triage coordinator, provide case management guidance focusing on:
           - Urgency assessment and prioritization
           - Specialist coordination recommendations
@@ -676,9 +679,12 @@ export class AgentCoordinator {
       } else if (specialistType.includes('pain') || specialistType.includes('whisperer') || specialistType === 'painWhisperer') {
         consultationPrompt = `
           PAIN MANAGEMENT CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As the pain management specialist, focus specifically on:
           - Pain assessment and characterization
           - Pain management strategies and interventions
@@ -697,9 +703,12 @@ export class AgentCoordinator {
       } else if (specialistType.includes('movement') || specialistType.includes('detective') || specialistType === 'movementDetective') {
         consultationPrompt = `
           MOVEMENT & BIOMECHANICS CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As the movement specialist, focus specifically on:
           - Movement pattern analysis and dysfunction
           - Biomechanical assessment and correction
@@ -718,9 +727,12 @@ export class AgentCoordinator {
       } else if (specialistType.includes('strength') || specialistType.includes('sage') || specialistType === 'strengthSage') {
         consultationPrompt = `
           STRENGTH & FUNCTIONAL RESTORATION CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As the strength and functional restoration specialist, focus specifically on:
           - Functional capacity assessment and goals
           - Strength training and exercise progression
@@ -739,9 +751,12 @@ export class AgentCoordinator {
       } else if (specialistType.includes('mind') || specialistType.includes('mender') || specialistType === 'mindMender') {
         consultationPrompt = `
           PSYCHOLOGICAL RECOVERY CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As the psychological recovery specialist, focus specifically on:
           - Psychological barriers to recovery
           - Fear-avoidance and anxiety management
@@ -761,9 +776,12 @@ export class AgentCoordinator {
         // Generic fallback for any other specialist type
         consultationPrompt = `
           SPECIALIST CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As a ${specialist.subspecialty} specialist, provide your expert perspective on this case.
           Focus on your area of expertise and provide specific recommendations.
           
@@ -814,7 +832,10 @@ export class AgentCoordinator {
       const synthesisPrompt = `
         MULTI-SPECIALIST CONSULTATION SYNTHESIS:
 
-        Case Data: ${JSON.stringify(caseData)}
+        Case Data:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
 
         Specialist Responses:
         ${successfulResponses.map((r, i) => `

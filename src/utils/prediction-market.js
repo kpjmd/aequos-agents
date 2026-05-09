@@ -15,6 +15,58 @@ export class PredictionMarket {
     this.predictionHistory = [];
   }
 
+  async _getSql() {
+    const mod = await import('./db.js');
+    return mod.default;
+  }
+
+  async loadFromDb() {
+    const sql = await this._getSql();
+    if (!sql) return;
+    try {
+      const predRows = await sql`SELECT * FROM predictions`;
+      for (const row of predRows) {
+        this.predictions.set(row.consultation_id, {
+          consultationId: row.consultation_id,
+          caseData: row.case_data,
+          agentPredictions: row.agent_predictions,
+          status: row.status,
+          timestamp: row.created_at
+        });
+      }
+
+      const resRows = await sql`SELECT * FROM prediction_resolutions`;
+      for (const row of resRows) {
+        this.resolutions.set(row.consultation_id, {
+          consultationId: row.consultation_id,
+          source: row.source,
+          outcomes: row.outcomes,
+          agentResults: row.agent_results,
+          timestamp: row.timestamp
+        });
+      }
+
+      const perfRows = await sql`SELECT * FROM agent_performance`;
+      for (const row of perfRows) {
+        this.agentPerformance.set(row.agent_id, {
+          agentId: row.agent_id,
+          totalPredictions: row.total_predictions,
+          totalStaked: row.total_staked,
+          totalWon: row.total_won,
+          totalLost: row.total_lost,
+          averageAccuracy: row.average_accuracy,
+          predictionCount: row.prediction_count,
+          dimensionAccuracy: row.dimension_accuracy || {}
+        });
+      }
+
+      logger.info(`PredictionMarket loaded from DB: ${predRows.length} predictions, ${perfRows.length} performance records`);
+    } catch (error) {
+      logger.error(`PredictionMarket DB load failed: ${error.message}`);
+      throw error;
+    }
+  }
+
   /**
    * Initiate predictions for a consultation
    * Called at consultation start - agents make predictions before seeing outcomes
@@ -61,6 +113,19 @@ export class PredictionMarket {
       }
 
       this.predictions.set(consultationId, predictions);
+
+      // Persist to DB
+      const sql = await this._getSql();
+      if (sql) {
+        await sql`
+          INSERT INTO predictions (consultation_id, case_data, agent_predictions, status, created_at, updated_at)
+          VALUES (${consultationId}, ${JSON.stringify(predictions.caseData)}, ${JSON.stringify(predictions.agentPredictions)}, ${predictions.status}, NOW(), NOW())
+          ON CONFLICT (consultation_id) DO UPDATE SET
+            agent_predictions = EXCLUDED.agent_predictions,
+            status = EXCLUDED.status,
+            updated_at = NOW()
+        `;
+      }
 
       // Count specialists (exclude triage) for MD review recommendation
       const specialistCount = predictions.agentPredictions
@@ -337,6 +402,20 @@ export class PredictionMarket {
       this.resolutions.set(consultationId, resolution);
       predictions.status = 'resolved';
 
+      // Persist resolution + updated prediction status
+      const sql = await this._getSql();
+      if (sql) {
+        await sql`
+          INSERT INTO prediction_resolutions (consultation_id, source, outcomes, agent_results, timestamp)
+          VALUES (${consultationId}, ${source}, ${JSON.stringify(resolution.outcomes)}, ${JSON.stringify(resolution.agentResults)}, ${timestamp})
+          ON CONFLICT (consultation_id, source) DO NOTHING
+        `;
+        await sql`
+          UPDATE predictions SET status = 'resolved', updated_at = NOW()
+          WHERE consultation_id = ${consultationId}
+        `;
+      }
+
       // Record in history
       this.predictionHistory.push({
         consultationId,
@@ -521,12 +600,9 @@ export class PredictionMarket {
         });
         logger.info(`Agent ${agentId} won ${netChange} tokens from predictions`);
       } else if (netChange < 0) {
-        // Agent lost tokens (penalty)
-        const agentBalance = this.tokenManager.getAgentBalance(agentId);
-        if (agentBalance) {
-          agentBalance.tokenBalance = Math.max(0, agentBalance.tokenBalance + netChange);
-          logger.info(`Agent ${agentId} lost ${Math.abs(netChange)} tokens from predictions`);
-        }
+        // Agent lost tokens — route through applyPenalty for proper accounting
+        await this.tokenManager.applyPenalty(agentId, Math.abs(netChange));
+        logger.info(`Agent ${agentId} lost ${Math.abs(netChange)} tokens from predictions`);
       }
     } catch (error) {
       logger.error(`Error distributing prediction tokens: ${error.message}`);
@@ -536,7 +612,7 @@ export class PredictionMarket {
   /**
    * Update agent performance statistics
    */
-  updateAgentPerformance(agentId, result) {
+  async updateAgentPerformance(agentId, result) {
     if (!this.agentPerformance.has(agentId)) {
       this.agentPerformance.set(agentId, {
         agentId,
@@ -557,12 +633,10 @@ export class PredictionMarket {
     perf.totalLost += result.tokensLost;
     perf.predictionCount += 1;
 
-    // Update rolling average accuracy
     perf.averageAccuracy = (
       (perf.averageAccuracy * (perf.predictionCount - 1)) + result.accuracy
     ) / perf.predictionCount;
 
-    // Track dimension-specific accuracy
     for (const score of result.predictionScores) {
       if (!perf.dimensionAccuracy[score.dimension]) {
         perf.dimensionAccuracy[score.dimension] = {
@@ -571,11 +645,28 @@ export class PredictionMarket {
           averageAccuracy: 0
         };
       }
-
       const dimPerf = perf.dimensionAccuracy[score.dimension];
       dimPerf.count += 1;
       dimPerf.totalAccuracy += score.accuracy;
       dimPerf.averageAccuracy = dimPerf.totalAccuracy / dimPerf.count;
+    }
+
+    // Persist to DB
+    const sql = await this._getSql();
+    if (sql) {
+      await sql`
+        INSERT INTO agent_performance (agent_id, total_predictions, total_staked, total_won, total_lost, average_accuracy, prediction_count, dimension_accuracy, last_updated)
+        VALUES (${agentId}, ${perf.totalPredictions}, ${perf.totalStaked}, ${perf.totalWon}, ${perf.totalLost}, ${perf.averageAccuracy}, ${perf.predictionCount}, ${JSON.stringify(perf.dimensionAccuracy)}, NOW())
+        ON CONFLICT (agent_id) DO UPDATE SET
+          total_predictions = EXCLUDED.total_predictions,
+          total_staked = EXCLUDED.total_staked,
+          total_won = EXCLUDED.total_won,
+          total_lost = EXCLUDED.total_lost,
+          average_accuracy = EXCLUDED.average_accuracy,
+          prediction_count = EXCLUDED.prediction_count,
+          dimension_accuracy = EXCLUDED.dimension_accuracy,
+          last_updated = NOW()
+      `;
     }
   }
 

@@ -38,7 +38,6 @@ export class MindMenderAgent extends OrthopedicSpecialist {
     - Quality of life impact analysis
     
     Experience level: ${this.experience} points
-    Token balance: ${this.tokenBalance}
     Psychological interventions: ${this.interventionPlans.size}
     Wallet: ${this.walletAddress}
     
@@ -481,19 +480,6 @@ ${sport ? `🏈 ADDRESS: Fear of returning to ${sport}, confidence for contact/c
       const adherenceImprovement = this.calculateAdherenceImprovement(progressData);
       const confidenceGains = this.calculateConfidenceGains(progressData);
       
-      if (anxietyReduction >= 50 || adherenceImprovement >= 90 || confidenceGains >= 75) {
-        await this.updateExperienceWithTokens({
-          success: true,
-          reason: 'significant_psychological_improvement',
-          anxietyReduction: anxietyReduction >= 50,
-          adherenceImprovement: adherenceImprovement >= 90,
-          confidenceGains: confidenceGains >= 75,
-          mdApproval: anxietyReduction >= 60,
-          userSatisfaction: progressData.satisfaction || 8,
-          functionalImprovement: progressData.functionalImprovement || false
-        });
-      }
-      
       return {
         planId,
         progressAssessment,
@@ -830,7 +816,6 @@ ${sport ? `🏈 ADDRESS: Fear of returning to ${sport}, confidence for contact/c
       totalCopingStrategies,
       riskFactorDistribution: riskDistribution,
       urgencyDistribution,
-      tokenBalance: this.tokenBalance,
       experience: this.experience
     };
   }
