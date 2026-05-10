@@ -16,11 +16,7 @@ try {
   compiledToken = JSON.parse(readFileSync(contractPath, 'utf8'));
   logger.info('Loaded compiled OrthoIQAgentToken contract');
 } catch (error) {
-  throw new Error(
-    `Compiled contract artifact not found at ${contractPath}. ` +
-    `Run "npm run compile:contract" before starting the agent service. ` +
-    `Original error: ${error.message}`
-  );
+  logger.warn(`Compiled contract artifact not found at ${contractPath} — blockchain token minting disabled. Run "npm run compile:contract" to enable.`);
 }
 
 export class BlockchainUtils {
