@@ -357,33 +357,15 @@ class OrthoIQAgentSystem {
       )`;
       await sql`CREATE INDEX IF NOT EXISTS idx_token_tx_agent_id ON token_transactions(agent_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_token_tx_timestamp ON token_transactions(timestamp DESC)`;
-      await sql`CREATE TABLE IF NOT EXISTS predictions (
-        consultation_id TEXT PRIMARY KEY,
-        case_data JSONB NOT NULL,
-        agent_predictions JSONB NOT NULL,
-        status TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      )`;
-      await sql`CREATE TABLE IF NOT EXISTS prediction_resolutions (
+      await sql`CREATE TABLE IF NOT EXISTS consultation_feedback (
+        id SERIAL PRIMARY KEY,
         consultation_id TEXT NOT NULL,
-        source TEXT NOT NULL,
-        outcomes JSONB,
-        agent_results JSONB,
-        timestamp TIMESTAMP DEFAULT NOW(),
-        PRIMARY KEY (consultation_id, source)
+        feedback_type TEXT NOT NULL CHECK (feedback_type IN ('user_modal', 'md_review', 'follow_up')),
+        payload JSONB NOT NULL,
+        submitted_by TEXT,
+        submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
-      await sql`CREATE TABLE IF NOT EXISTS agent_performance (
-        agent_id TEXT PRIMARY KEY,
-        total_predictions INTEGER NOT NULL DEFAULT 0,
-        total_staked INTEGER NOT NULL DEFAULT 0,
-        total_won INTEGER NOT NULL DEFAULT 0,
-        total_lost INTEGER NOT NULL DEFAULT 0,
-        average_accuracy REAL NOT NULL DEFAULT 0,
-        prediction_count INTEGER NOT NULL DEFAULT 0,
-        dimension_accuracy JSONB,
-        last_updated TIMESTAMP DEFAULT NOW()
-      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_feedback_consultation_id ON consultation_feedback(consultation_id, feedback_type)`;
 
       logger.info('✅ Database migrations complete');
     } catch (error) {
@@ -490,9 +472,6 @@ class OrthoIQAgentSystem {
       
       // Replay persisted state from DB (T0-9)
       await this.tokenManager.loadFromDb();
-      if (this.coordinator.predictionMarket) {
-        await this.coordinator.predictionMarket.loadFromDb();
-      }
 
       logger.info('✅ Token economics initialized');
     } catch (error) {
@@ -1070,16 +1049,6 @@ class OrthoIQAgentSystem {
           finalOutcome
         );
 
-        // Record outcome on blockchain
-        let blockchainRecord = null;
-        if (await this.blockchainUtils.isConnected()) {
-          blockchainRecord = await this.blockchainUtils.recordMedicalOutcome(
-            patientId,
-            finalOutcome,
-            'recovery_team'
-          );
-        }
-
         // Distribute final rewards
         const outcome = {
           success: completionResult.success,
@@ -1099,7 +1068,6 @@ class OrthoIQAgentSystem {
         res.json({
           success: true,
           completion: completionResult,
-          blockchainRecord,
           rewards,
           timestamp: new Date().toISOString()
         });
@@ -1234,117 +1202,63 @@ class OrthoIQAgentSystem {
       }
     });
 
-    // Prediction market endpoints
-    this.app.get('/predictions/market/statistics', requireApiKey, looseLimiter, (req, res, next) => {
-      try {
-        const marketStats = this.coordinator.getPredictionMarketStats();
-
-        if (!marketStats) {
-          return res.json({
-            success: true,
-            message: 'Prediction market not initialized',
-            statistics: null
-          });
-        }
-
-        res.json({
-          success: true,
-          statistics: marketStats,
-          timestamp: new Date().toISOString()
-        });
-      } catch (error) {
-        logger.error(`Prediction market stats API error: ${error.message}`);
-        return next(error);
-      }
-    });
-
-    this.app.get('/predictions/agent/:agentId', requireApiKey, looseLimiter, (req, res, next) => {
-      try {
-        const { agentId } = req.params;
-        const performance = this.coordinator.getAgentPredictionPerformance(agentId);
-
-        if (!performance) {
-          return res.status(404).json({ error: 'Agent prediction performance not found' });
-        }
-
-        res.json({
-          success: true,
-          agentId,
-          performance,
-          timestamp: new Date().toISOString()
-        });
-      } catch (error) {
-        logger.error(`Agent prediction performance API error: ${error.message}`);
-        return next(error);
-      }
-    });
-
+    // Feedback ingest endpoints — persist for V2 prediction market substrate
+    // URLs kept stable so frontend / admin dashboard / Farcaster integrations continue working.
     this.app.post('/predictions/resolve/md-review', requireApiKey, mediumLimiter, requireAdmin, async (req, res, next) => {
       try {
         const { consultationId, mdReviewData } = req.body;
-
         if (!consultationId || !mdReviewData) {
           return res.status(400).json({ error: 'consultationId and mdReviewData are required' });
         }
-
-        const resolution = await this.coordinator.resolveMDReviewPredictions(consultationId, mdReviewData);
-
-        res.json({
-          success: true,
-          consultationId,
-          resolution,
-          timestamp: new Date().toISOString()
-        });
+        const sql = (await import('./utils/db.js')).default;
+        if (sql) {
+          await sql`INSERT INTO consultation_feedback (consultation_id, feedback_type, payload, submitted_by) VALUES (${consultationId}, 'md_review', ${JSON.stringify(mdReviewData)}, ${req.user?.identity || null})`;
+        }
+        res.json({ success: true, consultationId, recorded: true, timestamp: new Date().toISOString() });
       } catch (error) {
-        logger.error(`MD review resolution API error: ${error.message}`);
+        logger.error(`MD review feedback API error: ${error.message}`);
         return next(error);
       }
     });
 
-    this.app.post('/predictions/resolve/user-modal', requireApiKey, mediumLimiter, requireAdmin, async (req, res, next) => {
+    this.app.post('/predictions/resolve/user-modal', requireApiKey, mediumLimiter, async (req, res, next) => {
       try {
         const { consultationId, userFeedback } = req.body;
-
         if (!consultationId || !userFeedback) {
           return res.status(400).json({ error: 'consultationId and userFeedback are required' });
         }
-
-        const resolution = await this.coordinator.resolveUserModalPredictions(consultationId, userFeedback);
-
+        const sql = (await import('./utils/db.js')).default;
+        if (sql) {
+          await sql`INSERT INTO consultation_feedback (consultation_id, feedback_type, payload, submitted_by) VALUES (${consultationId}, 'user_modal', ${JSON.stringify(userFeedback)}, ${req.user?.identity || null})`;
+        }
         res.json({
           success: true,
           consultationId,
-          resolution,
-          // Cascading resolution metadata (for frontend to display)
-          cascadingResolution: resolution?.cascadingResolution || null,
-          recommendMDReview: resolution?.cascadingResolution?.recommendMDReview || false,
-          totalAgentsResolved: resolution?.cascadingResolution?.totalAgentsResolved || 0,
+          recorded: true,
+          cascadingResolution: null,
+          recommendMDReview: false,
+          totalAgentsResolved: 0,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
-        logger.error(`User modal resolution API error: ${error.message}`);
+        logger.error(`User modal feedback API error: ${error.message}`);
         return next(error);
       }
     });
 
-    this.app.post('/predictions/resolve/follow-up', requireApiKey, mediumLimiter, requireAdmin, async (req, res, next) => {
+    this.app.post('/predictions/resolve/follow-up', requireApiKey, mediumLimiter, async (req, res, next) => {
       try {
         const { consultationId, followUpData } = req.body;
-
         if (!consultationId || !followUpData) {
           return res.status(400).json({ error: 'consultationId and followUpData are required' });
         }
-
-        const resolution = await this.coordinator.resolveFollowUpPredictions(consultationId, followUpData);
-
-        res.json({
-          success: true,
-          consultationId,
-          resolution,
-          timestamp: new Date().toISOString()
-        });
+        const sql = (await import('./utils/db.js')).default;
+        if (sql) {
+          await sql`INSERT INTO consultation_feedback (consultation_id, feedback_type, payload, submitted_by) VALUES (${consultationId}, 'follow_up', ${JSON.stringify(followUpData)}, ${req.user?.identity || null})`;
+        }
+        res.json({ success: true, consultationId, recorded: true, timestamp: new Date().toISOString() });
       } catch (error) {
-        logger.error(`Follow-up resolution API error: ${error.message}`);
+        logger.error(`Follow-up feedback API error: ${error.message}`);
         return next(error);
       }
     });
@@ -1597,12 +1511,10 @@ class OrthoIQAgentSystem {
             balance: 'GET /tokens/balance/:agentId - Get agent token balance',
             statistics: 'GET /tokens/statistics - Get network token statistics'
           },
-          predictions: {
-            marketStatistics: 'GET /predictions/market/statistics - Get prediction market statistics',
-            agentPerformance: 'GET /predictions/agent/:agentId - Get agent prediction performance',
-            resolveMDReview: 'POST /predictions/resolve/md-review - Resolve predictions with MD review data',
-            resolveUserModal: 'POST /predictions/resolve/user-modal - Resolve predictions with user feedback modal',
-            resolveFollowUp: 'POST /predictions/resolve/follow-up - Resolve predictions with user follow-up data'
+          feedback: {
+            mdReview: 'POST /predictions/resolve/md-review - Persist MD review feedback (V2 substrate)',
+            userModal: 'POST /predictions/resolve/user-modal - Persist user feedback modal (V2 substrate)',
+            followUp: 'POST /predictions/resolve/follow-up - Persist PROMIS follow-up data (V2 substrate)'
           },
           research: {
             trigger: 'POST /research/trigger - Trigger async research literature curation',

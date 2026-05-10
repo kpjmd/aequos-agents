@@ -247,8 +247,13 @@ export class BlockchainUtils {
 
   async createAgentTokenContract(deployerWalletProvider) {
     try {
+      // T0-2: if TOKEN_CONTRACT_ADDRESS is set, bind to it and never auto-deploy
+      if (agentConfig.tokenEconomics.contractAddress) {
+        return this.createMockTokenContract();
+      }
+
       logger.info('Creating OrthoIQ Agent Token contract');
-      
+
       if (!deployerWalletProvider) {
         logger.warn('No wallet provider available, creating mock token contract');
         return this.createMockTokenContract();
@@ -392,9 +397,7 @@ export class BlockchainUtils {
       return mintResult;
     } catch (error) {
       logger.error(`Token minting failed: ${error.message}`);
-
-      // Return mock mint as fallback
-      return this.createMockMintResult(tokenAddress, agentAddress, amount);
+      throw error;
     }
   }
   
@@ -413,6 +416,18 @@ export class BlockchainUtils {
   async transferTokensBetweenAgents(tokenAddress, fromAddress, toAddress, amount) {
     try {
       logger.info(`Transferring ${amount} tokens from ${fromAddress} to ${toAddress}`);
+
+      if (agentConfig.blockchain.mockResponses) {
+        return {
+          contractAddress: tokenAddress,
+          functionName: 'transferFrom',
+          args: [fromAddress, toAddress, amount],
+          transactionHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+          status: 'success',
+          timestamp: new Date().toISOString(),
+          isMock: true
+        };
+      }
       
       const transferResult = await this.interactWithContract(
         tokenAddress,
@@ -423,17 +438,7 @@ export class BlockchainUtils {
       return transferResult;
     } catch (error) {
       logger.error(`Token transfer failed: ${error.message}`);
-      
-      // Return mock transfer for development
-      return {
-        contractAddress: tokenAddress,
-        functionName: 'transferFrom',
-        args: [fromAddress, toAddress, amount],
-        transactionHash: `0x${Math.random().toString(16).substring(2, 66)}`,
-        status: 'success',
-        timestamp: new Date().toISOString(),
-        isMock: true
-      };
+      throw error;
     }
   }
 
@@ -467,55 +472,10 @@ export class BlockchainUtils {
       };
     } catch (error) {
       logger.error(`Failed to get token balance: ${error.message}`);
-
-      // Return mock balance for development
-      return {
-        address: agentAddress,
-        balance: "0.0",
-        tokenAddress: tokenAddress,
-        timestamp: new Date().toISOString(),
-        isMock: true
-      };
+      return { address: agentAddress, balance: null, tokenAddress, isError: true, error: error.message };
     }
   }
 
-  async recordMedicalOutcome(patientId, outcome, agentId) {
-    try {
-      logger.info(`Recording medical outcome on blockchain for patient: ${patientId}`);
-      
-      // Create outcome hash for privacy
-      const outcomeHash = ethers.keccak256(
-        ethers.toUtf8Bytes(JSON.stringify({
-          patientId,
-          outcome,
-          agentId,
-          timestamp: new Date().toISOString()
-        }))
-      );
-      
-      // In a real implementation, this would call a medical records contract
-      // For now, we'll create a mock transaction record since no wallet is available
-      const recordTx = {
-        id: `mock_outcome_${Date.now()}`,
-        type: 'medical_outcome',
-        data: outcomeHash,
-        timestamp: new Date().toISOString(),
-        note: 'Mock transaction - would require agent wallet for real blockchain recording'
-      };
-      
-      return {
-        patientId,
-        outcomeHash,
-        transactionHash: recordTx.hash,
-        blockNumber: recordTx.blockNumber,
-        agentId,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      logger.error(`Failed to record medical outcome: ${error.message}`);
-      throw error;
-    }
-  }
 
   async verifyMedicalRecord(transactionHash) {
     try {
@@ -540,43 +500,6 @@ export class BlockchainUtils {
     }
   }
 
-  async createReputationScore(agentId, scores) {
-    try {
-      logger.info(`Creating reputation score for agent: ${agentId}`);
-      
-      const reputationData = {
-        agentId,
-        scores,
-        timestamp: new Date().toISOString(),
-        version: 1
-      };
-      
-      const reputationHash = ethers.keccak256(
-        ethers.toUtf8Bytes(JSON.stringify(reputationData))
-      );
-      
-      // Record reputation on blockchain
-      // For now, we'll create a mock transaction record since no wallet is available
-      const reputationTx = {
-        id: `mock_reputation_${Date.now()}`,
-        type: 'reputation_update',
-        data: reputationHash,
-        timestamp: new Date().toISOString(),
-        note: 'Mock transaction - would require agent wallet for real blockchain recording'
-      };
-      
-      return {
-        agentId,
-        reputationHash,
-        transactionHash: reputationTx.hash,
-        scores,
-        timestamp: reputationData.timestamp
-      };
-    } catch (error) {
-      logger.error(`Failed to create reputation score: ${error.message}`);
-      throw error;
-    }
-  }
 
   async getNetworkStatistics() {
     try {

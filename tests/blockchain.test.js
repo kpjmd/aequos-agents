@@ -189,21 +189,6 @@ describe('BlockchainUtils', () => {
     expect(result.isMock).toBe(true);
   });
 
-  test('should record medical outcome on blockchain', async () => {
-    await blockchainUtils.initialize();
-
-    const outcome = {
-      painReduction: 75,
-      functionalImprovement: true,
-      satisfaction: 9
-    };
-
-    const result = await blockchainUtils.recordMedicalOutcome('patient123', outcome, 'agent456');
-
-    expect(result.patientId).toBe('patient123');
-    expect(result.agentId).toBe('agent456');
-    expect(result.outcomeHash).toBeDefined();
-  });
 
   test('should verify medical record', async () => {
     await blockchainUtils.initialize();
@@ -216,21 +201,6 @@ describe('BlockchainUtils', () => {
     expect(result.blockNumber).toBeDefined();
   });
 
-  test('should create reputation score', async () => {
-    await blockchainUtils.initialize();
-
-    const scores = {
-      accuracy: 95,
-      timeliness: 88,
-      patientSatisfaction: 92
-    };
-
-    const result = await blockchainUtils.createReputationScore('agent123', scores);
-
-    expect(result.agentId).toBe('agent123');
-    expect(result.scores).toEqual(scores);
-    expect(result.reputationHash).toBeDefined();
-  });
 
   test('should get network statistics', async () => {
     await blockchainUtils.initialize();
@@ -533,29 +503,4 @@ describe('Token Economics Integration', () => {
     expect(mintResult.args[1]).toBe(tokenResult.amount);
   });
 
-  test('should record medical outcomes on blockchain', async () => {
-    const patientOutcome = {
-      painReduction: 80,
-      functionalImprovement: true,
-      patientSatisfaction: 9,
-      returnToActivity: true
-    };
-
-    const blockchainRecord = await blockchainUtils.recordMedicalOutcome(
-      'patient123',
-      patientOutcome,
-      'agent456'
-    );
-
-    expect(blockchainRecord.patientId).toBe('patient123');
-    expect(blockchainRecord.agentId).toBe('agent456');
-    expect(blockchainRecord.outcomeHash).toBeDefined();
-
-    // Verify the record
-    const verification = await blockchainUtils.verifyMedicalRecord(
-      blockchainRecord.transactionHash
-    );
-
-    expect(verification.verified).toBe(true);
-  });
 });

@@ -40,6 +40,10 @@ export class TokenManager {
     };
     // Per-agent promise-chain mutex (T0-10)
     this.balanceLocks = new Map();
+    // Per-consultation running mint totals for cap enforcement (T0-11)
+    this.consultationMints = new Map();
+    this.maxPerConsultationPerAgent = parseInt(process.env.MAX_TOKENS_PER_CONSULTATION) || 50;
+    this.maxPerDistribution = parseInt(process.env.MAX_TOKENS_PER_DISTRIBUTION) || 50;
   }
 
   initializeRewardRules() {
@@ -268,11 +272,27 @@ export class TokenManager {
         throw new Error(`Agent balance not found for agentId: ${agentId}`);
       }
 
-      const rewardAmount = this.calculateRewardAmount(outcome, additionalData);
+      let rewardAmount = this.calculateRewardAmount(outcome, additionalData);
 
       if (rewardAmount <= 0) {
         logger.info(`No reward calculated for agent ${agentId}`);
         return null;
+      }
+
+      // T0-11: per-distribution cap
+      rewardAmount = Math.min(rewardAmount, this.maxPerDistribution);
+
+      // T0-11: per-consultation cap (only when consultationId is provided)
+      const consultationId = additionalData.consultationId;
+      if (consultationId) {
+        const mintKey = `${agentId}:${consultationId}`;
+        const alreadyMinted = this.consultationMints.get(mintKey) || 0;
+        const allowed = this.maxPerConsultationPerAgent - alreadyMinted;
+        if (allowed <= 0) {
+          logger.info(`Per-consultation cap reached for agent ${agentId} on ${consultationId} — skipping`);
+          return null;
+        }
+        rewardAmount = Math.min(rewardAmount, allowed);
       }
 
       const transaction = {
@@ -288,7 +308,21 @@ export class TokenManager {
         status: 'pending'
       };
 
-      // Mutate in-memory first (will revert on DB failure)
+      // T0-6: mint on-chain first; only credit memory + DB after confirmed.
+      // Mock/disabled-blockchain path skips this block and credits locally.
+      const blockchainEnabled = agentConfig.blockchain.enabled && !agentConfig.blockchain.mockResponses;
+      if (blockchainEnabled) {
+        const blockchainTx = await this.processBlockchainReward(
+          agentBalance.walletAddress,
+          rewardAmount,
+          transaction.id,
+          additionalData.walletProvider
+        );
+        transaction.blockchainTx = blockchainTx.hash;
+        transaction.status = blockchainTx.isMock ? 'simulated' : 'confirmed';
+      }
+
+      // Credit in-memory (will revert on DB failure)
       agentBalance.tokenBalance += rewardAmount;
       agentBalance.totalEarned += rewardAmount;
       agentBalance.lastUpdated = new Date().toISOString();
@@ -301,7 +335,6 @@ export class TokenManager {
           await this._persistBalance(sql, agentBalance);
           await this._persistTransaction(sql, transaction);
         } catch (dbError) {
-          // Revert in-memory mutation
           agentBalance.tokenBalance -= rewardAmount;
           agentBalance.totalEarned -= rewardAmount;
           agentBalance.transactionCount -= 1;
@@ -310,20 +343,14 @@ export class TokenManager {
       }
 
       this.tokenTransactions.set(transaction.id, transaction);
+      if (!blockchainEnabled) {
+        transaction.status = 'simulated';
+      }
 
-      // Try blockchain (non-fatal)
-      try {
-        const blockchainTx = await this.processBlockchainReward(
-          agentBalance.walletAddress,
-          rewardAmount,
-          transaction.id,
-          additionalData.walletProvider
-        );
-        transaction.blockchainTx = blockchainTx.hash;
-        transaction.status = blockchainTx.isMock ? 'simulated' : 'confirmed';
-      } catch (blockchainError) {
-        logger.warn(`Blockchain transaction failed, keeping local record: ${blockchainError.message}`);
-        transaction.status = 'local_only';
+      // Update per-consultation running total
+      if (consultationId) {
+        const mintKey = `${agentId}:${consultationId}`;
+        this.consultationMints.set(mintKey, (this.consultationMints.get(mintKey) || 0) + rewardAmount);
       }
 
       this.updateNetworkStats(rewardAmount, outcome);
@@ -353,7 +380,7 @@ export class TokenManager {
     }
   }
 
-  // --- Penalty (used by PredictionMarket instead of direct Map mutation) ---
+  // --- Penalty ---
 
   async applyPenalty(agentId, amount) {
     return this._withAgentLock(agentId, () => this._applyPenaltyImpl(agentId, amount));

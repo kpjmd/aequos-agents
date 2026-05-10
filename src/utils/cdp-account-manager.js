@@ -1,5 +1,6 @@
 import { CdpClient } from '@coinbase/cdp-sdk';
 import logger from './logger.js';
+import { agentConfig } from '../config/agent-config.js';
 
 async function getSql() {
   const mod = await import('./db.js');
@@ -52,7 +53,7 @@ export class CdpAccountManager {
         agentId,
         address: account.address,
         createdAt: new Date().toISOString(),
-        network: 'base-sepolia'
+        network: agentConfig.network.id
       };
       
       this.createdAccounts.set(agentId, accountInfo);
@@ -70,7 +71,7 @@ export class CdpAccountManager {
       
       const faucetResponse = await this.cdpClient.evm.requestFaucet({
         address: accountInfo.address,
-        network: 'base-sepolia',
+        network: agentConfig.network.id,
         token: amount
       });
       
