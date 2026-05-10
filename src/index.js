@@ -8,6 +8,7 @@
 
 import dotenv from 'dotenv';
 import express from 'express';
+import helmet from 'helmet';
 import logger from './utils/logger.js';
 import AgentCoordinator from './utils/agent-coordinator.js';
 import TokenManager from './utils/token-manager.js';
@@ -19,6 +20,12 @@ import promptManager from './utils/prompt-manager.js';
 import { validateScope } from './utils/scope-validator.js';
 import { agentConfig } from './config/agent-config.js';
 import { storeResearchPending, storeResearchResult, storeResearchError, getResearchResult } from './utils/research-storage.js';
+import { requireApiKey, requireAdmin } from './middleware/auth.js';
+import { requireIdentity } from './middleware/identity.js';
+import { strictLimiter, mediumLimiter, looseLimiter } from './middleware/rate-limit.js';
+import { validateBody } from './schemas/validate.js';
+import { triageSchema } from './schemas/triage.js';
+import { consultationSchema } from './schemas/consultation.js';
 
 // Import all specialist agents
 import { TriageAgent } from './agents/triage-agent.js';
@@ -30,6 +37,16 @@ import { ResearchAgent } from './agents/research-agent.js';
 
 // Load environment variables
 dotenv.config();
+
+// Fail-fast in production if auth env vars are missing
+if (process.env.NODE_ENV === 'production') {
+  const required = ['FARCASTER_API_KEY', 'WEB_API_KEY', 'ADMIN_API_KEY', 'CORS_ORIGINS', 'FARCASTER_AUTH_DOMAIN'];
+  const missing = required.filter(k => !process.env[k]);
+  if (missing.length > 0) {
+    console.error(`FATAL: missing required env vars: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+}
 
 // Helper function to check if consultation meets quality thresholds for MD review
 function shouldFlagForMDReview(result) {
@@ -197,25 +214,62 @@ class OrthoIQAgentSystem {
   }
 
   setupMiddleware() {
-    this.app.use(express.json({ limit: '10mb' }));
-    this.app.use(express.urlencoded({ extended: true }));
-    
-    // CORS middleware
+    this.app.use(helmet());
+
+    // Assign a unique request ID used by logging and error responses
     this.app.use((req, res, next) => {
-      res.header('Access-Control-Allow-Origin', '*');
-      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-      
-      if (req.method === 'OPTIONS') {
-        res.sendStatus(200);
-      } else {
-        next();
-      }
+      req.id = crypto.randomUUID();
+      res.setHeader('X-Request-Id', req.id);
+      next();
     });
 
-    // Request logging middleware
+    // CORS — production reads CORS_ORIGINS (comma-list); dev auto-allows localhost
     this.app.use((req, res, next) => {
-      logger.info(`${req.method} ${req.path} - ${req.ip}`);
+      const origin = req.headers['origin'];
+      if (!origin) return next();
+
+      const allowed = (process.env.CORS_ORIGINS || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const isDev = process.env.NODE_ENV === 'development';
+      const localhostRe = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+      const originAllowed = allowed.includes(origin) || (isDev && localhostRe.test(origin));
+
+      if (!originAllowed) {
+        return res.status(403).json({ error: 'cors_origin_not_allowed' });
+      }
+
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Vary', 'Origin');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Origin, Content-Type, Accept, Authorization, X-API-Key, X-User-Id');
+      res.header('Access-Control-Allow-Credentials', 'true');
+
+      if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+      }
+      next();
+    });
+
+    this.app.use(express.json({ limit: '64kb' }));
+    this.app.use(express.urlencoded({ extended: true, limit: '64kb' }));
+
+    // Structured request logger — no IP correlation with PHI
+    this.app.use((req, res, next) => {
+      const start = Date.now();
+      res.on('finish', () => {
+        logger.info({
+          event: 'request',
+          requestId: req.id,
+          method: req.method,
+          path: req.path,
+          status: res.statusCode,
+          durationMs: Date.now() - start,
+          keyName: req.auth?.keyName ?? 'none',
+        });
+      });
       next();
     });
   }
@@ -268,6 +322,51 @@ class OrthoIQAgentSystem {
       )`;
       await sql`CREATE INDEX IF NOT EXISTS idx_research_consultation_id ON research_results(consultation_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_research_status ON research_results(status)`;
+
+      // Token ledger tables (Phase 2)
+      await sql`CREATE TABLE IF NOT EXISTS agent_wallets (
+        agent_id TEXT PRIMARY KEY,
+        agent_name TEXT UNIQUE NOT NULL,
+        address TEXT NOT NULL,
+        network TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS agent_balances (
+        agent_id TEXT PRIMARY KEY,
+        agent_name TEXT NOT NULL,
+        wallet_address TEXT,
+        token_balance INTEGER NOT NULL DEFAULT 0,
+        total_earned INTEGER NOT NULL DEFAULT 0,
+        transaction_count INTEGER NOT NULL DEFAULT 0,
+        last_updated TIMESTAMP DEFAULT NOW()
+      )`;
+      await sql`CREATE TABLE IF NOT EXISTS token_transactions (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT,
+        type TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        outcome JSONB,
+        additional_data JSONB,
+        track TEXT,
+        blockchain_tx TEXT,
+        status TEXT NOT NULL,
+        from_agent_id TEXT,
+        to_agent_id TEXT,
+        reason TEXT,
+        timestamp TIMESTAMP DEFAULT NOW()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_token_tx_agent_id ON token_transactions(agent_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_token_tx_timestamp ON token_transactions(timestamp DESC)`;
+      await sql`CREATE TABLE IF NOT EXISTS consultation_feedback (
+        id SERIAL PRIMARY KEY,
+        consultation_id TEXT NOT NULL,
+        feedback_type TEXT NOT NULL CHECK (feedback_type IN ('user_modal', 'md_review', 'follow_up')),
+        payload JSONB NOT NULL,
+        submitted_by TEXT,
+        submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_feedback_consultation_id ON consultation_feedback(consultation_id, feedback_type)`;
+
       logger.info('✅ Database migrations complete');
     } catch (error) {
       logger.error(`⚠️  Database migration failed: ${error.message}`);
@@ -371,6 +470,9 @@ class OrthoIQAgentSystem {
         }
       }
       
+      // Replay persisted state from DB (T0-9)
+      await this.tokenManager.loadFromDb();
+
       logger.info('✅ Token economics initialized');
     } catch (error) {
       logger.error(`❌ Token initialization failed: ${error.message}`);
@@ -396,7 +498,7 @@ class OrthoIQAgentSystem {
     });
 
     // System status endpoint with performance metrics
-    this.app.get('/status', async (req, res) => {
+    this.app.get('/status', requireApiKey, looseLimiter, async (req, res) => {
       try {
         const coordinationStats = this.coordinator.getCoordinationStatistics();
         const networkStats = this.tokenManager.getNetworkStatistics();
@@ -409,7 +511,7 @@ class OrthoIQAgentSystem {
           system: {
             initialized: this.isInitialized,
             uptime: process.uptime(),
-            version: '2.0.0', // Updated version with optimizations
+            version: '2.0.0',
             optimizationsEnabled: true
           },
           performance: {
@@ -424,7 +526,6 @@ class OrthoIQAgentSystem {
               {
                 name: agent.name,
                 experience: agent.experience,
-                tokenBalance: agent.tokenBalance,
                 specialization: agent.subspecialty
               }
             ])
@@ -432,7 +533,6 @@ class OrthoIQAgentSystem {
           researchAgent: this.researchAgent ? {
             name: this.researchAgent.name,
             experience: this.researchAgent.experience,
-            tokenBalance: this.researchAgent.tokenBalance,
             statistics: this.researchAgent.getResearchStatistics(),
           } : null,
           coordination: coordinationStats,
@@ -447,7 +547,7 @@ class OrthoIQAgentSystem {
     });
 
     // Triage endpoint
-    this.app.post('/triage', async (req, res) => {
+    this.app.post('/triage', requireApiKey, strictLimiter, validateBody(triageSchema), async (req, res, next) => {
       try {
         // Scope validation - early return if out of scope
         const scopeCheck = this.validateQueryScope(req, res);
@@ -471,12 +571,12 @@ class OrthoIQAgentSystem {
         });
       } catch (error) {
         logger.error(`Triage API error: ${error.message}`);
-        res.status(500).json({ error: 'Triage failed', message: error.message });
+        return next(error);
       }
     });
 
     // Multi-specialist consultation endpoint with caching and modes
-    this.app.post('/consultation', async (req, res) => {
+    this.app.post('/consultation', requireApiKey, strictLimiter, validateBody(consultationSchema), async (req, res, next) => {
       try {
         // Scope validation - early return if out of scope
         const scopeCheck = this.validateQueryScope(req, res);
@@ -594,6 +694,7 @@ class OrthoIQAgentSystem {
             isReturningUser,
             platformContext
           });
+          triageResponse.triageClassificationConfidence = heuristicClassification.confidence;
 
           // Check if informational — user override takes precedence; otherwise either classifier
           // saying informational is a confident signal (both default to clinical when uncertain)
@@ -739,6 +840,7 @@ class OrthoIQAgentSystem {
           timeout: 75000,  // Match coordinator normal-mode timeout for Sonnet
           rawQuery, enableDualTrack
         });
+        triageForClassification.triageClassificationConfidence = heuristicClassification.confidence;
 
         const effectiveQueryTypeNormal = userOverride
           || ((triageForClassification.queryType === 'informational' || heuristicClassification.queryType === 'informational')
@@ -837,27 +939,17 @@ class OrthoIQAgentSystem {
         });
       } catch (error) {
         logger.error(`Consultation API error: ${error.message}`);
-        
-        // Return timeout error with appropriate status
         if (error.message.includes('timeout')) {
-          res.status(504).json({ 
-            error: 'Consultation timeout', 
-            message: 'Request exceeded time limit, please try again',
-            mode: req.body.mode
-          });
-        } else {
-          res.status(500).json({
-            error: 'Consultation failed',
-            message: process.env.NODE_ENV === 'production'
-              ? 'An error occurred processing your consultation. Please try again.'
-              : error.message
-          });
+          const timeoutErr = new Error('Request exceeded time limit, please try again');
+          timeoutErr.status = 504;
+          return next(timeoutErr);
         }
+        return next(error);
       }
     });
 
     // Async consultation status endpoint — polls result of normal-mode background consultations
-    this.app.get('/consultation/:consultationId/status', async (req, res) => {
+    this.app.get('/consultation/:consultationId/status', requireApiKey, mediumLimiter, async (req, res) => {
       const { consultationId } = req.params;
       const entry = this.consultationResults.get(consultationId);
 
@@ -892,9 +984,10 @@ class OrthoIQAgentSystem {
     });
 
     // Recovery tracking endpoints
-    this.app.post('/recovery/start', async (req, res) => {
+    this.app.post('/recovery/start', requireApiKey, mediumLimiter, requireIdentity, async (req, res, next) => {
       try {
-        const { patientId, initialAssessment } = req.body;
+        const patientId = req.user.identity;
+        const { initialAssessment } = req.body;
         
         const trackingResult = await this.recoveryMetrics.trackPatientRecovery(
           patientId,
@@ -908,13 +1001,14 @@ class OrthoIQAgentSystem {
         });
       } catch (error) {
         logger.error(`Recovery start API error: ${error.message}`);
-        res.status(500).json({ error: 'Recovery tracking start failed', message: error.message });
+        return next(error);
       }
     });
 
-    this.app.post('/recovery/update', async (req, res) => {
+    this.app.post('/recovery/update', requireApiKey, mediumLimiter, requireIdentity, async (req, res, next) => {
       try {
-        const { patientId, progressData } = req.body;
+        const patientId = req.user.identity;
+        const { progressData } = req.body;
         
         const updateResult = await this.recoveryMetrics.updateRecoveryProgress(
           patientId,
@@ -943,33 +1037,23 @@ class OrthoIQAgentSystem {
         });
       } catch (error) {
         logger.error(`Recovery update API error: ${error.message}`);
-        res.status(500).json({ error: 'Recovery update failed', message: error.message });
+        return next(error);
       }
     });
 
-    this.app.post('/recovery/complete', async (req, res) => {
+    this.app.post('/recovery/complete', requireApiKey, mediumLimiter, requireIdentity, async (req, res, next) => {
       try {
-        const { patientId, finalOutcome } = req.body;
+        const patientId = req.user.identity;
+        const { finalOutcome } = req.body;
         
         const completionResult = await this.recoveryMetrics.completeRecoveryTracking(
           patientId,
           finalOutcome
         );
 
-        // Record outcome on blockchain
-        let blockchainRecord = null;
-        if (await this.blockchainUtils.isConnected()) {
-          blockchainRecord = await this.blockchainUtils.recordMedicalOutcome(
-            patientId,
-            finalOutcome,
-            'recovery_team'
-          );
-        }
-
         // Distribute final rewards
         const outcome = {
           success: completionResult.success,
-          mdApproval: true,
           userSatisfaction: finalOutcome.patientSatisfaction || 0,
           functionalImprovement: completionResult.finalMetrics.totalFunctionalImprovement >= 80,
           returnToActivity: finalOutcome.returnToActivity || false
@@ -986,18 +1070,17 @@ class OrthoIQAgentSystem {
         res.json({
           success: true,
           completion: completionResult,
-          blockchainRecord,
           rewards,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
         logger.error(`Recovery completion API error: ${error.message}`);
-        res.status(500).json({ error: 'Recovery completion failed', message: error.message });
+        return next(error);
       }
     });
 
     // Agent-specific endpoints
-    this.app.post('/agents/:agentType/assess', async (req, res) => {
+    this.app.post('/agents/:agentType/assess', requireApiKey, strictLimiter, async (req, res, next) => {
       try {
         // Scope validation - early return if out of scope
         const scopeCheck = this.validateQueryScope(req, res);
@@ -1032,7 +1115,7 @@ class OrthoIQAgentSystem {
         // Process outcome for token rewards if outcome data is provided
         if (assessmentData.outcome && assessmentData.outcome.success) {
           try {
-            await agent.updateExperienceWithTokens(assessmentData.outcome);
+            await this.tokenManager.distributeTokenReward(agent.agentId, assessmentData.outcome);
             logger.info(`Token rewards processed for ${agent.name} based on successful outcome`);
           } catch (tokenError) {
             logger.warn(`Token reward processing failed for ${agent.name}: ${tokenError.message}`);
@@ -1047,12 +1130,12 @@ class OrthoIQAgentSystem {
         });
       } catch (error) {
         logger.error(`Agent assessment API error: ${error.message}`);
-        res.status(500).json({ error: 'Agent assessment failed', message: error.message });
+        return next(error);
       }
     });
 
     // Cache management endpoints
-    this.app.post('/cache/clear', (req, res) => {
+    this.app.post('/cache/clear', requireApiKey, mediumLimiter, requireAdmin, (req, res, next) => {
       try {
         cacheManager.clear();
         logger.info('Cache cleared via API endpoint');
@@ -1064,11 +1147,11 @@ class OrthoIQAgentSystem {
         });
       } catch (error) {
         logger.error(`Cache clear API error: ${error.message}`);
-        res.status(500).json({ error: 'Failed to clear cache', message: error.message });
+        return next(error);
       }
     });
 
-    this.app.get('/cache/stats', (req, res) => {
+    this.app.get('/cache/stats', requireApiKey, looseLimiter, (req, res, next) => {
       try {
         const stats = cacheManager.getStats();
 
@@ -1082,12 +1165,12 @@ class OrthoIQAgentSystem {
         });
       } catch (error) {
         logger.error(`Cache stats API error: ${error.message}`);
-        res.status(500).json({ error: 'Failed to get cache stats', message: error.message });
+        return next(error);
       }
     });
 
     // Token management endpoints
-    this.app.get('/tokens/balance/:agentId', (req, res) => {
+    this.app.get('/tokens/balance/:agentId', requireApiKey, looseLimiter, (req, res, next) => {
       try {
         const { agentId } = req.params;
         const balance = this.tokenManager.getAgentBalance(agentId);
@@ -1103,11 +1186,11 @@ class OrthoIQAgentSystem {
         });
       } catch (error) {
         logger.error(`Token balance API error: ${error.message}`);
-        res.status(500).json({ error: 'Failed to get token balance', message: error.message });
+        return next(error);
       }
     });
 
-    this.app.get('/tokens/statistics', (req, res) => {
+    this.app.get('/tokens/statistics', requireApiKey, looseLimiter, (req, res, next) => {
       try {
         const stats = this.tokenManager.getNetworkStatistics();
         res.json({
@@ -1117,127 +1200,73 @@ class OrthoIQAgentSystem {
         });
       } catch (error) {
         logger.error(`Token statistics API error: ${error.message}`);
-        res.status(500).json({ error: 'Failed to get token statistics', message: error.message });
+        return next(error);
       }
     });
 
-    // Prediction market endpoints
-    this.app.get('/predictions/market/statistics', (req, res) => {
-      try {
-        const marketStats = this.coordinator.getPredictionMarketStats();
-
-        if (!marketStats) {
-          return res.json({
-            success: true,
-            message: 'Prediction market not initialized',
-            statistics: null
-          });
-        }
-
-        res.json({
-          success: true,
-          statistics: marketStats,
-          timestamp: new Date().toISOString()
-        });
-      } catch (error) {
-        logger.error(`Prediction market stats API error: ${error.message}`);
-        res.status(500).json({ error: 'Failed to get prediction market statistics', message: error.message });
-      }
-    });
-
-    this.app.get('/predictions/agent/:agentId', (req, res) => {
-      try {
-        const { agentId } = req.params;
-        const performance = this.coordinator.getAgentPredictionPerformance(agentId);
-
-        if (!performance) {
-          return res.status(404).json({ error: 'Agent prediction performance not found' });
-        }
-
-        res.json({
-          success: true,
-          agentId,
-          performance,
-          timestamp: new Date().toISOString()
-        });
-      } catch (error) {
-        logger.error(`Agent prediction performance API error: ${error.message}`);
-        res.status(500).json({ error: 'Failed to get agent prediction performance', message: error.message });
-      }
-    });
-
-    this.app.post('/predictions/resolve/md-review', async (req, res) => {
+    // Feedback ingest endpoints — persist for V2 prediction market substrate
+    // URLs kept stable so frontend / admin dashboard / Farcaster integrations continue working.
+    this.app.post('/predictions/resolve/md-review', requireApiKey, mediumLimiter, requireAdmin, async (req, res, next) => {
       try {
         const { consultationId, mdReviewData } = req.body;
-
         if (!consultationId || !mdReviewData) {
           return res.status(400).json({ error: 'consultationId and mdReviewData are required' });
         }
-
-        const resolution = await this.coordinator.resolveMDReviewPredictions(consultationId, mdReviewData);
-
-        res.json({
-          success: true,
-          consultationId,
-          resolution,
-          timestamp: new Date().toISOString()
-        });
+        const sql = (await import('./utils/db.js')).default;
+        if (sql) {
+          await sql`INSERT INTO consultation_feedback (consultation_id, feedback_type, payload, submitted_by) VALUES (${consultationId}, 'md_review', ${JSON.stringify(mdReviewData)}, ${req.user?.identity || null})`;
+        }
+        res.json({ success: true, consultationId, recorded: true, timestamp: new Date().toISOString() });
       } catch (error) {
-        logger.error(`MD review resolution API error: ${error.message}`);
-        res.status(500).json({ error: 'Failed to resolve MD review predictions', message: error.message });
+        logger.error(`MD review feedback API error: ${error.message}`);
+        return next(error);
       }
     });
 
-    this.app.post('/predictions/resolve/user-modal', async (req, res) => {
+    this.app.post('/predictions/resolve/user-modal', requireApiKey, mediumLimiter, async (req, res, next) => {
       try {
         const { consultationId, userFeedback } = req.body;
-
         if (!consultationId || !userFeedback) {
           return res.status(400).json({ error: 'consultationId and userFeedback are required' });
         }
-
-        const resolution = await this.coordinator.resolveUserModalPredictions(consultationId, userFeedback);
-
+        const sql = (await import('./utils/db.js')).default;
+        if (sql) {
+          await sql`INSERT INTO consultation_feedback (consultation_id, feedback_type, payload, submitted_by) VALUES (${consultationId}, 'user_modal', ${JSON.stringify(userFeedback)}, ${req.user?.identity || null})`;
+        }
         res.json({
           success: true,
           consultationId,
-          resolution,
-          // Cascading resolution metadata (for frontend to display)
-          cascadingResolution: resolution?.cascadingResolution || null,
-          recommendMDReview: resolution?.cascadingResolution?.recommendMDReview || false,
-          totalAgentsResolved: resolution?.cascadingResolution?.totalAgentsResolved || 0,
+          recorded: true,
+          cascadingResolution: null,
+          recommendMDReview: false,
+          totalAgentsResolved: 0,
           timestamp: new Date().toISOString()
         });
       } catch (error) {
-        logger.error(`User modal resolution API error: ${error.message}`);
-        res.status(500).json({ error: 'Failed to resolve user modal predictions', message: error.message });
+        logger.error(`User modal feedback API error: ${error.message}`);
+        return next(error);
       }
     });
 
-    this.app.post('/predictions/resolve/follow-up', async (req, res) => {
+    this.app.post('/predictions/resolve/follow-up', requireApiKey, mediumLimiter, async (req, res, next) => {
       try {
         const { consultationId, followUpData } = req.body;
-
         if (!consultationId || !followUpData) {
           return res.status(400).json({ error: 'consultationId and followUpData are required' });
         }
-
-        const resolution = await this.coordinator.resolveFollowUpPredictions(consultationId, followUpData);
-
-        res.json({
-          success: true,
-          consultationId,
-          resolution,
-          timestamp: new Date().toISOString()
-        });
+        const sql = (await import('./utils/db.js')).default;
+        if (sql) {
+          await sql`INSERT INTO consultation_feedback (consultation_id, feedback_type, payload, submitted_by) VALUES (${consultationId}, 'follow_up', ${JSON.stringify(followUpData)}, ${req.user?.identity || null})`;
+        }
+        res.json({ success: true, consultationId, recorded: true, timestamp: new Date().toISOString() });
       } catch (error) {
-        logger.error(`Follow-up resolution API error: ${error.message}`);
-        res.status(500).json({ error: 'Failed to resolve follow-up predictions', message: error.message });
+        logger.error(`Follow-up feedback API error: ${error.message}`);
+        return next(error);
       }
     });
 
     // Research endpoints
-    this.app.post('/research/trigger', async (req, res) => {
+    this.app.post('/research/trigger', requireApiKey, strictLimiter, async (req, res, next) => {
       try {
         const { consultationId, caseData, consultationResult, userTier = 'basic' } = req.body;
 
@@ -1378,11 +1407,11 @@ class OrthoIQAgentSystem {
           });
       } catch (error) {
         logger.error(`Research trigger API error: ${error.message}`);
-        res.status(500).json({ error: 'Research trigger failed', message: error.message });
+        return next(error);
       }
     });
 
-    this.app.get('/research/:consultationId', async (req, res) => {
+    this.app.get('/research/:consultationId', requireApiKey, mediumLimiter, async (req, res, next) => {
       try {
         const { consultationId } = req.params;
 
@@ -1455,7 +1484,7 @@ class OrthoIQAgentSystem {
         res.json({ status: row.status });
       } catch (error) {
         logger.error(`Research poll API error: ${error.message}`);
-        res.status(500).json({ error: 'Failed to get research status', message: error.message });
+        return next(error);
       }
     });
 
@@ -1484,12 +1513,10 @@ class OrthoIQAgentSystem {
             balance: 'GET /tokens/balance/:agentId - Get agent token balance',
             statistics: 'GET /tokens/statistics - Get network token statistics'
           },
-          predictions: {
-            marketStatistics: 'GET /predictions/market/statistics - Get prediction market statistics',
-            agentPerformance: 'GET /predictions/agent/:agentId - Get agent prediction performance',
-            resolveMDReview: 'POST /predictions/resolve/md-review - Resolve predictions with MD review data',
-            resolveUserModal: 'POST /predictions/resolve/user-modal - Resolve predictions with user feedback modal',
-            resolveFollowUp: 'POST /predictions/resolve/follow-up - Resolve predictions with user follow-up data'
+          feedback: {
+            mdReview: 'POST /predictions/resolve/md-review - Persist MD review feedback (V2 substrate)',
+            userModal: 'POST /predictions/resolve/user-modal - Persist user feedback modal (V2 substrate)',
+            followUp: 'POST /predictions/resolve/follow-up - Persist PROMIS follow-up data (V2 substrate)'
           },
           research: {
             trigger: 'POST /research/trigger - Trigger async research literature curation',
@@ -1518,11 +1545,33 @@ class OrthoIQAgentSystem {
     });
 
     // Global error handler
-    this.app.use((error, req, res, next) => {
-      logger.error(`API Error: ${error.message}`);
-      res.status(500).json({
-        error: 'Internal server error',
-        message: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+    this.app.use((err, req, res, next) => {
+      const status = err.status || 500;
+      logger.error({
+        event: 'unhandled_error',
+        requestId: req.id,
+        status,
+        message: err.message,
+        stack: err.stack,
+      });
+
+      if (err.code === 'validation_error') {
+        return res.status(400).json({
+          error: 'validation_error',
+          requestId: req.id,
+          ...(process.env.NODE_ENV !== 'production' && { issues: err.issues }),
+        });
+      }
+
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(status).json({ error: 'internal_error', requestId: req.id });
+      }
+
+      res.status(status).json({
+        error: 'internal_error',
+        requestId: req.id,
+        message: err.message,
+        ...(err.stack && { stack: err.stack }),
       });
     });
   }
@@ -1538,7 +1587,7 @@ class OrthoIQAgentSystem {
     logger.info({
       event: 'scope_validation_start',
       hasCaseData: !!req.body.caseData,
-      extractedQuery: query?.substring(0, 100),
+      hasQuery: !!query,
       validationEnabled: process.env.ENABLE_SCOPE_VALIDATION
     });
 

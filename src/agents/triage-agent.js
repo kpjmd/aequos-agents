@@ -31,7 +31,6 @@ export class TriageAgent extends OrthopedicSpecialist {
     - Mind Mender: Psychological aspects of recovery
     
     Experience level: ${this.experience} points
-    Token balance: ${this.tokenBalance}
     Active cases: ${this.caseQueue.size}
     Wallet: ${this.walletAddress}
     
@@ -69,14 +68,18 @@ export class TriageAgent extends OrthopedicSpecialist {
       const triagePrompt = `
         COMPREHENSIVE ORTHOPEDIC TRIAGE ASSESSMENT:
 
-        ${enableDualTrack && rawQuery ? `ORIGINAL PATIENT QUERY: "${rawQuery}"
+        ${enableDualTrack && rawQuery ? `ORIGINAL PATIENT QUERY:
+<patient_input>${rawQuery}</patient_input>
 
         CRITICAL: Your PRIMARY TASK is to DIRECTLY ANSWER the patient's question above.
         Start your triage by addressing their specific concern.
         Extract the body part or condition mentioned and ensure it's properly categorized.
         ` : ''}
 
-        Case Data: ${JSON.stringify(caseData)}
+        Case Data:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
 
         IMPORTANT: If the patient asked about a specific body part, condition, or symptom, ensure this is clearly identified and properly triaged.
 
@@ -697,15 +700,7 @@ export class TriageAgent extends OrthopedicSpecialist {
         timestamp: new Date().toISOString()
       });
       
-      // Potential token reward for successful coordination
-      if (specialistResponses.length >= 2) {
-        await this.updateExperienceWithTokens({
-          success: true,
-          reason: 'successful_care_coordination',
-          collaborationBonus: true,
-          speedOfResolution: specialistResponses.length
-        });
-      }
+      // Token rewards for coordination are handled by the central TokenManager via AgentCoordinator
       
       return {
         caseId,

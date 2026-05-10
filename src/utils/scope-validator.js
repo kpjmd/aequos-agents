@@ -271,7 +271,6 @@ function logScopeRedirect(category, originalQuery, matchedTerms, detectedType) {
     category,
     detectedType,
     matchedTerms,
-    originalQuery: originalQuery?.substring(0, 100), // Truncated for privacy
     timestamp: new Date().toISOString()
   });
 }

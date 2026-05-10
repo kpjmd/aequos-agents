@@ -39,7 +39,6 @@ export class PainWhispererAgent extends OrthopedicSpecialist {
     - Sleep and mood effects
     
     Experience level: ${this.experience} points
-    Token balance: ${this.tokenBalance}
     Pain cases managed: ${this.painTrackingHistory.length}
     Wallet: ${this.walletAddress}
     
@@ -397,17 +396,6 @@ Pain Data: ${JSON.stringify(painData)}
       const painReduction = this.calculatePainReduction(progressData);
       const functionalImprovement = this.calculateFunctionalImprovement(progressData);
       
-      if (painReduction >= 50 || functionalImprovement >= 75) {
-        await this.updateExperienceWithTokens({
-          success: true,
-          reason: 'significant_pain_improvement',
-          painReduction,
-          functionalImprovement: functionalImprovement >= 75,
-          mdApproval: painReduction >= 70,
-          userSatisfaction: progressData.satisfaction || 8
-        });
-      }
-      
       return {
         planId,
         progressAssessment,
@@ -607,7 +595,6 @@ Pain Data: ${JSON.stringify(painData)}
       totalManagementPlans: totalPlans,
       riskDistribution,
       painScoreDistribution,
-      tokenBalance: this.tokenBalance,
       experience: this.experience
     };
   }

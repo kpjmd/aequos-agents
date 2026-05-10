@@ -45,7 +45,6 @@ export class OrthopedicSpecialist extends BaseAgent {
     - Generating enhanced digital prescriptions with recovery metrics
     
     Experience level: ${this.experience} points
-    Token balance: ${this.tokenBalance}
     Subspecialty: ${this.subspecialty}
     Wallet: ${this.walletAddress}
     
@@ -480,7 +479,8 @@ export class OrthopedicSpecialist extends BaseAgent {
       if (enhancedOutcome.mobilityImprovement >= 75) enhancedOutcome.functionalImprovement = true;
       if (enhancedOutcome.returnToActivity) enhancedOutcome.collaborationBonus = true;
       
-      return await this.updateExperienceWithTokens(enhancedOutcome);
+      // Token rewards are handled by the central TokenManager, not the parallel agent ledger
+      return enhancedOutcome;
     } catch (error) {
       logger.error(`Error updating outcome tokens:`, error);
       throw error;

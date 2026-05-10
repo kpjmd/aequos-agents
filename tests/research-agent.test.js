@@ -381,7 +381,6 @@ describe('ResearchAgent - Statistics', () => {
     expect(stats.totalSearches).toBe(0);
     expect(stats.totalCitations).toBe(0);
     expect(stats.avgResponseTime).toBe(0);
-    expect(stats.tokenBalance).toBe(0);
   });
 });
 

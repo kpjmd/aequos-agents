@@ -1,5 +1,11 @@
 import { CdpClient } from '@coinbase/cdp-sdk';
 import logger from './logger.js';
+import { agentConfig } from '../config/agent-config.js';
+
+async function getSql() {
+  const mod = await import('./db.js');
+  return mod.default;
+}
 
 export class CdpAccountManager {
   constructor() {
@@ -47,7 +53,7 @@ export class CdpAccountManager {
         agentId,
         address: account.address,
         createdAt: new Date().toISOString(),
-        network: 'base-sepolia'
+        network: agentConfig.network.id
       };
       
       this.createdAccounts.set(agentId, accountInfo);
@@ -65,7 +71,7 @@ export class CdpAccountManager {
       
       const faucetResponse = await this.cdpClient.evm.requestFaucet({
         address: accountInfo.address,
-        network: 'base-sepolia',
+        network: agentConfig.network.id,
         token: amount
       });
       
@@ -80,6 +86,51 @@ export class CdpAccountManager {
       // Don't throw error since faucet failures shouldn't stop agent creation
       return null;
     }
+  }
+
+  /**
+   * Look up persisted wallet by name; create + persist if not found.
+   * This makes wallet addresses stable across server restarts (T0-1).
+   */
+  async getOrCreateAgentAccount(agentName, agentId) {
+    const sql = await getSql();
+    if (sql) {
+      try {
+        const rows = await sql`SELECT * FROM agent_wallets WHERE agent_name = ${agentName}`;
+        if (rows.length > 0) {
+          const row = rows[0];
+          const info = {
+            agentName: row.agent_name,
+            agentId: row.agent_id,
+            address: row.address,
+            createdAt: row.created_at,
+            network: row.network
+          };
+          this.createdAccounts.set(row.agent_id, info);
+          logger.info(`Loaded persisted CDP account for ${agentName}: ${row.address}`);
+          return info;
+        }
+      } catch (dbError) {
+        logger.warn(`DB lookup failed for ${agentName}, falling back to create: ${dbError.message}`);
+      }
+    }
+
+    // No existing record — create new CDP account
+    const info = await this.createAgentAccount(agentName, agentId);
+
+    if (sql) {
+      try {
+        await sql`
+          INSERT INTO agent_wallets (agent_id, agent_name, address, network)
+          VALUES (${info.agentId}, ${info.agentName}, ${info.address}, ${info.network})
+          ON CONFLICT (agent_name) DO NOTHING
+        `;
+      } catch (dbError) {
+        logger.warn(`Failed to persist wallet for ${agentName}: ${dbError.message}`);
+      }
+    }
+
+    return info;
   }
 
   getAccountInfo(agentId) {

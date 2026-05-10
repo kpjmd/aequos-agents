@@ -46,11 +46,13 @@ class PromptManager {
 
 CRITICAL: Provide immediate, actionable orthopedic guidance in PLAIN TEXT.
 
+<patient_input>
 Patient: ${context.demographics}
 Primary Complaint: ${context.primaryComplaint}
 Symptoms: ${context.symptoms}
 Pain: ${context.painLevel}/10 at ${context.location}
 Duration: ${context.duration}
+</patient_input>
 
 Provide a concise clinical assessment in plain text covering:
 - Most likely diagnosis and differential diagnoses
@@ -79,7 +81,9 @@ Format: Plain text narrative, NOT JSON.`
 LEARNING MODE - Deep Analysis Required
 
 FULL CASE DATA:
+<patient_input>
 ${JSON.stringify(this.sanitizeCaseData(caseData), null, 2)}
+</patient_input>
 
 AGENT EXPERIENCE: ${agent.experience} points
 COLLABORATION NETWORK: ${agent.collaboratingAgents ? agent.collaboratingAgents.size : 0} specialists
@@ -125,12 +129,14 @@ Goal: Discover novel insights and patterns.`
    * Comprehensive prompt - full analysis when needed
    */
   getComprehensivePrompt(agent, caseData) {
-    // Original verbose prompt for comparison/special cases
     return {
       role: 'system',
       content: agent.getSystemPrompt() + `
-      
-      Full case analysis required for: ${JSON.stringify(caseData)}`
+
+      Full case analysis required for:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>`
     };
   }
   
@@ -181,9 +187,12 @@ Goal: Discover novel insights and patterns.`
 
     if (mode === 'fast') {
       return `Triage Assessment Required
+
+<patient_input>
 Patient: ${context.demographics}
 Chief Complaint: ${context.primaryComplaint}
 Urgency Indicators: ${context.symptoms}
+</patient_input>
 
 Provide a brief triage assessment in plain text covering:
 - Urgency level (emergent, urgent, semi-urgent, or routine)
@@ -203,9 +212,12 @@ Format: Plain text narrative, NOT JSON.`;
 
     if (mode === 'fast') {
       return `Pain Assessment
+
+<patient_input>
 Location: ${context.location}
 Intensity: ${context.painLevel}/10
 Duration: ${context.duration}
+</patient_input>
 
 Provide a concise pain assessment in plain text covering:
 - Pain type and classification
@@ -222,8 +234,11 @@ Format: Plain text narrative, NOT JSON.`;
   getMovementPrompt(caseData, mode) {
     if (mode === 'fast') {
       return `Movement Analysis
+
+<patient_input>
 Symptoms: ${caseData.movementSymptoms || caseData.symptoms}
 Functional Limitations: ${caseData.limitations || 'Not specified'}
+</patient_input>
 
 Provide a brief movement assessment in plain text covering:
 - Movement dysfunction classification
@@ -240,8 +255,11 @@ Format: Plain text narrative, NOT JSON.`;
   getStrengthPrompt(caseData, mode) {
     if (mode === 'fast') {
       return `Functional Capacity Assessment
+
+<patient_input>
 Current Function: ${caseData.functionalLevel || 'Not assessed'}
 Goals: ${caseData.goals || 'Return to activity'}
+</patient_input>
 
 Provide a concise functional assessment in plain text covering:
 - Functional deficits identified
@@ -258,8 +276,11 @@ Format: Plain text narrative, NOT JSON.`;
   getMindPrompt(caseData, mode) {
     if (mode === 'fast') {
       return `Psychological Assessment
+
+<patient_input>
 Pain Impact: ${caseData.painImpact || 'Not assessed'}
 Mood: ${caseData.mood || 'Not assessed'}
+</patient_input>
 
 Provide a brief psychological assessment in plain text covering:
 - Psychological factors affecting recovery

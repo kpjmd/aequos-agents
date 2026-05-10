@@ -16,7 +16,11 @@ try {
   compiledToken = JSON.parse(readFileSync(contractPath, 'utf8'));
   logger.info('Loaded compiled OrthoIQAgentToken contract');
 } catch (error) {
-  logger.warn('Compiled contract not found - run "npm run compile:contract" first');
+  throw new Error(
+    `Compiled contract artifact not found at ${contractPath}. ` +
+    `Run "npm run compile:contract" before starting the agent service. ` +
+    `Original error: ${error.message}`
+  );
 }
 
 export class BlockchainUtils {
@@ -245,56 +249,11 @@ export class BlockchainUtils {
     }
   }
 
-  async createAgentTokenContract(deployerWalletProvider) {
-    try {
-      logger.info('Creating OrthoIQ Agent Token contract');
-      
-      if (!deployerWalletProvider) {
-        logger.warn('No wallet provider available, creating mock token contract');
-        return this.createMockTokenContract();
-      }
-      
-      // Simple ERC20 token contract ABI
-      const tokenAbi = [
-        "constructor(string memory name, string memory symbol, uint256 totalSupply)",
-        "function name() view returns (string)",
-        "function symbol() view returns (string)",
-        "function decimals() view returns (uint8)",
-        "function totalSupply() view returns (uint256)",
-        "function balanceOf(address owner) view returns (uint256)",
-        "function transfer(address to, uint256 amount) returns (bool)",
-        "function approve(address spender, uint256 amount) returns (bool)",
-        "function transferFrom(address from, address to, uint256 amount) returns (bool)",
-        "function mint(address to, uint256 amount) returns (bool)",
-        "function burn(uint256 amount) returns (bool)",
-        "event Transfer(address indexed from, address indexed to, uint256 value)",
-        "event Approval(address indexed owner, address indexed spender, uint256 value)"
-      ];
-      
-      // Use compiled contract bytecode if available
-      const tokenBytecode = compiledToken ? compiledToken.bytecode : "0x608060405234801561001057600080fd5b506040516111b93803806111b98339818101604052810190610032919061028d565b8260039081610041919061052f565b50816004908161005191906105..."; // Fallback placeholder
-      const finalAbi = compiledToken ? compiledToken.abi : tokenAbi;
-
-      // Deploy token contract
-      const deployment = await this.deployContract(
-        deployerWalletProvider,
-        finalAbi,
-        tokenBytecode,
-        ["OrthoIQ Agent Token", "OAT", ethers.parseEther("1000000")] // 1M tokens
-      );
-      
-      return {
-        tokenAddress: deployment.address,
-        name: "OrthoIQ Agent Token",
-        symbol: "OAT",
-        totalSupply: "1000000",
-        deploymentTx: deployment.transactionHash
-      };
-    } catch (error) {
-      logger.error(`Failed to create agent token contract: ${error.message}`);
-      // Return mock contract for development
-      return this.createMockTokenContract();
-    }
+  async createAgentTokenContract(_deployerWalletProvider) {
+    // Deployment is handled out-of-band via Hardhat (scripts/deploy.js).
+    // Runtime always binds to the deployed address from TOKEN_CONTRACT_ADDRESS,
+    // or returns a mock contract if unset (dev/testing).
+    return this.createMockTokenContract();
   }
 
   createMockTokenContract() {
@@ -392,9 +351,7 @@ export class BlockchainUtils {
       return mintResult;
     } catch (error) {
       logger.error(`Token minting failed: ${error.message}`);
-
-      // Return mock mint as fallback
-      return this.createMockMintResult(tokenAddress, agentAddress, amount);
+      throw error;
     }
   }
   
@@ -413,6 +370,18 @@ export class BlockchainUtils {
   async transferTokensBetweenAgents(tokenAddress, fromAddress, toAddress, amount) {
     try {
       logger.info(`Transferring ${amount} tokens from ${fromAddress} to ${toAddress}`);
+
+      if (agentConfig.blockchain.mockResponses) {
+        return {
+          contractAddress: tokenAddress,
+          functionName: 'transferFrom',
+          args: [fromAddress, toAddress, amount],
+          transactionHash: `0x${Math.random().toString(16).substring(2, 66)}`,
+          status: 'success',
+          timestamp: new Date().toISOString(),
+          isMock: true
+        };
+      }
       
       const transferResult = await this.interactWithContract(
         tokenAddress,
@@ -423,17 +392,7 @@ export class BlockchainUtils {
       return transferResult;
     } catch (error) {
       logger.error(`Token transfer failed: ${error.message}`);
-      
-      // Return mock transfer for development
-      return {
-        contractAddress: tokenAddress,
-        functionName: 'transferFrom',
-        args: [fromAddress, toAddress, amount],
-        transactionHash: `0x${Math.random().toString(16).substring(2, 66)}`,
-        status: 'success',
-        timestamp: new Date().toISOString(),
-        isMock: true
-      };
+      throw error;
     }
   }
 
@@ -467,55 +426,10 @@ export class BlockchainUtils {
       };
     } catch (error) {
       logger.error(`Failed to get token balance: ${error.message}`);
-
-      // Return mock balance for development
-      return {
-        address: agentAddress,
-        balance: "0.0",
-        tokenAddress: tokenAddress,
-        timestamp: new Date().toISOString(),
-        isMock: true
-      };
+      return { address: agentAddress, balance: null, tokenAddress, isError: true, error: error.message };
     }
   }
 
-  async recordMedicalOutcome(patientId, outcome, agentId) {
-    try {
-      logger.info(`Recording medical outcome on blockchain for patient: ${patientId}`);
-      
-      // Create outcome hash for privacy
-      const outcomeHash = ethers.keccak256(
-        ethers.toUtf8Bytes(JSON.stringify({
-          patientId,
-          outcome,
-          agentId,
-          timestamp: new Date().toISOString()
-        }))
-      );
-      
-      // In a real implementation, this would call a medical records contract
-      // For now, we'll create a mock transaction record since no wallet is available
-      const recordTx = {
-        id: `mock_outcome_${Date.now()}`,
-        type: 'medical_outcome',
-        data: outcomeHash,
-        timestamp: new Date().toISOString(),
-        note: 'Mock transaction - would require agent wallet for real blockchain recording'
-      };
-      
-      return {
-        patientId,
-        outcomeHash,
-        transactionHash: recordTx.hash,
-        blockNumber: recordTx.blockNumber,
-        agentId,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      logger.error(`Failed to record medical outcome: ${error.message}`);
-      throw error;
-    }
-  }
 
   async verifyMedicalRecord(transactionHash) {
     try {
@@ -540,43 +454,6 @@ export class BlockchainUtils {
     }
   }
 
-  async createReputationScore(agentId, scores) {
-    try {
-      logger.info(`Creating reputation score for agent: ${agentId}`);
-      
-      const reputationData = {
-        agentId,
-        scores,
-        timestamp: new Date().toISOString(),
-        version: 1
-      };
-      
-      const reputationHash = ethers.keccak256(
-        ethers.toUtf8Bytes(JSON.stringify(reputationData))
-      );
-      
-      // Record reputation on blockchain
-      // For now, we'll create a mock transaction record since no wallet is available
-      const reputationTx = {
-        id: `mock_reputation_${Date.now()}`,
-        type: 'reputation_update',
-        data: reputationHash,
-        timestamp: new Date().toISOString(),
-        note: 'Mock transaction - would require agent wallet for real blockchain recording'
-      };
-      
-      return {
-        agentId,
-        reputationHash,
-        transactionHash: reputationTx.hash,
-        scores,
-        timestamp: reputationData.timestamp
-      };
-    } catch (error) {
-      logger.error(`Failed to create reputation score: ${error.message}`);
-      throw error;
-    }
-  }
 
   async getNetworkStatistics() {
     try {

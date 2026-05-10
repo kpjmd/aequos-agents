@@ -39,7 +39,6 @@ export const agentConfig = {
   // Token Economics Configuration
   tokenEconomics: {
     contractAddress: process.env.TOKEN_CONTRACT_ADDRESS,
-    initialSupply: parseInt(process.env.INITIAL_TOKEN_SUPPLY) || 1000000,
     baseRewardAmount: parseInt(process.env.BASE_REWARD_AMOUNT) || 1,
     maxRewardMultiplier: parseInt(process.env.MAX_REWARD_MULTIPLIER) || 50,
   },

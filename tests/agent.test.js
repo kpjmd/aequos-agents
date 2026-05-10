@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 
 // Mock the configuration
 jest.unstable_mockModule('../src/config/agent-config.js', () => ({
@@ -56,7 +56,6 @@ describe('BaseAgent', () => {
     expect(agent.name).toBe('TestAgent');
     expect(agent.specialization).toBe('testing');
     expect(agent.experience).toBe(0);
-    expect(agent.tokenBalance).toBe(0);
     expect(agent.agentId).toBeDefined();
     expect(agent.walletAddress).toBeDefined();
   });
@@ -73,16 +72,8 @@ describe('BaseAgent', () => {
     expect(agent.experience).toBeGreaterThan(initialExperience);
   });
 
-  test('should calculate token rewards correctly', () => {
-    const outcome = {
-      success: true,
-      mdApproval: true,
-      userSatisfaction: 9,
-      functionalImprovement: true
-    };
-
-    const tokens = agent.calculateTokenReward(outcome);
-    expect(tokens).toBeGreaterThan(0);
+  test('should not expose a tokenBalance property', () => {
+    expect(agent.tokenBalance).toBeUndefined();
   });
 });
 
@@ -296,35 +287,42 @@ describe('MindMenderAgent', () => {
 });
 
 describe('Agent Token Economics', () => {
-  let agent;
+  let tokenManager;
 
-  beforeEach(() => {
-    agent = new BaseAgent('TokenTestAgent');
+  beforeEach(async () => {
+    const { TokenManager } = await import('../src/utils/token-manager.js');
+    tokenManager = new TokenManager();
   });
 
-  test('should calculate complex token rewards', () => {
+  test('should calculate complex token rewards via TokenManager', () => {
     const complexOutcome = {
-      success: true,
-      mdApproval: true,
-      userSatisfaction: 9,
-      functionalImprovement: true,
-      painReduction: 75,
-      speedOfResolution: 3,
-      collaborationBonus: true
+      success: true,           // +5 successful_analysis
+      userSatisfaction: 9,     // +10 patient_satisfaction_high
+      functionalImprovement: true, // +20
+      painReduction: 75,       // +25 pain_reduction_75_percent
+      speedOfResolution: 3,    // +5 rapid_response (<=5)
+      collaborationBonus: true // +5 multi_specialist_consultation
     };
 
-    const tokens = agent.calculateTokenReward(complexOutcome);
-    expect(tokens).toBeGreaterThan(40); // Should be substantial reward
+    // 1 base + 5 + 10 + 20 + 25 + 5 + 5 = 71
+    const tokens = tokenManager.calculateRewardAmount(complexOutcome);
+    expect(tokens).toBe(71);
   });
 
-  test('should handle minimal rewards', () => {
+  test('should calculate minimal rewards via TokenManager', () => {
     const minimalOutcome = {
       success: false,
       userSatisfaction: 3
     };
 
-    const tokens = agent.calculateTokenReward(minimalOutcome);
-    expect(tokens).toBe(1); // Base reward only
+    // 1 base only
+    const tokens = tokenManager.calculateRewardAmount(minimalOutcome);
+    expect(tokens).toBe(1);
+  });
+
+  test('BaseAgent should not have calculateTokenReward method', () => {
+    const agent = new BaseAgent('TokenTestAgent');
+    expect(agent.calculateTokenReward).toBeUndefined();
   });
 });
 
@@ -395,7 +393,6 @@ describe('Performance Metrics', () => {
     expect(stats).toBeDefined();
     expect(stats.totalAssessments).toBe(0);
     expect(stats.totalManagementPlans).toBe(0);
-    expect(stats.tokenBalance).toBe(0);
     expect(stats.experience).toBe(0);
   });
 

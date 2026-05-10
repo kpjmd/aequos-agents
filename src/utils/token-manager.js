@@ -38,6 +38,12 @@ export class TokenManager {
       successfulOutcomes: 0,
       networkUtilization: 0
     };
+    // Per-agent promise-chain mutex (T0-10)
+    this.balanceLocks = new Map();
+    // Per-consultation running mint totals for cap enforcement (T0-11)
+    this.consultationMints = new Map();
+    this.maxPerConsultationPerAgent = parseInt(process.env.MAX_TOKENS_PER_CONSULTATION) || 50;
+    this.maxPerDistribution = parseInt(process.env.MAX_TOKENS_PER_DISTRIBUTION) || 50;
   }
 
   initializeRewardRules() {
@@ -46,34 +52,34 @@ export class TokenManager {
       base_consultation: 1,
       successful_analysis: 5,
       patient_satisfaction_high: 10,
-      
+
       // Medical outcome rewards
       pain_reduction_50_percent: 15,
       pain_reduction_75_percent: 25,
       functional_improvement: 20,
       return_to_activity: 30,
       md_approval: 15,
-      
+
       // Collaboration bonuses
       multi_specialist_consultation: 5,
       successful_coordination: 10,
       knowledge_sharing: 3,
-      
+
       // Innovation and excellence
       novel_approach: 20,
       exceptional_outcome: 50,
       zero_complications: 15,
-      
+
       // Speed and efficiency
       rapid_response: 5,
       timeline_adherence: 10,
       efficient_resource_use: 8,
-      
+
       // Education and engagement
       patient_education_effective: 8,
       adherence_improvement: 12,
       self_advocacy_development: 10,
-      
+
       // Risk mitigation
       prevented_complications: 25,
       successful_risk_mitigation: 15,
@@ -88,31 +94,160 @@ export class TokenManager {
     };
   }
 
+  // --- Serialization helpers (T0-10) ---
+
+  _withAgentLock(agentId, fn) {
+    const prev = this.balanceLocks.get(agentId) || Promise.resolve();
+    const next = prev.then(fn, fn); // run regardless of prior outcome
+    this.balanceLocks.set(agentId, next.catch(() => {})); // don't poison chain
+    return next;
+  }
+
+  async _getSql() {
+    const mod = await import('./db.js');
+    return mod.default;
+  }
+
+  // --- DB persistence (T0-9) ---
+
+  async loadFromDb() {
+    const sql = await this._getSql();
+    if (!sql) return;
+    try {
+      const balanceRows = await sql`SELECT * FROM agent_balances`;
+      for (const row of balanceRows) {
+        this.agentBalances.set(row.agent_id, {
+          agentId: row.agent_id,
+          name: row.agent_name,
+          walletAddress: row.wallet_address,
+          tokenBalance: row.token_balance,
+          totalEarned: row.total_earned,
+          lastUpdated: row.last_updated,
+          transactionCount: row.transaction_count
+        });
+      }
+
+      const txRows = await sql`
+        SELECT * FROM token_transactions ORDER BY timestamp DESC LIMIT 1000
+      `;
+      for (const row of txRows) {
+        this.tokenTransactions.set(row.id, {
+          id: row.id,
+          agentId: row.agent_id,
+          type: row.type,
+          amount: row.amount,
+          outcome: row.outcome,
+          additionalData: row.additional_data,
+          track: row.track,
+          timestamp: row.timestamp,
+          blockchainTx: row.blockchain_tx,
+          status: row.status,
+          fromAgentId: row.from_agent_id,
+          toAgentId: row.to_agent_id,
+          reason: row.reason
+        });
+      }
+
+      // Rebuild network stats from DB state
+      const issued = Array.from(this.tokenTransactions.values())
+        .filter(tx => tx.type === 'reward_distribution')
+        .reduce((sum, tx) => sum + tx.amount, 0);
+      this.networkStats.totalTokensIssued = issued;
+      this.networkStats.totalRewardsDistributed = Array.from(this.tokenTransactions.values())
+        .filter(tx => tx.type === 'reward_distribution').length;
+
+      logger.info(`TokenManager loaded from DB: ${balanceRows.length} balances, ${txRows.length} recent transactions`);
+    } catch (error) {
+      logger.error(`TokenManager DB load failed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async _persistBalance(sql, balance) {
+    await sql`
+      INSERT INTO agent_balances (agent_id, agent_name, wallet_address, token_balance, total_earned, transaction_count, last_updated)
+      VALUES (${balance.agentId}, ${balance.name}, ${balance.walletAddress}, ${balance.tokenBalance}, ${balance.totalEarned}, ${balance.transactionCount}, NOW())
+      ON CONFLICT (agent_id) DO UPDATE SET
+        token_balance = EXCLUDED.token_balance,
+        total_earned = EXCLUDED.total_earned,
+        transaction_count = EXCLUDED.transaction_count,
+        last_updated = NOW()
+    `;
+  }
+
+  async _persistTransaction(sql, tx) {
+    await sql`
+      INSERT INTO token_transactions (id, agent_id, type, amount, outcome, additional_data, track, blockchain_tx, status, from_agent_id, to_agent_id, reason, timestamp)
+      VALUES (
+        ${tx.id}, ${tx.agentId ?? null}, ${tx.type}, ${tx.amount},
+        ${tx.outcome ? JSON.stringify(tx.outcome) : null},
+        ${tx.additionalData ? JSON.stringify(tx.additionalData) : null},
+        ${tx.track ?? null}, ${tx.blockchainTx ?? null}, ${tx.status},
+        ${tx.fromAgentId ?? null}, ${tx.toAgentId ?? null}, ${tx.reason ?? null},
+        ${tx.timestamp}
+      )
+      ON CONFLICT (id) DO NOTHING
+    `;
+  }
+
+  // --- Core wallet/balance initialization ---
+
   async initializeAgentWallet(agent) {
     try {
       logger.info(`Initializing wallet for agent: ${agent.name}`);
-      
+
       if (!agent.walletAddress) {
         throw new Error(`Agent ${agent.name} does not have a wallet address`);
       }
-      
-      // Initialize balance tracking
-      this.agentBalances.set(agent.agentId, {
+
+      const sql = await this._getSql();
+
+      // If DB has a record, load it (balance persisted from prior run)
+      if (sql) {
+        const rows = await sql`SELECT * FROM agent_balances WHERE agent_id = ${agent.agentId}`;
+        if (rows.length > 0) {
+          const row = rows[0];
+          const balance = {
+            agentId: row.agent_id,
+            name: row.agent_name,
+            walletAddress: row.wallet_address,
+            tokenBalance: row.token_balance,
+            totalEarned: row.total_earned,
+            lastUpdated: row.last_updated,
+            transactionCount: row.transaction_count
+          };
+          this.agentBalances.set(agent.agentId, balance);
+          logger.info(`Wallet loaded from DB for ${agent.name}, balance: ${row.token_balance}`);
+          return {
+            agentId: agent.agentId,
+            walletAddress: agent.walletAddress,
+            initialBalance: row.token_balance
+          };
+        }
+      }
+
+      // New agent — initialize fresh
+      const balance = {
         agentId: agent.agentId,
         name: agent.name,
         walletAddress: agent.walletAddress,
-        tokenBalance: agent.tokenBalance || 0,
+        tokenBalance: 0,
         totalEarned: 0,
         lastUpdated: new Date().toISOString(),
         transactionCount: 0
-      });
-      
+      };
+      this.agentBalances.set(agent.agentId, balance);
+
+      if (sql) {
+        await this._persistBalance(sql, balance);
+      }
+
       logger.info(`Wallet initialized for ${agent.name} at address: ${agent.walletAddress}`);
-      
+
       return {
         agentId: agent.agentId,
         walletAddress: agent.walletAddress,
-        initialBalance: agent.tokenBalance || 0
+        initialBalance: 0
       };
     } catch (error) {
       logger.error(`Error initializing agent wallet: ${error.message}`);
@@ -120,24 +255,46 @@ export class TokenManager {
     }
   }
 
+  // --- Reward distribution (T0-9 + T0-10) ---
+
   async distributeTokenReward(agentId, outcome, additionalData = {}) {
+    return this._withAgentLock(agentId, () =>
+      this._distributeTokenRewardImpl(agentId, outcome, additionalData)
+    );
+  }
+
+  async _distributeTokenRewardImpl(agentId, outcome, additionalData = {}) {
     try {
       logger.info(`Distributing token reward for agent: ${agentId}`);
-      
+
       const agentBalance = this.agentBalances.get(agentId);
       if (!agentBalance) {
         throw new Error(`Agent balance not found for agentId: ${agentId}`);
       }
-      
-      // Calculate reward amount
-      const rewardAmount = this.calculateRewardAmount(outcome, additionalData);
-      
+
+      let rewardAmount = this.calculateRewardAmount(outcome, additionalData);
+
       if (rewardAmount <= 0) {
         logger.info(`No reward calculated for agent ${agentId}`);
         return null;
       }
-      
-      // Create transaction record
+
+      // T0-11: per-distribution cap
+      rewardAmount = Math.min(rewardAmount, this.maxPerDistribution);
+
+      // T0-11: per-consultation cap (only when consultationId is provided)
+      const consultationId = additionalData.consultationId;
+      if (consultationId) {
+        const mintKey = `${agentId}:${consultationId}`;
+        const alreadyMinted = this.consultationMints.get(mintKey) || 0;
+        const allowed = this.maxPerConsultationPerAgent - alreadyMinted;
+        if (allowed <= 0) {
+          logger.info(`Per-consultation cap reached for agent ${agentId} on ${consultationId} — skipping`);
+          return null;
+        }
+        rewardAmount = Math.min(rewardAmount, allowed);
+      }
+
       const transaction = {
         id: `txn_${Date.now()}_${agentId}`,
         agentId,
@@ -150,36 +307,54 @@ export class TokenManager {
         blockchainTx: null,
         status: 'pending'
       };
-      
-      // Update agent balance
-      agentBalance.tokenBalance += rewardAmount;
-      agentBalance.totalEarned += rewardAmount;
-      agentBalance.lastUpdated = new Date().toISOString();
-      agentBalance.transactionCount += 1;
-      
-      // Store transaction
-      this.tokenTransactions.set(transaction.id, transaction);
-      
-      // Try to process blockchain transaction if available
-      try {
+
+      // T0-6: mint on-chain first; only credit memory + DB after confirmed.
+      // Mock/disabled-blockchain path skips this block and credits locally.
+      const blockchainEnabled = agentConfig.blockchain.enabled && !agentConfig.blockchain.mockResponses;
+      if (blockchainEnabled) {
         const blockchainTx = await this.processBlockchainReward(
           agentBalance.walletAddress,
           rewardAmount,
           transaction.id,
-          additionalData.walletProvider // Pass wallet provider if available
+          additionalData.walletProvider
         );
-        
         transaction.blockchainTx = blockchainTx.hash;
         transaction.status = blockchainTx.isMock ? 'simulated' : 'confirmed';
-      } catch (blockchainError) {
-        logger.warn(`Blockchain transaction failed, keeping local record: ${blockchainError.message}`);
-        transaction.status = 'local_only';
       }
-      
-      // Update network statistics
+
+      // Credit in-memory (will revert on DB failure)
+      agentBalance.tokenBalance += rewardAmount;
+      agentBalance.totalEarned += rewardAmount;
+      agentBalance.lastUpdated = new Date().toISOString();
+      agentBalance.transactionCount += 1;
+
+      // Persist to DB — revert and throw on failure (T0-9 strict mode)
+      const sql = await this._getSql();
+      if (sql) {
+        try {
+          await this._persistBalance(sql, agentBalance);
+          await this._persistTransaction(sql, transaction);
+        } catch (dbError) {
+          agentBalance.tokenBalance -= rewardAmount;
+          agentBalance.totalEarned -= rewardAmount;
+          agentBalance.transactionCount -= 1;
+          throw dbError;
+        }
+      }
+
+      this.tokenTransactions.set(transaction.id, transaction);
+      if (!blockchainEnabled) {
+        transaction.status = 'simulated';
+      }
+
+      // Update per-consultation running total
+      if (consultationId) {
+        const mintKey = `${agentId}:${consultationId}`;
+        this.consultationMints.set(mintKey, (this.consultationMints.get(mintKey) || 0) + rewardAmount);
+      }
+
       this.updateNetworkStats(rewardAmount, outcome);
-      
-      // Record distribution history
+
       this.distributionHistory.push({
         agentId,
         agentName: agentBalance.name,
@@ -188,9 +363,9 @@ export class TokenManager {
         track: additionalData.track || 'clinical',
         timestamp: new Date().toISOString()
       });
-      
+
       logger.info(`Distributed ${rewardAmount} tokens to agent ${agentId} for: ${this.summarizeOutcome(outcome)}`);
-      
+
       return {
         transactionId: transaction.id,
         agentId,
@@ -205,117 +380,122 @@ export class TokenManager {
     }
   }
 
+  // --- Penalty ---
+
+  async applyPenalty(agentId, amount) {
+    return this._withAgentLock(agentId, () => this._applyPenaltyImpl(agentId, amount));
+  }
+
+  async _applyPenaltyImpl(agentId, amount) {
+    const agentBalance = this.agentBalances.get(agentId);
+    if (!agentBalance) return;
+
+    const actualPenalty = Math.min(amount, agentBalance.tokenBalance);
+    if (actualPenalty <= 0) return;
+
+    const transaction = {
+      id: `penalty_${Date.now()}_${agentId}`,
+      agentId,
+      type: 'penalty',
+      amount: -actualPenalty,
+      outcome: null,
+      additionalData: null,
+      track: 'prediction',
+      timestamp: new Date().toISOString(),
+      blockchainTx: null,
+      status: 'local_only'
+    };
+
+    agentBalance.tokenBalance -= actualPenalty;
+    agentBalance.lastUpdated = new Date().toISOString();
+    agentBalance.transactionCount += 1;
+
+    const sql = await this._getSql();
+    if (sql) {
+      try {
+        await this._persistBalance(sql, agentBalance);
+        await this._persistTransaction(sql, transaction);
+      } catch (dbError) {
+        agentBalance.tokenBalance += actualPenalty;
+        agentBalance.transactionCount -= 1;
+        throw dbError;
+      }
+    }
+
+    this.tokenTransactions.set(transaction.id, transaction);
+    logger.info(`Applied penalty of ${actualPenalty} tokens to agent ${agentId}`);
+  }
+
   calculateRewardAmount(outcome, additionalData = {}) {
     let totalReward = 0;
-    
-    // Base reward for participation
+
     totalReward += this.rewardRules.base_consultation;
-    
-    // Outcome-based rewards
+
     if (outcome.success) {
       totalReward += this.rewardRules.successful_analysis;
     }
-    
-    if (outcome.mdApproval) {
-      totalReward += this.rewardRules.md_approval;
-    }
-    
     if (outcome.functionalImprovement) {
       totalReward += this.rewardRules.functional_improvement;
     }
-    
     if (outcome.returnToActivity) {
       totalReward += this.rewardRules.return_to_activity;
     }
-    
-    // Pain reduction rewards
     if (outcome.painReduction >= 75) {
       totalReward += this.rewardRules.pain_reduction_75_percent;
     } else if (outcome.painReduction >= 50) {
       totalReward += this.rewardRules.pain_reduction_50_percent;
     }
-    
-    // Patient satisfaction rewards
     if (outcome.userSatisfaction >= 8) {
       totalReward += this.rewardRules.patient_satisfaction_high;
     }
-    
-    // Collaboration bonuses
     if (outcome.collaborationBonus) {
       totalReward += this.rewardRules.multi_specialist_consultation;
     }
-    
     if (outcome.coordinationSuccess) {
       totalReward += this.rewardRules.successful_coordination;
     }
-    
-    // Speed and efficiency bonuses
     if (outcome.speedOfResolution && outcome.speedOfResolution <= 5) {
       totalReward += this.rewardRules.rapid_response;
     }
-    
     if (outcome.timelineAdherence) {
       totalReward += this.rewardRules.timeline_adherence;
     }
-    
-    // Innovation and excellence
-    if (outcome.novelApproach) {
-      totalReward += this.rewardRules.novel_approach;
-    }
-    
-    if (outcome.exceptionalOutcome) {
-      totalReward += this.rewardRules.exceptional_outcome;
-    }
-    
     if (outcome.zeroComplications) {
       totalReward += this.rewardRules.zero_complications;
     }
-    
-    // Education and engagement
     if (outcome.effectiveEducation) {
       totalReward += this.rewardRules.patient_education_effective;
     }
-    
     if (outcome.adherenceImprovement >= 90) {
       totalReward += this.rewardRules.adherence_improvement;
     }
-    
-    // Risk mitigation
     if (outcome.preventedComplications) {
       totalReward += this.rewardRules.prevented_complications;
     }
-    
     if (outcome.riskMitigation) {
       totalReward += this.rewardRules.successful_risk_mitigation;
     }
-
-    // Research and evidence curation rewards
     if (outcome.literatureSearchCompleted) {
       totalReward += this.rewardRules.literature_search_completed;
     }
-
     if (outcome.relevantStudiesFound) {
       totalReward += this.rewardRules.relevant_studies_found;
     }
-
     if (outcome.highImpactJournal) {
       totalReward += this.rewardRules.high_impact_journal;
     }
-
     if (outcome.recentEvidence) {
       totalReward += this.rewardRules.recent_evidence;
     }
-
     if (outcome.multipleStudyTypes) {
       totalReward += this.rewardRules.multiple_study_types;
     }
 
-    // Additional multipliers
     const experienceMultiplier = additionalData.experienceMultiplier || 1.0;
     const qualityMultiplier = additionalData.qualityMultiplier || 1.0;
-    
+
     totalReward = Math.round(totalReward * experienceMultiplier * qualityMultiplier);
-    
+
     return Math.max(0, totalReward);
   }
 
@@ -325,14 +505,9 @@ export class TokenManager {
         logger.warn('No wallet provider available for token contract initialization');
         return null;
       }
-      
-      // Initialize blockchain utilities
       await this.blockchainUtils.initialize();
-      
-      // Create or get existing token contract
       const tokenContract = await this.blockchainUtils.createAgentTokenContract(walletProvider);
       this.tokenContractAddress = tokenContract.tokenAddress;
-      
       logger.info(`Token contract initialized at: ${this.tokenContractAddress}`);
       return tokenContract;
     } catch (error) {
@@ -345,7 +520,6 @@ export class TokenManager {
     try {
       logger.info(`Processing blockchain reward: ${amount} tokens to ${walletAddress}`);
 
-      // Check if blockchain is disabled or in mock mode
       if (!agentConfig.blockchain.enabled || agentConfig.blockchain.mockResponses) {
         logger.debug('Mock blockchain mode enabled, returning simulated transaction');
         return this.createSimulatedTransaction(walletAddress, amount);
@@ -361,7 +535,6 @@ export class TokenManager {
         return this.createSimulatedTransaction(walletAddress, amount);
       }
 
-      // Mint tokens to the agent wallet on real blockchain
       const mintResult = await this.blockchainUtils.mintTokensToAgent(
         this.tokenContractAddress,
         walletAddress,
@@ -373,21 +546,20 @@ export class TokenManager {
 
       return {
         hash: mintResult.transactionHash,
-        from: '0x0000000000000000000000000000000000000000', // Minting from zero address
+        from: '0x0000000000000000000000000000000000000000',
         to: walletAddress,
         value: ethers.parseEther(amount.toString()),
         gasUsed: mintResult.gasUsed || 21000,
         blockNumber: mintResult.blockNumber || 0,
         timestamp: mintResult.timestamp,
-        isMock: mintResult.isMock !== false // Default to true if not explicitly false
+        isMock: mintResult.isMock !== false
       };
     } catch (error) {
       logger.error(`Blockchain reward processing failed: ${error.message}`);
-      // Fall back to simulated transaction
       return this.createSimulatedTransaction(walletAddress, amount);
     }
   }
-  
+
   createSimulatedTransaction(walletAddress, amount) {
     const simulatedTx = {
       hash: `0x${Math.random().toString(16).substring(2, 66)}`,
@@ -399,52 +571,72 @@ export class TokenManager {
       timestamp: new Date().toISOString(),
       isMock: true
     };
-    
     logger.info(`Simulated blockchain transaction: ${simulatedTx.hash}`);
     return simulatedTx;
   }
 
   async transferTokensBetweenAgents(fromAgentId, toAgentId, amount, reason) {
+    // Lock both agents in deterministic order to prevent inconsistent state
+    const [firstId, secondId] = [fromAgentId, toAgentId].sort();
+    return this._withAgentLock(firstId, () =>
+      this._withAgentLock(secondId, () =>
+        this._transferImpl(fromAgentId, toAgentId, amount, reason)
+      )
+    );
+  }
+
+  async _transferImpl(fromAgentId, toAgentId, amount, reason) {
     try {
       logger.info(`Transferring ${amount} tokens from ${fromAgentId} to ${toAgentId}`);
-      
+
       const fromBalance = this.agentBalances.get(fromAgentId);
       const toBalance = this.agentBalances.get(toAgentId);
-      
+
       if (!fromBalance || !toBalance) {
         throw new Error('One or both agents not found');
       }
-      
       if (fromBalance.tokenBalance < amount) {
         throw new Error('Insufficient token balance');
       }
-      
-      // Create transfer transaction
+
       const transferTx = {
         id: `transfer_${Date.now()}_${fromAgentId}_${toAgentId}`,
         type: 'agent_transfer',
         fromAgentId,
         toAgentId,
+        agentId: fromAgentId,
         amount,
         reason,
         timestamp: new Date().toISOString(),
         status: 'completed'
       };
-      
-      // Update balances
+
+      // Mutate
       fromBalance.tokenBalance -= amount;
       fromBalance.lastUpdated = new Date().toISOString();
       fromBalance.transactionCount += 1;
-      
       toBalance.tokenBalance += amount;
       toBalance.lastUpdated = new Date().toISOString();
       toBalance.transactionCount += 1;
-      
-      // Store transaction
+
+      const sql = await this._getSql();
+      if (sql) {
+        try {
+          await this._persistBalance(sql, fromBalance);
+          await this._persistBalance(sql, toBalance);
+          await this._persistTransaction(sql, transferTx);
+        } catch (dbError) {
+          // Revert
+          fromBalance.tokenBalance += amount;
+          fromBalance.transactionCount -= 1;
+          toBalance.tokenBalance -= amount;
+          toBalance.transactionCount -= 1;
+          throw dbError;
+        }
+      }
+
       this.tokenTransactions.set(transferTx.id, transferTx);
-      
       logger.info(`Transfer completed: ${amount} tokens from ${fromBalance.name} to ${toBalance.name}`);
-      
       return transferTx;
     } catch (error) {
       logger.error(`Error transferring tokens: ${error.message}`);
@@ -455,7 +647,6 @@ export class TokenManager {
   async createIncentivePool(poolName, totalTokens, criteria) {
     try {
       const poolId = `pool_${Date.now()}_${poolName.replace(/\s+/g, '_')}`;
-      
       const incentivePool = {
         id: poolId,
         name: poolName,
@@ -467,15 +658,11 @@ export class TokenManager {
         createdAt: new Date().toISOString(),
         status: 'active'
       };
-      
-      // Store pool
       if (!this.incentivePools) {
         this.incentivePools = new Map();
       }
       this.incentivePools.set(poolId, incentivePool);
-      
       logger.info(`Created incentive pool: ${poolName} with ${totalTokens} tokens`);
-      
       return incentivePool;
     } catch (error) {
       logger.error(`Error creating incentive pool: ${error.message}`);
@@ -486,29 +673,23 @@ export class TokenManager {
   updateNetworkStats(rewardAmount, outcome) {
     this.networkStats.totalTokensIssued += rewardAmount;
     this.networkStats.totalRewardsDistributed += 1;
-    
     if (outcome.success) {
       this.networkStats.successfulOutcomes += 1;
     }
-    
-    // Calculate network utilization
     const totalAgents = this.agentBalances.size;
     const activeAgents = Array.from(this.agentBalances.values())
       .filter(balance => balance.transactionCount > 0).length;
-    
     this.networkStats.networkUtilization = totalAgents > 0 ? (activeAgents / totalAgents) * 100 : 0;
   }
 
   summarizeOutcome(outcome) {
     const reasons = [];
-    
     if (outcome.success) reasons.push('successful_outcome');
     if (outcome.mdApproval) reasons.push('md_approved');
     if (outcome.functionalImprovement) reasons.push('functional_improvement');
     if (outcome.painReduction >= 50) reasons.push(`pain_reduced_${outcome.painReduction}%`);
     if (outcome.userSatisfaction >= 8) reasons.push('high_satisfaction');
     if (outcome.collaborationBonus) reasons.push('collaboration');
-    
     return reasons.length > 0 ? reasons.join(', ') : 'participation';
   }
 
@@ -524,12 +705,11 @@ export class TokenManager {
 
   getNetworkStatistics() {
     const balances = Array.from(this.agentBalances.values());
-    
     return {
       ...this.networkStats,
       totalAgents: balances.length,
       totalTokenBalance: balances.reduce((sum, b) => sum + b.tokenBalance, 0),
-      averageBalance: balances.length > 0 ? 
+      averageBalance: balances.length > 0 ?
         balances.reduce((sum, b) => sum + b.tokenBalance, 0) / balances.length : 0,
       totalTransactions: this.tokenTransactions.size,
       topPerformers: this.getTopPerformers(5),
@@ -564,17 +744,16 @@ export class TokenManager {
     };
   }
 
-  // Audit and reporting methods
   generateTokenAuditReport() {
     const transactions = Array.from(this.tokenTransactions.values());
     const balances = Array.from(this.agentBalances.values());
-    
+
     const totalIssued = transactions
       .filter(tx => tx.type === 'reward_distribution')
       .reduce((sum, tx) => sum + tx.amount, 0);
-    
+
     const totalCirculating = balances.reduce((sum, b) => sum + b.tokenBalance, 0);
-    
+
     return {
       reportDate: new Date().toISOString(),
       totalTokensIssued: totalIssued,
@@ -599,7 +778,6 @@ export class TokenManager {
   analyzeBalanceDistribution(balances) {
     const sorted = balances.map(b => b.tokenBalance).sort((a, b) => a - b);
     const len = sorted.length;
-    
     return {
       min: sorted[0] || 0,
       max: sorted[len - 1] || 0,

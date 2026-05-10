@@ -84,7 +84,6 @@ export class ResearchAgent extends BaseAgent {
 Your role is to curate and present medical literature evidence to support evidence-based orthopedic care decisions, tailored to each patient's context.
 
 Experience level: ${this.experience} points
-Token balance: ${this.tokenBalance}
 
 ## Evidence Hierarchy & Grading
 
@@ -1157,7 +1156,6 @@ PubMed ID: [PMID]
       totalSearches,
       totalCitations,
       avgResponseTime,
-      tokenBalance: this.tokenBalance,
     };
   }
 }

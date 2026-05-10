@@ -38,7 +38,6 @@ export class StrengthSageAgent extends OrthopedicSpecialist {
     - Cardiovascular conditioning
     
     Experience level: ${this.experience} points
-    Token balance: ${this.tokenBalance}
     Rehabilitation programs: ${this.rehabilitationPrograms.size}
     Wallet: ${this.walletAddress}
     
@@ -172,6 +171,9 @@ ${sport ? `🏈 INCLUDE: ${sport}-specific return-to-play criteria and readiness
         Provide your response as readable prose with markdown headers (## for sections).
         Write naturally as a strength and rehabilitation specialist explaining your analysis and recommendations.
         Use bullet points for exercise lists, but write in clear, clinical narrative format.
+
+        At the very end of your response add a single machine-readable tag on its own line (required):
+        PREDICTED_RECOVERY_DAYS: <integer 1-730, or null if the available information is insufficient to estimate>
       `;
       
       const assessment = await this.processMessage(assessmentPrompt, context);
@@ -181,6 +183,7 @@ ${sport ? `🏈 INCLUDE: ${sport}-specific return-to-play criteria and readiness
       const functionalLevel = this.extractFunctionalLevel(assessment);
       const strengthDeficits = this.extractStrengthDeficits(assessment);
       const restorationPotential = this.assessRestorePotential(assessment);
+      const predictedRecoveryDays = this.extractPredictedRecoveryDays(assessment);
 
       // Build structured response per Task 1.2
       const functionalAssessment = {
@@ -256,7 +259,8 @@ ${sport ? `🏈 INCLUDE: ${sport}-specific return-to-play criteria and readiness
         assessmentId: `functional_${Date.now()}`,
         functionalLevel: functionalLevel,
         strengthDeficits: strengthDeficits,
-        restorationPotential: restorationPotential
+        restorationPotential: restorationPotential,
+        predictedRecoveryDays: predictedRecoveryDays
       };
 
       // Generate user-friendly markdown response
@@ -481,18 +485,6 @@ ${sport ? `🏈 INCLUDE: ${sport}-specific return-to-play criteria and readiness
       // Calculate improvements for token rewards
       const strengthImprovement = this.calculateStrengthImprovement(progressData);
       const functionalGains = this.calculateFunctionalGains(progressData);
-      
-      if (strengthImprovement >= 80 || functionalGains >= 85) {
-        await this.updateExperienceWithTokens({
-          success: true,
-          reason: 'significant_functional_improvement',
-          functionalImprovement: functionalGains >= 85,
-          strengthGains: strengthImprovement,
-          mdApproval: strengthImprovement >= 90,
-          userSatisfaction: progressData.satisfaction || 9,
-          speedOfResolution: this.calculateRehabSpeed(programId)
-        });
-      }
       
       return {
         programId,
@@ -726,6 +718,13 @@ ${sport ? `🏈 INCLUDE: ${sport}-specific return-to-play criteria and readiness
     return 'good'; // Default
   }
 
+  extractPredictedRecoveryDays(assessment) {
+    const match = assessment.match(/PREDICTED_RECOVERY_DAYS:\s*(\d+|null)/i);
+    if (!match || match[1].toLowerCase() === 'null') return null;
+    const days = parseInt(match[1], 10);
+    return (days >= 1 && days <= 730) ? days : null;
+  }
+
   calculateStrengthImprovement(progressData) {
     if (progressData.strengthGains) {
       return progressData.strengthGains.overall || 0;
@@ -808,7 +807,6 @@ ${sport ? `🏈 INCLUDE: ${sport}-specific return-to-play criteria and readiness
       totalProtocols,
       functionalLevelDistribution: levelDistribution,
       restorePotentialDistribution: potentialDistribution,
-      tokenBalance: this.tokenBalance,
       experience: this.experience
     };
   }

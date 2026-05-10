@@ -2,8 +2,6 @@ import logger from './logger.js';
 import { agentConfig } from '../config/agent-config.js';
 import promptManager from './prompt-manager.js';
 import { CoordinationConference } from './coordination-conference.js';
-import { PredictionMarket } from './prediction-market.js';
-
 export class AgentCoordinator {
   constructor(tokenManager = null) {
     this.specialists = new Map();
@@ -12,8 +10,8 @@ export class AgentCoordinator {
     this.performanceMetrics = new Map();
     this.coordinationConference = new CoordinationConference();
     this.tokenManager = tokenManager;
-    this.predictionMarket = tokenManager ? new PredictionMarket(tokenManager) : null;
-    this.consultationPayments = new Map(); // Track payment flows
+    this.consultationPayments = new Map();
+    this.consultationPaymentsInFlight = new Set();
   }
 
   registerSpecialist(type, agent) {
@@ -25,7 +23,7 @@ export class AgentCoordinator {
       successRate: 0,
       averageResponseTime: 0,
       patientSatisfaction: 0,
-      tokenBalance: agent.tokenBalance,
+      tokenBalance: 0, // populated lazily from TokenManager on read
       experience: agent.experience
     });
     
@@ -83,27 +81,7 @@ export class AgentCoordinator {
 
       this.activeConsultations.set(consultationId, consultation);
 
-      // PHASE 1: Initiate prediction market (non-blocking for performance)
-      let predictionData = null;
-      if (this.predictionMarket) {
-        const participatingAgents = availableSpecialists
-          .map(type => this.specialists.get(type))
-          .filter(agent => agent);
-
-        // Async initiation without await - predictions happen in parallel
-        this.predictionMarket.initiatePredictions(
-          consultationId,
-          caseData,
-          participatingAgents
-        ).then(predictions => {
-          predictionData = predictions;
-          logger.info(`Predictions initiated: ${predictions.totalPredictions} predictions, ${predictions.totalStaked} tokens staked`);
-        }).catch(error => {
-          logger.error(`Prediction initiation failed: ${error.message}`);
-        });
-      }
-
-      // PHASE 2: Process consultation payments (async, non-blocking)
+      // Process consultation payments (async, non-blocking)
       if (this.tokenManager) {
         this.processConsultationPayments(
           consultationId,
@@ -155,18 +133,6 @@ export class AgentCoordinator {
       consultation.synthesizedRecommendations = synthesizedRecommendations;
       consultation.endTime = new Date().toISOString();
       consultation.status = 'completed';
-
-      // PHASE 3: Resolve inter-agent predictions (guaranteed resolution)
-      // This provides baseline prediction accuracy using agent consensus
-      if (this.predictionMarket) {
-        this.resolveInterAgentPredictions(
-          consultationId,
-          responses,
-          coordinationMetadata
-        ).catch(error => {
-          logger.error(`Inter-agent prediction resolution failed: ${error.message}`);
-        });
-      }
 
       // Update performance metrics
       this.updatePerformanceMetrics(consultation);
@@ -655,9 +621,12 @@ export class AgentCoordinator {
       if (specialistType.includes('triage') || specialistType === 'triage') {
         consultationPrompt = `
           TRIAGE COORDINATION CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As the triage coordinator, provide case management guidance focusing on:
           - Urgency assessment and prioritization
           - Specialist coordination recommendations
@@ -676,9 +645,12 @@ export class AgentCoordinator {
       } else if (specialistType.includes('pain') || specialistType.includes('whisperer') || specialistType === 'painWhisperer') {
         consultationPrompt = `
           PAIN MANAGEMENT CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As the pain management specialist, focus specifically on:
           - Pain assessment and characterization
           - Pain management strategies and interventions
@@ -697,9 +669,12 @@ export class AgentCoordinator {
       } else if (specialistType.includes('movement') || specialistType.includes('detective') || specialistType === 'movementDetective') {
         consultationPrompt = `
           MOVEMENT & BIOMECHANICS CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As the movement specialist, focus specifically on:
           - Movement pattern analysis and dysfunction
           - Biomechanical assessment and correction
@@ -718,9 +693,12 @@ export class AgentCoordinator {
       } else if (specialistType.includes('strength') || specialistType.includes('sage') || specialistType === 'strengthSage') {
         consultationPrompt = `
           STRENGTH & FUNCTIONAL RESTORATION CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As the strength and functional restoration specialist, focus specifically on:
           - Functional capacity assessment and goals
           - Strength training and exercise progression
@@ -739,9 +717,12 @@ export class AgentCoordinator {
       } else if (specialistType.includes('mind') || specialistType.includes('mender') || specialistType === 'mindMender') {
         consultationPrompt = `
           PSYCHOLOGICAL RECOVERY CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As the psychological recovery specialist, focus specifically on:
           - Psychological barriers to recovery
           - Fear-avoidance and anxiety management
@@ -761,9 +742,12 @@ export class AgentCoordinator {
         // Generic fallback for any other specialist type
         consultationPrompt = `
           SPECIALIST CONSULTATION:
-          
-          Case: ${JSON.stringify(caseData)}
-          
+
+          Case:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
           As a ${specialist.subspecialty} specialist, provide your expert perspective on this case.
           Focus on your area of expertise and provide specific recommendations.
           
@@ -814,7 +798,10 @@ export class AgentCoordinator {
       const synthesisPrompt = `
         MULTI-SPECIALIST CONSULTATION SYNTHESIS:
 
-        Case Data: ${JSON.stringify(caseData)}
+        Case Data:
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
 
         Specialist Responses:
         ${successfulResponses.map((r, i) => `
@@ -1757,11 +1744,15 @@ export class AgentCoordinator {
   // INTER-AGENT TOKEN ECONOMY METHODS
   // ============================================================================
 
-  /**
-   * PHASE 2: Process consultation payments
-   * Agents pay tokens for specialist consultations based on expertise and performance
-   */
   async processConsultationPayments(consultationId, specialistTypes, caseData) {
+    if (this.consultationPayments.has(consultationId)) {
+      return this.consultationPayments.get(consultationId).payments;
+    }
+    if (this.consultationPaymentsInFlight.has(consultationId)) {
+      logger.warn(`processConsultationPayments called concurrently for ${consultationId} — skipping duplicate`);
+      return [];
+    }
+    this.consultationPaymentsInFlight.add(consultationId);
     try {
       logger.info(`Processing consultation payments for: ${consultationId}`);
 
@@ -1801,6 +1792,7 @@ export class AgentCoordinator {
           success: true,
           consultationPayment: true
         }, {
+          consultationId,
           experienceMultiplier: 1.0,
           qualityMultiplier: performanceMultiplier
         });
@@ -1817,6 +1809,8 @@ export class AgentCoordinator {
     } catch (error) {
       logger.error(`Error processing consultation payments: ${error.message}`);
       throw error;
+    } finally {
+      this.consultationPaymentsInFlight.delete(consultationId);
     }
   }
 
@@ -1845,218 +1839,7 @@ export class AgentCoordinator {
     return 'low';
   }
 
-  /**
-   * PHASE 3: Resolve inter-agent predictions
-   * Uses agent consensus as baseline resolution (guaranteed to occur)
-   */
-  async resolveInterAgentPredictions(consultationId, responses, coordinationMetadata) {
-    try {
-      logger.info(`Resolving inter-agent predictions for: ${consultationId}`);
-
-      // Extract consensus outcomes from agent responses
-      const consensusOutcomes = this.extractConsensusOutcomes(responses, coordinationMetadata);
-
-      // Resolve predictions with inter-agent data
-      const resolution = await this.predictionMarket.resolvePredictions(consultationId, {
-        interAgent: {
-          ...consensusOutcomes,
-          timestamp: new Date().toISOString()
-        }
-      });
-
-      logger.info(`Inter-agent predictions resolved for ${consultationId}`);
-      return resolution;
-    } catch (error) {
-      logger.error(`Error resolving inter-agent predictions: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Extract consensus outcomes from agent responses
-   */
-  extractConsensusOutcomes(responses, coordinationMetadata) {
-    const outcomes = {};
-
-    // User satisfaction - based on quality score
-    const successfulResponses = Array.from(responses.values()).filter(r => r.status === 'success');
-    const avgConfidence = successfulResponses.reduce((sum, r) => sum + (r.confidence || 0.7), 0) / successfulResponses.length;
-    outcomes.user_satisfaction = avgConfidence > 0.75;
-
-    // MD approval - based on overall confidence and coordination
-    const highConfidenceResponses = successfulResponses.filter(r => r.confidence > 0.8).length;
-    outcomes.md_approval = highConfidenceResponses >= successfulResponses.length * 0.5;
-
-    // Agreement level
-    if (coordinationMetadata) {
-      outcomes.inter_agent_agreement = coordinationMetadata.disagreements.length === 0 ? 1.0 :
-        Math.max(0.3, 1.0 - (coordinationMetadata.disagreements.length * 0.2));
-    } else {
-      outcomes.inter_agent_agreement = 0.8;
-    }
-
-    return outcomes;
-  }
-
-  /**
-   * Resolve predictions with MD review feedback
-   * Called when MD provides review/approval
-   */
-  async resolveMDReviewPredictions(consultationId, mdReviewData) {
-    try {
-      logger.info(`Resolving MD review predictions for: ${consultationId}`);
-
-      if (!this.predictionMarket) {
-        logger.warn('Prediction market not initialized');
-        return null;
-      }
-
-      // MD review data structure expected:
-      // {
-      //   approved: boolean,
-      //   clinicalAccuracy: number (0-1),
-      //   recommendations: string,
-      //   timestamp: string
-      // }
-
-      const resolution = await this.predictionMarket.resolvePredictions(consultationId, {
-        mdReview: {
-          md_approval: mdReviewData.approved,
-          clinical_accuracy: mdReviewData.clinicalAccuracy,
-          timestamp: mdReviewData.timestamp || new Date().toISOString()
-        }
-      });
-
-      logger.info(`MD review predictions resolved for ${consultationId}`);
-      return resolution;
-    } catch (error) {
-      logger.error(`Error resolving MD review predictions: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Resolve predictions with user modal feedback
-   * Called when user submits feedback modal (before prescription access)
-   * Implements cascading resolution: resolves ALL participating agents, not just triage
-   */
-  async resolveUserModalPredictions(consultationId, userFeedback) {
-    try {
-      logger.info(`Resolving user modal predictions for: ${consultationId}`);
-
-      if (!this.predictionMarket) {
-        logger.warn('Prediction market not initialized');
-        return null;
-      }
-
-      // Get consultation metadata before resolution (for cascading info)
-      const metadata = this.predictionMarket.getConsultationMetadata(consultationId);
-      const shouldFlagMDReview = metadata?.recommendMDReview || false;
-
-      // User modal feedback structure expected:
-      // {
-      //   satisfied: boolean,
-      //   painLevel: number (0-10),
-      //   confidence: number (1-5),
-      //   timestamp: string
-      // }
-
-      const resolution = await this.predictionMarket.resolvePredictions(consultationId, {
-        userModal: {
-          user_satisfaction: userFeedback.satisfied,
-          pain_reduction_day7: userFeedback.painLevel,
-          user_confidence: userFeedback.confidence / 5, // Normalize to 0-1
-          timestamp: userFeedback.timestamp || new Date().toISOString()
-        }
-      });
-
-      // Enhance resolution with cascading metadata
-      if (resolution) {
-        resolution.cascadingResolution = {
-          totalAgentsResolved: resolution.agentResults?.length || 0,
-          agentsSummary: resolution.agentResults?.map(r => ({
-            agentId: r.agentId,
-            agentName: r.agentName,
-            accuracy: r.accuracy,
-            netChange: r.netChange
-          })) || [],
-          recommendMDReview: shouldFlagMDReview,
-          resolutionSource: 'user_modal'
-        };
-      }
-
-      logger.info(`User modal predictions resolved for ${consultationId}: ${resolution?.agentResults?.length || 0} agents resolved (cascading)`);
-      return resolution;
-    } catch (error) {
-      logger.error(`Error resolving user modal predictions: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Resolve predictions with user follow-up data
-   * Called when user returns for milestone check-ins
-   */
-  async resolveFollowUpPredictions(consultationId, followUpData) {
-    try {
-      logger.info(`Resolving follow-up predictions for: ${consultationId}`);
-
-      if (!this.predictionMarket) {
-        logger.warn('Prediction market not initialized');
-        return null;
-      }
-
-      // Follow-up data structure expected:
-      // {
-      //   painLevel: number (0-10),
-      //   functionalImprovement: number (0-100),
-      //   returnedToActivity: boolean,
-      //   adherenceRate: number (0-100),
-      //   daysSinceConsultation: number,
-      //   timestamp: string
-      // }
-
-      const resolution = await this.predictionMarket.resolvePredictions(consultationId, {
-        followUp: {
-          pain_reduction_percentage: followUpData.painLevel ?
-            ((10 - followUpData.painLevel) / 10) * 100 : null,
-          functional_restoration: followUpData.functionalImprovement,
-          return_to_activity_timeline: followUpData.daysSinceConsultation,
-          adherence_rate: followUpData.adherenceRate,
-          returned_to_activity: followUpData.returnedToActivity,
-          timestamp: followUpData.timestamp || new Date().toISOString()
-        }
-      });
-
-      logger.info(`Follow-up predictions resolved for ${consultationId}`);
-      return resolution;
-    } catch (error) {
-      logger.error(`Error resolving follow-up predictions: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Get prediction market performance for admin dashboard
-   */
-  getPredictionMarketStats() {
-    if (!this.predictionMarket) {
-      return null;
-    }
-
-    return this.predictionMarket.getMarketStatistics();
-  }
-
-  /**
-   * Get agent prediction performance
-   */
-  getAgentPredictionPerformance(agentId) {
-    if (!this.predictionMarket) {
-      return null;
-    }
-
-    return this.predictionMarket.getAgentPerformance(agentId);
-  }
 }
+
 
 export default AgentCoordinator;
