@@ -694,6 +694,7 @@ class OrthoIQAgentSystem {
             isReturningUser,
             platformContext
           });
+          triageResponse.triageClassificationConfidence = heuristicClassification.confidence;
 
           // Check if informational — user override takes precedence; otherwise either classifier
           // saying informational is a confident signal (both default to clinical when uncertain)
@@ -839,6 +840,7 @@ class OrthoIQAgentSystem {
           timeout: 75000,  // Match coordinator normal-mode timeout for Sonnet
           rawQuery, enableDualTrack
         });
+        triageForClassification.triageClassificationConfidence = heuristicClassification.confidence;
 
         const effectiveQueryTypeNormal = userOverride
           || ((triageForClassification.queryType === 'informational' || heuristicClassification.queryType === 'informational')
