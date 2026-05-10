@@ -11,9 +11,9 @@
     "lint": "eslint src/",
     "example": "node examples/basic-agent.js",
     "compile:contract": "hardhat compile",
-    "deploy:contract": "hardhat run scripts/deploy.js --network base-sepolia",
-    "authorize:agents": "hardhat run scripts/authorize-agents.js --network base-sepolia",
-    "check:balances": "hardhat run scripts/check-balances.js --network base-sepolia",
+    "deploy:contract": "hardhat run scripts/deploy.cjs --network base-sepolia",
+    "authorize:agents": "hardhat run scripts/authorize-agents.cjs --network base-sepolia",
+    "check:balances": "hardhat run scripts/check-balances.cjs --network base-sepolia",
     "verify:contract": "hardhat verify --network base-sepolia"
   },
   "dependencies": {
@@ -23,6 +23,7 @@
     "@coinbase/cdp-agentkit-core": "^0.0.14",
     "@coinbase/cdp-langchain": "^0.0.15",
     "@coinbase/cdp-sdk": "^1.38.1",
+    "@farcaster/quick-auth": "^0.0.8",
     "@langchain/anthropic": "^0.3.34",
     "@langchain/core": "^0.3.21",
     "@langchain/langgraph": "^0.2.16",
@@ -31,15 +32,18 @@
     "dotenv": "^16.4.5",
     "ethers": "^6.13.4",
     "express": "^4.21.1",
+    "express-rate-limit": "^8.5.1",
     "express-sse": "^1.0.0",
     "fast-xml-parser": "^4.3.0",
+    "helmet": "^8.1.0",
     "lru-cache": "^11.2.2",
     "node-fetch": "^3.3.2",
     "p-queue": "^8.1.1",
     "p-timeout": "^7.0.0",
     "uuid": "^11.0.3",
     "winston": "^3.15.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

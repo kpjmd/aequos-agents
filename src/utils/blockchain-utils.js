@@ -16,7 +16,11 @@ try {
   compiledToken = JSON.parse(readFileSync(contractPath, 'utf8'));
   logger.info('Loaded compiled OrthoIQAgentToken contract');
 } catch (error) {
-  logger.warn('Compiled contract not found - run "npm run compile:contract" first');
+  throw new Error(
+    `Compiled contract artifact not found at ${contractPath}. ` +
+    `Run "npm run compile:contract" before starting the agent service. ` +
+    `Original error: ${error.message}`
+  );
 }
 
 export class BlockchainUtils {
@@ -245,61 +249,11 @@ export class BlockchainUtils {
     }
   }
 
-  async createAgentTokenContract(deployerWalletProvider) {
-    try {
-      // T0-2: if TOKEN_CONTRACT_ADDRESS is set, bind to it and never auto-deploy
-      if (agentConfig.tokenEconomics.contractAddress) {
-        return this.createMockTokenContract();
-      }
-
-      logger.info('Creating OrthoIQ Agent Token contract');
-
-      if (!deployerWalletProvider) {
-        logger.warn('No wallet provider available, creating mock token contract');
-        return this.createMockTokenContract();
-      }
-      
-      // Simple ERC20 token contract ABI
-      const tokenAbi = [
-        "constructor(string memory name, string memory symbol, uint256 totalSupply)",
-        "function name() view returns (string)",
-        "function symbol() view returns (string)",
-        "function decimals() view returns (uint8)",
-        "function totalSupply() view returns (uint256)",
-        "function balanceOf(address owner) view returns (uint256)",
-        "function transfer(address to, uint256 amount) returns (bool)",
-        "function approve(address spender, uint256 amount) returns (bool)",
-        "function transferFrom(address from, address to, uint256 amount) returns (bool)",
-        "function mint(address to, uint256 amount) returns (bool)",
-        "function burn(uint256 amount) returns (bool)",
-        "event Transfer(address indexed from, address indexed to, uint256 value)",
-        "event Approval(address indexed owner, address indexed spender, uint256 value)"
-      ];
-      
-      // Use compiled contract bytecode if available
-      const tokenBytecode = compiledToken ? compiledToken.bytecode : "0x608060405234801561001057600080fd5b506040516111b93803806111b98339818101604052810190610032919061028d565b8260039081610041919061052f565b50816004908161005191906105..."; // Fallback placeholder
-      const finalAbi = compiledToken ? compiledToken.abi : tokenAbi;
-
-      // Deploy token contract
-      const deployment = await this.deployContract(
-        deployerWalletProvider,
-        finalAbi,
-        tokenBytecode,
-        ["OrthoIQ Agent Token", "OAT", ethers.parseEther("1000000")] // 1M tokens
-      );
-      
-      return {
-        tokenAddress: deployment.address,
-        name: "OrthoIQ Agent Token",
-        symbol: "OAT",
-        totalSupply: "1000000",
-        deploymentTx: deployment.transactionHash
-      };
-    } catch (error) {
-      logger.error(`Failed to create agent token contract: ${error.message}`);
-      // Return mock contract for development
-      return this.createMockTokenContract();
-    }
+  async createAgentTokenContract(_deployerWalletProvider) {
+    // Deployment is handled out-of-band via Hardhat (scripts/deploy.js).
+    // Runtime always binds to the deployed address from TOKEN_CONTRACT_ADDRESS,
+    // or returns a mock contract if unset (dev/testing).
+    return this.createMockTokenContract();
   }
 
   createMockTokenContract() {
