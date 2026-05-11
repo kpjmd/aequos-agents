@@ -586,9 +586,11 @@ class OrthoIQAgentSystem {
           caseData,
           requiredSpecialists,
           mode = 'fast',
-          platformContext,
+          platformContext: topPlatformContext,
           queryType       // optional user override: 'informational' | 'clinical'
         } = req.body;
+        // Frontend nests platformContext inside caseData; fall back to that if absent at top level
+        const platformContext = topPlatformContext ?? caseData?.platformContext;
         const startTime = Date.now();
 
         // Extract new dual-track fields from caseData
