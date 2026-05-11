@@ -32,11 +32,15 @@ export const caseDataSchema = z.object({
   enableDualTrack: z.boolean().optional(),
   userId: z.string().max(200).optional(),
   isReturningUser: z.boolean().optional(),
-  priorConsultations: z.number().int().min(0).optional(),
+  priorConsultations: z.union([
+    z.number().int().min(0),
+    z.array(z.any()).max(100),
+  ]).optional(),
   requestResearch: z.boolean().optional(),
   uploadedImages: z.array(z.any()).max(10).optional(),
   athleteProfile: z.object({}).passthrough().optional(),
   userTier: z.enum(['basic', 'premium']).optional(),
   triageContext: z.object({}).passthrough().optional(),
   agentRecommendations: z.array(z.any()).optional(),
+  platformContext: z.object({}).passthrough().optional(),
 }).passthrough();
