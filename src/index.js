@@ -365,8 +365,11 @@ class OrthoIQAgentSystem {
         submitted_by TEXT,
         submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
-      // Must run before the index below — legacy tables lack this column.
+      // Legacy-table backfills: each ADD COLUMN IF NOT EXISTS is a no-op on fresh installs.
       await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS feedback_type TEXT DEFAULT 'user_modal'`;
+      await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS payload JSONB DEFAULT '{}'::jsonb`;
+      await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS submitted_by TEXT`;
+      await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ DEFAULT NOW()`;
       await sql`CREATE INDEX IF NOT EXISTS idx_feedback_consultation_id ON consultation_feedback(consultation_id, feedback_type)`;
 
       logger.info('✅ Database migrations complete');
