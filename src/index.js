@@ -253,8 +253,8 @@ class OrthoIQAgentSystem {
       next();
     });
 
-    this.app.use(express.json({ limit: '64kb' }));
-    this.app.use(express.urlencoded({ extended: true, limit: '64kb' }));
+    this.app.use(express.json({ limit: '1mb' }));
+    this.app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
     // Structured request logger — no IP correlation with PHI
     this.app.use((req, res, next) => {
@@ -365,16 +365,9 @@ class OrthoIQAgentSystem {
         submitted_by TEXT,
         submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`;
+      // Must run before the index below — legacy tables lack this column.
+      await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS feedback_type TEXT DEFAULT 'user_modal'`;
       await sql`CREATE INDEX IF NOT EXISTS idx_feedback_consultation_id ON consultation_feedback(consultation_id, feedback_type)`;
-
-      // One-time fix: tables created before feedback_type was added to the schema
-      // need an ALTER TABLE since CREATE TABLE IF NOT EXISTS silently skips.
-      try {
-        await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS feedback_type TEXT DEFAULT 'user_modal'`;
-        await sql`ALTER TABLE consultation_feedback ADD CONSTRAINT IF NOT EXISTS feedback_type_check CHECK (feedback_type IN ('user_modal', 'md_review', 'follow_up'))`;
-      } catch (migErr) {
-        logger.warn(`feedback_type migration skipped (already applied): ${migErr.message}`);
-      }
 
       logger.info('✅ Database migrations complete');
     } catch (error) {
