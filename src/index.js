@@ -367,6 +367,15 @@ class OrthoIQAgentSystem {
       )`;
       await sql`CREATE INDEX IF NOT EXISTS idx_feedback_consultation_id ON consultation_feedback(consultation_id, feedback_type)`;
 
+      // One-time fix: tables created before feedback_type was added to the schema
+      // need an ALTER TABLE since CREATE TABLE IF NOT EXISTS silently skips.
+      try {
+        await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS feedback_type TEXT DEFAULT 'user_modal'`;
+        await sql`ALTER TABLE consultation_feedback ADD CONSTRAINT IF NOT EXISTS feedback_type_check CHECK (feedback_type IN ('user_modal', 'md_review', 'follow_up'))`;
+      } catch (migErr) {
+        logger.warn(`feedback_type migration skipped (already applied): ${migErr.message}`);
+      }
+
       logger.info('✅ Database migrations complete');
     } catch (error) {
       logger.error(`⚠️  Database migration failed: ${error.message}`);
