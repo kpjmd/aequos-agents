@@ -370,6 +370,8 @@ class OrthoIQAgentSystem {
       await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS payload JSONB DEFAULT '{}'::jsonb`;
       await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS submitted_by TEXT`;
       await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ DEFAULT NOW()`;
+      await sql`ALTER TABLE consultation_feedback ADD COLUMN IF NOT EXISTS patient_id TEXT`;
+      await sql`ALTER TABLE consultation_feedback ALTER COLUMN patient_id DROP NOT NULL`;
       await sql`CREATE INDEX IF NOT EXISTS idx_feedback_consultation_id ON consultation_feedback(consultation_id, feedback_type)`;
 
       logger.info('✅ Database migrations complete');
