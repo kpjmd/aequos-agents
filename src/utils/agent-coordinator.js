@@ -107,13 +107,13 @@ export class AgentCoordinator {
       let coordinationMetadata = null;
       if (responses.size >= 2) {
         try {
-          logger.info('Conducting coordination conference round');
+          logger.info('Running multi-specialist synthesis');
           coordinationMetadata = await this.coordinationConference.conductConferenceRound(
             responses,
             this.specialists,
             caseData
           );
-          logger.info(`Conference complete: ${coordinationMetadata.interAgentDialogue.length} dialogues, ${coordinationMetadata.disagreements.length} disagreements`);
+          logger.info(`Synthesis complete: ${coordinationMetadata.interAgentDialogue.length} follow-up responses, ${coordinationMetadata.disagreements.length} recommendation divergences`);
         } catch (error) {
           logger.error(`Coordination conference error: ${error.message}`);
           coordinationMetadata = {
@@ -1754,7 +1754,7 @@ ${JSON.stringify(caseData)}
     }
     this.consultationPaymentsInFlight.add(consultationId);
     try {
-      logger.info(`Processing consultation payments for: ${consultationId}`);
+      logger.info(`Distributing specialist token rewards for: ${consultationId}`);
 
       const payments = [];
       const complexity = this.assessCaseComplexity(caseData);
@@ -1803,7 +1803,7 @@ ${JSON.stringify(caseData)}
         totalFees: payments.reduce((sum, p) => sum + p.fee, 0)
       });
 
-      logger.info(`Consultation payments processed: ${payments.length} specialists, total: ${payments.reduce((sum, p) => sum + p.fee, 0)} tokens`);
+      logger.info(`Token rewards distributed: ${payments.length} specialists, total: ${payments.reduce((sum, p) => sum + p.fee, 0)} tokens`);
 
       return payments;
     } catch (error) {

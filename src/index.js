@@ -1224,6 +1224,7 @@ class OrthoIQAgentSystem {
         const sql = (await import('./utils/db.js')).default;
         if (sql) {
           await sql`INSERT INTO consultation_feedback (consultation_id, feedback_type, payload, submitted_by) VALUES (${consultationId}, 'md_review', ${JSON.stringify(mdReviewData)}, ${req.user?.identity || null})`;
+          logger.info(`Feedback recorded: md_review for consultation ${consultationId}`);
         }
         res.json({ success: true, consultationId, recorded: true, timestamp: new Date().toISOString() });
       } catch (error) {
@@ -1241,6 +1242,7 @@ class OrthoIQAgentSystem {
         const sql = (await import('./utils/db.js')).default;
         if (sql) {
           await sql`INSERT INTO consultation_feedback (consultation_id, feedback_type, payload, submitted_by) VALUES (${consultationId}, 'user_modal', ${JSON.stringify(userFeedback)}, ${req.user?.identity || null})`;
+          logger.info(`Feedback recorded: user_modal for consultation ${consultationId}`);
         }
         res.json({
           success: true,
@@ -1266,6 +1268,7 @@ class OrthoIQAgentSystem {
         const sql = (await import('./utils/db.js')).default;
         if (sql) {
           await sql`INSERT INTO consultation_feedback (consultation_id, feedback_type, payload, submitted_by) VALUES (${consultationId}, 'follow_up', ${JSON.stringify(followUpData)}, ${req.user?.identity || null})`;
+          logger.info(`Feedback recorded: follow_up for consultation ${consultationId}`);
         }
         res.json({ success: true, consultationId, recorded: true, timestamp: new Date().toISOString() });
       } catch (error) {

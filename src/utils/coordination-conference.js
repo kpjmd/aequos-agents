@@ -19,12 +19,12 @@ export class CoordinationConference {
    */
   async conductConferenceRound(initialResponses, specialists, caseData) {
     try {
-      logger.info('Starting coordination conference round');
+      logger.info('Running cross-specialist synthesis round');
       const startTime = Date.now();
 
       // Step 1: Collect all inter-agent questions
       const interAgentQuestions = this.collectInterAgentQuestions(initialResponses);
-      logger.info(`Collected ${interAgentQuestions.length} inter-agent questions`);
+      logger.info(`Extracted ${interAgentQuestions.length} cross-specialist synthesis prompts`);
 
       // Step 2: Route questions to target agents and collect responses
       const dialogue = await this.routeQuestionsToAgents(
@@ -33,15 +33,15 @@ export class CoordinationConference {
         initialResponses,
         caseData
       );
-      logger.info(`Completed ${dialogue.length} inter-agent dialogues`);
+      logger.info(`Completed ${dialogue.length} specialist follow-up responses`);
 
       // Step 3: Detect disagreements between agents
       const disagreements = this.detectDisagreements(initialResponses, dialogue);
-      logger.info(`Detected ${disagreements.length} disagreements`);
+      logger.info(`Found ${disagreements.length} recommendation divergences`);
 
       // Step 4: Track emergent findings from coordination
       const emergentFindings = this.trackEmergentFindings(dialogue, initialResponses);
-      logger.info(`Identified ${emergentFindings.length} emergent findings`);
+      logger.info(`Flagged ${emergentFindings.length} high-priority cross-specialist findings`);
 
       const coordinationMetadata = {
         interAgentDialogue: dialogue,
