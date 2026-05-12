@@ -7,7 +7,6 @@ import logger from './logger.js';
 export class CoordinationConference {
   constructor() {
     this.dialogueHistory = [];
-    this.disagreementLog = [];
   }
 
   /**
@@ -40,7 +39,7 @@ export class CoordinationConference {
       logger.info(`Found ${disagreements.length} recommendation divergences`);
 
       // Step 4: Track emergent findings from coordination
-      const emergentFindings = this.trackEmergentFindings(dialogue, initialResponses);
+      const emergentFindings = this.trackEmergentFindings(dialogue, initialResponses, disagreements);
       logger.info(`Flagged ${emergentFindings.length} high-priority cross-specialist findings`);
 
       const coordinationMetadata = {
@@ -344,9 +343,6 @@ IMPORTANT: Be specific and actionable. Focus on insights that will improve the c
     const importanceConflicts = this.detectImportanceConflicts(initialResponses);
     disagreements.push(...importanceConflicts);
 
-    // Log disagreements
-    this.disagreementLog.push(...disagreements);
-
     return disagreements;
   }
 
@@ -490,7 +486,7 @@ IMPORTANT: Be specific and actionable. Focus on insights that will improve the c
    * @param {Map} initialResponses - Initial responses
    * @returns {Array} Emergent findings
    */
-  trackEmergentFindings(dialogue, initialResponses) {
+  trackEmergentFindings(dialogue, initialResponses, disagreements = []) {
     const findings = [];
 
     // Findings from high-impact dialogue
@@ -512,8 +508,8 @@ IMPORTANT: Be specific and actionable. Focus on insights that will improve the c
       }
     }
 
-    // Findings from resolved disagreements
-    const resolvedDisagreements = this.disagreementLog.filter(d => d.resolution);
+    // Findings from resolved disagreements in this consultation
+    const resolvedDisagreements = disagreements.filter(d => d.resolution);
     for (const disagreement of resolvedDisagreements) {
       if (disagreement.severity === 'high') {
         findings.push({
@@ -691,7 +687,6 @@ IMPORTANT: Be specific and actionable. Focus on insights that will improve the c
   getStatistics() {
     return {
       totalConferences: this.dialogueHistory.length,
-      totalDisagreements: this.disagreementLog.length,
       averageDialogueCount: this.dialogueHistory.length > 0
         ? this.dialogueHistory.reduce((sum, h) => sum + h.interAgentDialogue.length, 0) / this.dialogueHistory.length
         : 0,

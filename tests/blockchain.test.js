@@ -221,26 +221,6 @@ describe('BlockchainUtils', () => {
     expect(blockchainUtils.validateAddress(invalidAddress)).toBe(false);
   });
 
-  test('should generate random wallet', () => {
-    const originalCreateRandom = ethersLib.ethers.Wallet.createRandom;
-    ethersLib.ethers.Wallet.createRandom = jest.fn().mockReturnValue({
-      address: '0x' + Math.random().toString(16).substring(2, 42),
-      privateKey: '0x' + Math.random().toString(16).substring(2, 66),
-      mnemonic: {
-        phrase: 'test mnemonic phrase here'
-      }
-    });
-
-    const wallet = blockchainUtils.generateRandomWallet();
-
-    expect(wallet.address).toBeDefined();
-    expect(wallet.privateKey).toBeDefined();
-    expect(wallet.mnemonic).toBeDefined();
-
-    // Restore original method
-    ethersLib.ethers.Wallet.createRandom = originalCreateRandom;
-  });
-
   test('should check connection status', async () => {
     await blockchainUtils.initialize();
     const isConnected = await blockchainUtils.isConnected();

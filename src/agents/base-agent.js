@@ -100,7 +100,7 @@ export class BaseAgent {
           logger.info(`Agent ${this.name} initialized successfully with CDP wallet ${this.walletAddress}`);
         } catch (blockchainError) {
           logger.warn(`Blockchain initialization failed for ${this.name}, running in offline mode: ${blockchainError.message}`);
-          logger.error(`Full error details: ${blockchainError.stack}`);
+          logger.debug(`Full error details: ${blockchainError.stack}`);
           this.walletAddress = `mock_wallet_${this.agentId}`;
         }
       } else {

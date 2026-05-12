@@ -517,15 +517,6 @@ export class BlockchainUtils {
     return ethers.parseEther(etherValue.toString());
   }
 
-  generateRandomWallet() {
-    const wallet = ethers.Wallet.createRandom();
-    return {
-      address: wallet.address,
-      privateKey: wallet.privateKey,
-      mnemonic: wallet.mnemonic?.phrase
-    };
-  }
-
   async isConnected() {
     try {
       if (!this.provider) return false;
