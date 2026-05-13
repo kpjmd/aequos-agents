@@ -885,8 +885,9 @@ Apply these notes in the Evidence Gaps section when relevant:
 
     // Filter, sort, and limit
     const maxCitations = tier === 'premium' ? 5 : 3;
+    const MIN_QUALITY_SCORE = 6; // minimum to be included; RCT 'A' grade uses a separate threshold of 7
     return scored
-      .filter(s => s.qualityScore >= 6)
+      .filter(s => s.qualityScore >= MIN_QUALITY_SCORE)
       .filter(s => s.relevanceScore >= 3) // Require minimum topic relevance — prevents off-topic high-prestige papers
       .sort((a, b) => b.combinedScore - a.combinedScore)
       .slice(0, maxCitations);
