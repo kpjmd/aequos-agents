@@ -982,7 +982,7 @@ class OrthoIQAgentSystem {
         consultation: consultationResult,
         research: researchPollEndpoint ? {
           status: 'pending',
-          estimatedSeconds: 15,
+          estimatedSeconds: agentConfig.research?.timeoutSeconds || 25,
           pollEndpoint: researchPollEndpoint,
         } : undefined,
         fromCache: false,
@@ -1300,7 +1300,7 @@ class OrthoIQAgentSystem {
             }
             if (existing.status === 'pending') {
               logger.info(`Research already in progress for ${consultationId}, skipping duplicate trigger`);
-              return res.json({ success: true, consultationId, status: 'pending', estimatedSeconds: 15 });
+              return res.json({ success: true, consultationId, status: 'pending', estimatedSeconds: agentConfig.research?.timeoutSeconds || 25 });
             }
             // status === 'failed': allow re-triggering
           }
@@ -1312,7 +1312,7 @@ class OrthoIQAgentSystem {
         const inMem = this.researchResults.get(consultationId);
         if (inMem && (inMem.status === 'processing' || inMem.status === 'completed')) {
           logger.info(`Research in-memory for ${consultationId}, skipping duplicate trigger`);
-          return res.json({ success: true, consultationId, status: 'pending', estimatedSeconds: 15 });
+          return res.json({ success: true, consultationId, status: 'pending', estimatedSeconds: agentConfig.research?.timeoutSeconds || 25 });
         }
 
         // Store in-memory immediately (DB is optional)
@@ -1351,12 +1351,13 @@ class OrthoIQAgentSystem {
           rawQuery: caseData.rawQuery || fallbackCase.rawQuery,
         };
 
-        // Fire-and-forget: curate studies in background with 15s timeout
-        const RESEARCH_TIMEOUT_MS = 15000;
+        // Fire-and-forget: curate studies in background. Timeout is config-driven
+        // (default 25s; bumped from 15s to accommodate optional LLM query generation).
+        const RESEARCH_TIMEOUT_MS = (agentConfig.research?.timeoutSeconds || 25) * 1000;
         Promise.race([
           this.researchAgent.curateRelevantStudies(enrichedQuery, userTier),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Research timed out after 15 seconds')), RESEARCH_TIMEOUT_MS)
+            setTimeout(() => reject(new Error(`Research timed out after ${RESEARCH_TIMEOUT_MS / 1000} seconds`)), RESEARCH_TIMEOUT_MS)
           )
         ])
           .then(async (result) => {
@@ -1460,8 +1461,9 @@ class OrthoIQAgentSystem {
         }
 
         if (row.status === 'pending') {
+          const totalBudget = agentConfig.research?.timeoutSeconds || 25;
           const elapsedSeconds = (Date.now() - new Date(row.created_at).getTime()) / 1000;
-          const estimatedSeconds = Math.max(0, 15 - Math.round(elapsedSeconds));
+          const estimatedSeconds = Math.max(0, totalBudget - Math.round(elapsedSeconds));
           return res.json({ status: 'pending', estimatedSeconds });
         }
 
@@ -1684,7 +1686,7 @@ class OrthoIQAgentSystem {
     }
 
     try {
-      const RESEARCH_TIMEOUT_MS = 15000;
+      const RESEARCH_TIMEOUT_MS = (agentConfig.research?.timeoutSeconds || 25) * 1000;
       const fallbackCase = consultationResult?.caseData || {};
       const enrichedQuery = {
         primaryComplaint: caseData.primaryComplaint || fallbackCase.primaryComplaint || '',
@@ -1701,7 +1703,7 @@ class OrthoIQAgentSystem {
       const result = await Promise.race([
         this.researchAgent.curateRelevantStudies(enrichedQuery, userTier),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Research timed out after 15 seconds')), RESEARCH_TIMEOUT_MS)
+          setTimeout(() => reject(new Error(`Research timed out after ${RESEARCH_TIMEOUT_MS / 1000} seconds`)), RESEARCH_TIMEOUT_MS)
         ),
       ]);
 

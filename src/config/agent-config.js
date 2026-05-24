@@ -78,6 +78,15 @@ export const agentConfig = {
   // Research Agent Configuration
   research: {
     enabled: process.env.ENABLE_RESEARCH_AGENT !== 'false', // default: enabled
+    // Total wall-clock budget for the async research job (PubMed + LLM query gen + intro).
+    // Bumped from 15 → 25 to accommodate optional Haiku query generation (~1–2s overhead).
+    timeoutSeconds: parseInt(process.env.RESEARCH_TIMEOUT_SECONDS) || 25,
+    // Feature flag for LLM-based PubMed query construction (Phase 1 rollout).
+    // When enabled, Haiku translates the case into a MeSH/field-tagged PubMed query
+    // before falling back to the deterministic keyword pipeline.
+    llmQueryEnabled: process.env.RESEARCH_LLM_QUERY_ENABLED === 'true',
+    // Per-attempt budget for the Haiku query-generation call. Falls back to heuristic on exceed.
+    llmQueryTimeoutMs: parseInt(process.env.RESEARCH_LLM_QUERY_TIMEOUT_MS) || 3000,
   },
 
   // PubMed Research Configuration

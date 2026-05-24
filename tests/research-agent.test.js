@@ -95,10 +95,10 @@ describe('ResearchAgent - Query Building', () => {
     agent = new ResearchAgent();
   });
 
-  test('should add date, study type, language, and human filters', () => {
+  test('should add study type, language, and human filters (no hard date filter)', () => {
     const query = agent.buildPubMedQuery('knee pain after surgery');
-    expect(query).toContain('2020');
-    expect(query).toContain('2025');
+    // Date filter intentionally removed — recency is scored in filterByQuality
+    expect(query).not.toContain('Date - Publication');
     expect(query).toContain('Meta-Analysis');
     expect(query).toContain('Systematic Review');
     expect(query).toContain('Randomized Controlled Trial');
@@ -705,7 +705,7 @@ describe('ResearchAgent - Quality Score Calculation', () => {
     expect(result[0].qualityScore).toBe(10);
   });
 
-  test('should score 5 and filter out unknown journal + Other type + old study', () => {
+  test('should score 5.5 and filter out unknown journal + Other type + 2015 study', () => {
     const studies = [{
       title: 'Old obscure study',
       journal: 'Unknown Journal',
@@ -713,12 +713,12 @@ describe('ResearchAgent - Quality Score Calculation', () => {
       studyType: 'Other',
       abstract: '',
     }];
-    // 5 (base) + 0 (unknown) + 0 (Other) + 0 (old) = 5 → filtered out (< 6)
+    // 5 (base) + 0 (unknown) + 0 (Other) + 0.5 (2015–2017) = 5.5 → filtered out (< 6)
     const result = agent.filterByQuality(studies);
     expect(result).toHaveLength(0);
   });
 
-  test('should score 8.5 for tier2 + review + 2023 study', () => {
+  test('should score 9.75 for tier2 + review + 2023 study', () => {
     const studies = [{
       title: 'Spine Review 2023',
       journal: 'Spine',
@@ -726,10 +726,10 @@ describe('ResearchAgent - Quality Score Calculation', () => {
       studyType: 'Review',
       abstract: '',
     }];
-    // 5 (base) + 2 (tier2) + 1 (Review) + 1.5 (2023) = 9.5
+    // 5 (base) + 2 (tier2) + 1 (Review) + 1.75 (2023) = 9.75
     const result = agent.filterByQuality(studies);
     expect(result).toHaveLength(1);
-    expect(result[0].qualityScore).toBe(9.5);
+    expect(result[0].qualityScore).toBe(9.75);
   });
 });
 
@@ -783,29 +783,29 @@ describe('ResearchAgent - Filter Threshold', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  test('should include studies scoring exactly 6', () => {
+  test('should include studies scoring exactly 6 (tier3 + 2017 + Other)', () => {
     const studies = [{
       title: 'Borderline study',
       journal: 'Journal of Orthopaedic and Sports Physical Therapy',
-      year: '2019',
+      year: '2017',
       studyType: 'Other',
       abstract: '',
     }];
-    // 5 (base) + 1 (tier3) + 0 (Other) + 0 (old) = 6 → included
+    // 5 (base) + 1 (tier3) + 0 (Other) + 0.5 (2015–2017) = 6.5 → included
     const result = agent.filterByQuality(studies);
     expect(result).toHaveLength(1);
-    expect(result[0].qualityScore).toBe(6);
+    expect(result[0].qualityScore).toBe(6.5);
   });
 
-  test('should exclude studies scoring below 6', () => {
+  test('should exclude studies scoring below 6 (pre-2015 unknown journal)', () => {
     const studies = [{
       title: 'Below threshold study',
       journal: 'Unknown Journal',
-      year: '2019',
+      year: '2010',
       studyType: 'Other',
       abstract: '',
     }];
-    // 5 (base) + 0 (unknown) + 0 (Other) + 0 (old) = 5 → excluded
+    // 5 (base) + 0 (unknown) + 0 (Other) + 0 (<2015) = 5 → excluded
     const result = agent.filterByQuality(studies);
     expect(result).toHaveLength(0);
   });
@@ -1314,20 +1314,31 @@ describe('ResearchAgent - Quality Score Granular Verification', () => {
     expect(result[0].qualityScore).toBe(7);
   });
 
-  test('should give recency bonus of +1.5 for year 2023 (score = 6.5)', () => {
+  test('should give recency bonus of +1.75 for year 2023 (score = 6.75)', () => {
     const result = agent.filterByQuality([makeStudy(2023)], '', 'premium');
+    expect(result).toHaveLength(1);
+    expect(result[0].qualityScore).toBe(6.75);
+  });
+
+  test('should give recency bonus of +1.5 for year 2021 (score = 6.5)', () => {
+    const result = agent.filterByQuality([makeStudy(2021)], '', 'premium');
     expect(result).toHaveLength(1);
     expect(result[0].qualityScore).toBe(6.5);
   });
 
-  test('should give recency bonus of +1 for year 2021 (score = 6)', () => {
-    const result = agent.filterByQuality([makeStudy(2021)], '', 'premium');
+  test('should give recency bonus of +1 for year 2019 (score = 6, included)', () => {
+    const result = agent.filterByQuality([makeStudy(2019)], '', 'premium');
     expect(result).toHaveLength(1);
     expect(result[0].qualityScore).toBe(6);
   });
 
-  test('should give recency bonus of 0 for year 2019 and filter out (score = 5)', () => {
-    const result = agent.filterByQuality([makeStudy(2019)], '', 'premium');
+  test('should give recency bonus of +0.5 for year 2016 (score = 5.5, excluded)', () => {
+    const result = agent.filterByQuality([makeStudy(2016)], '', 'premium');
+    expect(result).toHaveLength(0);
+  });
+
+  test('should give recency bonus of 0 for year 2010 and filter out (score = 5)', () => {
+    const result = agent.filterByQuality([makeStudy(2010)], '', 'premium');
     expect(result).toHaveLength(0);
   });
 
