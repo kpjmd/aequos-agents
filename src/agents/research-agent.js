@@ -289,6 +289,7 @@ Apply these notes in the Evidence Gaps section when relevant:
       'Generate a focused PubMed search query for the following orthopedic case.',
       '',
       `Primary complaint: ${ctx.primaryComplaint || '(none)'}`,
+      ctx.rawQuery ? `Patient's question: ${String(ctx.rawQuery).substring(0, 300)}` : null,
       ctx.symptoms ? `Symptoms: ${ctx.symptoms}` : null,
       ctx.bodyPart ? `Body part: ${ctx.bodyPart}` : null,
       ctx.location ? `Location: ${ctx.location}` : null,
@@ -305,11 +306,13 @@ Apply these notes in the Evidence Gaps section when relevant:
       '- Always end with: AND English[la] AND Humans[MeSH]',
       '- Do NOT include date filters (recency is scored downstream).',
       '- Do NOT include publication-type filters (study type is scored downstream).',
+      "- If the patient's question names a specific treatment, biologic, or comparison (e.g., 'PRP vs cortisone', 'ACP', 'hyaluronic acid'), include those as a separate AND concept using MeSH or [tiab] tags.",
       '',
       'Examples:',
       '("Anterior Cruciate Ligament Reconstruction"[Mesh] OR "ACL reconstruction"[tiab]) AND ("return to sport"[tiab] OR "return to play"[tiab]) AND English[la] AND Humans[MeSH]',
       '("Rotator Cuff Injuries"[Mesh] OR "rotator cuff tear"[tiab]) AND ("conservative management"[tiab] OR "Exercise Therapy"[Mesh] OR "physical therapy"[tiab]) AND English[la] AND Humans[MeSH]',
       '("Menisci, Tibial"[Mesh] AND "Arthroscopy"[Majr]) AND ("partial meniscectomy"[tiab] OR "meniscal repair"[tiab]) AND English[la] AND Humans[MeSH]',
+      '("Osteoarthritis, Knee"[Mesh] OR "knee osteoarthritis"[tiab]) AND ("Platelet-Rich Plasma"[Mesh] OR "PRP injection"[tiab] OR "corticosteroid injection"[tiab] OR "cortisone"[tiab]) AND English[la] AND Humans[MeSH]',
     ].filter(Boolean).join('\n');
 
     const systemPrompt = 'You are a medical librarian specializing in PubMed search syntax for orthopedic literature. You generate precise, MeSH-aware boolean queries that maximize retrieval of high-quality clinical evidence relevant to the patient case described.';
