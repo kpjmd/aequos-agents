@@ -1692,3 +1692,65 @@ describe('ResearchAgent - End-to-End curateRelevantStudies', () => {
     expect(result.intro.length).toBeGreaterThan(0);
   });
 });
+
+describe('ResearchAgent - Intro Citation Validator', () => {
+  let agent;
+
+  beforeEach(() => {
+    agent = new ResearchAgent();
+  });
+
+  const studies = [
+    { pmid: '111', authors: ['Smith J', 'Doe A'], year: '2020' },
+    { pmid: '222', authors: ['Patel R'], year: '2018' },
+    { pmid: '333', authors: 'Garcia M', year: '2015' },
+  ];
+
+  test('should return empty array for clean intro with allowed references', () => {
+    const intro = 'PMID 111 found that Smith 2020 reported good outcomes. Patel et al. 2018 confirmed this.';
+    expect(agent.validateIntroCitations(intro, studies)).toEqual([]);
+  });
+
+  test('should detect a single fabricated LastName Year reference', () => {
+    const intro = 'Meheux 2016 found PRP improved knee OA outcomes.';
+    const result = agent.validateIntroCitations(intro, studies);
+    expect(result).toContain('Meheux 2016');
+  });
+
+  test('should detect fabricated reference with "et al." variant', () => {
+    const intro = 'Bennell et al., 2021 reported similar findings.';
+    const result = agent.validateIntroCitations(intro, studies);
+    expect(result).toContain('Bennell 2021');
+  });
+
+  test('should detect multiple fabricated references and deduplicate', () => {
+    const intro = 'Laudy 2015 and Kompel 2019 reported different outcomes. Laudy 2015 was a meta-analysis.';
+    const result = agent.validateIntroCitations(intro, studies);
+    expect(result).toEqual(expect.arrayContaining(['Laudy 2015', 'Kompel 2019']));
+    expect(result.filter(r => r === 'Laudy 2015')).toHaveLength(1);
+  });
+
+  test('should mix allowed and fabricated references correctly', () => {
+    const intro = 'Smith 2020 reported X. Shen 2017 found Y. Patel 2018 confirmed.';
+    const result = agent.validateIntroCitations(intro, studies);
+    expect(result).toContain('Shen 2017');
+    expect(result).not.toContain('Smith 2020');
+    expect(result).not.toContain('Patel 2018');
+  });
+
+  test('should handle author stored as plain string (not array)', () => {
+    const intro = 'Garcia 2015 reported good outcomes.';
+    expect(agent.validateIntroCitations(intro, studies)).toEqual([]);
+  });
+
+  test('should return empty array for empty inputs', () => {
+    expect(agent.validateIntroCitations('', studies)).toEqual([]);
+    expect(agent.validateIntroCitations('Some text', null)).toEqual([]);
+    expect(agent.validateIntroCitations(null, studies)).toEqual([]);
+  });
+
+  test('should not flag PMID-style references', () => {
+    const intro = 'PMID 12345678 found that PRP improved outcomes (PMID 87654321).';
+    expect(agent.validateIntroCitations(intro, studies)).toEqual([]);
+  });
+});

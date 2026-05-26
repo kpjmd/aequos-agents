@@ -28,6 +28,8 @@ export class ResearchAgent extends BaseAgent {
     // Research tracking
     this.researchHistory = [];
     this.searchCache = new Map();
+
+    logger.info(`Research agent initialized — LLM query enabled: ${agentConfig.research?.llmQueryEnabled === true} (RESEARCH_LLM_QUERY_ENABLED=${process.env.RESEARCH_LLM_QUERY_ENABLED ?? 'unset'})`);
   }
 
   initializeJournalTiers() {
@@ -160,6 +162,8 @@ Apply these notes in the Evidence Gaps section when relevant:
           logger.warn(`LLM query generation failed, using heuristic: ${llmErr.message}`);
         }
         timings.queryGenMs = Date.now() - qStart;
+      } else {
+        logger.info('LLM query gen skipped (flag off) — using heuristic query');
       }
       logger.info(`PubMed search query (${queryMethod}): ${searchQuery}`);
 
@@ -1131,7 +1135,9 @@ Apply these notes in the Evidence Gaps section when relevant:
       ];
       const queryBodyPart = bodyParts.find(bp => expandedQuery.includes(bp));
       if (queryBodyPart && (expandedTitle.includes(queryBodyPart) || expandedAbstract.includes(queryBodyPart))) {
-        score += 3;
+        // Body-part-only match is insufficient on its own to clear the relevance
+        // threshold (3); requires at least 1 point from term-matching above.
+        score += 2;
       }
     }
 
@@ -1202,6 +1208,13 @@ Studies (${studies.length} total; highest evidence level: Level ${highestLevel})
 
 ${studySummaries}
 
+STRICT CITATION RULES — these are non-negotiable:
+- You may ONLY cite studies from the "Studies" list above.
+- Each citation MUST use the exact Authors, Year, Journal, and PMID values shown above — copy them verbatim.
+- You MUST NOT introduce any author names, years, or studies that are not in the list — not in Key Findings, not in Citations, not in Evidence Gaps, not anywhere.
+- In "Key Findings" and "Evidence Gaps", refer to studies by PMID (e.g., "PMID 12345678 found...") — never by an author/year string that isn't in the list above.
+- If you cannot find supporting evidence in the provided studies for a claim, omit the claim rather than inventing a citation.
+
 Produce the response in this exact structure:
 
 ## Research Summary: [fill in condition/question from the clinical query]
@@ -1239,12 +1252,54 @@ PubMed ID: [PMID]
 
 [1–2 related PubMed queries the user may want to run for adjacent evidence]`;
 
-      const intro = await this.processMessage(prompt);
-      return typeof intro === 'string' ? intro : String(intro);
+      const introRaw = await this.processMessage(prompt);
+      const intro = typeof introRaw === 'string' ? introRaw : String(introRaw);
+
+      const hallucinated = this.validateIntroCitations(intro, studies);
+      if (hallucinated.length > 0) {
+        logger.warn(`Intro contained ${hallucinated.length} fabricated citation(s): ${hallucinated.join(', ')} — falling back to plain-text summary`);
+        return `We found ${studies.length} relevant ${studies.length === 1 ? 'study' : 'studies'} related to your condition. Please review the citations below for the latest evidence-based recommendations.`;
+      }
+
+      return intro;
     } catch (error) {
       logger.warn(`Failed to generate research intro: ${error.message}`);
       return `We found ${studies.length} relevant ${studies.length === 1 ? 'study' : 'studies'} related to your condition. Please review the citations below for the latest evidence-based recommendations.`;
     }
+  }
+
+  /**
+   * Scan the generated intro for "LastName Year" patterns and flag any that
+   * don't match an author/year pair from the provided studies. Catches the
+   * common hallucination mode where Haiku produces plausible-looking
+   * citations that never went through the PubMed pipeline.
+   *
+   * Returns an array of fabricated reference strings (empty array = clean).
+   */
+  validateIntroCitations(intro, studies) {
+    if (!intro || !Array.isArray(studies)) return [];
+
+    const allowed = new Set();
+    for (const s of studies) {
+      const first = Array.isArray(s.authors) ? s.authors[0] : s.authors;
+      const lastName = String(first || '').trim().split(/[\s,]+/)[0];
+      if (lastName && s.year) {
+        allowed.add(`${lastName.toLowerCase()}|${s.year}`);
+      }
+    }
+
+    const refPattern = /\b([A-Z][a-z]+)(?:\s+et\s+al\.?,?)?\s+(\d{4})\b/g;
+    const hallucinated = [];
+    const seen = new Set();
+    let m;
+    while ((m = refPattern.exec(intro)) !== null) {
+      const key = `${m[1].toLowerCase()}|${m[2]}`;
+      if (!allowed.has(key) && !seen.has(key)) {
+        hallucinated.push(`${m[1]} ${m[2]}`);
+        seen.add(key);
+      }
+    }
+    return hallucinated;
   }
 
   getResearchStatistics() {
