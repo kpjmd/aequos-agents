@@ -29,27 +29,53 @@ No authentication headers are required. CORS is enabled for all origins.
 
 ## 1. Overview
 
-The Research Agent subsystem enriches orthopedic consultations with curated, evidence-based literature sourced from PubMed. It operates as a **fire-and-forget** service: the trigger endpoint returns immediately with a `pending` status while literature retrieval and curation run asynchronously in the background (up to 15 seconds). Callers poll a separate status endpoint until research is complete.
+The Research Agent subsystem enriches orthopedic consultations with curated, evidence-based literature sourced from PubMed. It operates as a **fire-and-forget** service: the trigger endpoint returns immediately with a `pending` status while literature retrieval and curation run asynchronously in the background (up to 25 seconds — configurable via `RESEARCH_TIMEOUT_SECONDS`). Callers poll a separate status endpoint until research is complete.
 
 As of v0.8.0, the agent produces a **structured research summary** rather than a flat paragraph block. The `intro` field now follows a consistent six-section format with PICO restatement, evidence-graded citations, and explicit Evidence Gaps & Caveats. See [Section 3 — Research Result Schema](#3-research-result-schema) for the full format.
 
+### Query Construction Pipeline
+
+The Research Agent supports two complementary query-building strategies, controlled by the `RESEARCH_LLM_QUERY_ENABLED` environment variable.
+
+#### Heuristic Query Builder (default, always available)
+
+Uses hardcoded keyword maps (body parts, conditions, treatments) to extract up to 3 clinical terms from the case + triage output and join them with `AND`. Output is bare keywords that rely on PubMed's automatic term mapping.
+
+```
+(knee AND "anterior cruciate ligament") AND (Meta-Analysis[pt] OR Systematic Review[pt] OR Randomized Controlled Trial[pt] OR Clinical Trial[pt] OR Review[pt]) AND English[la] AND Humans[MeSH]
+```
+
+#### LLM Query Builder (opt-in, `RESEARCH_LLM_QUERY_ENABLED=true`)
+
+Uses Claude Haiku to translate the case context into a MeSH-tagged boolean PubMed query with field tags (`[Mesh]`, `[Majr]`, `[tiab]`). This produces more precise queries — papers where a concept is the *main* topic, not incidentally mentioned.
+
+```
+("Anterior Cruciate Ligament Reconstruction"[Mesh] OR "ACL reconstruction"[tiab]) AND ("return to sport"[tiab] OR "return to play"[tiab]) AND English[la] AND Humans[MeSH]
+```
+
+**Behavior:**
+- Per-call budget: 3 seconds (configurable via `RESEARCH_LLM_QUERY_TIMEOUT_MS`). On timeout, invalid output, or API error → falls back to the heuristic query.
+- The heuristic query is always computed alongside and logged for side-by-side comparison during rollout.
+- The LLM query also benefits from triage `suggestedDiagnoses` and `primaryFindings`, which are passed into the prompt.
+
 ### Triage-Informed Query Building
 
-A key feature of the Research Agent is that it uses the **Triage Agent's output** to construct specific PubMed search queries — even when the user's original question was vague.
+Both query builders use the **Triage Agent's output** to produce more specific PubMed searches — even when the user's original question was vague.
 
 **Example:**
 
-| User Query | Without Triage | With Triage |
-|-----------|---------------|-------------|
-| "34yo male, knee pain, swelling and giving way after basketball" | `(knee AND pain)` | `(knee AND "anterior cruciate ligament")` |
-| "shoulder pain lifting overhead, 3 months" | `(shoulder AND pain)` | `(shoulder AND "rotator cuff")` |
+| User Query | Without Triage | With Triage (Heuristic) | With Triage (LLM) |
+|-----------|---------------|-------------|-------------|
+| "34yo male, knee pain, swelling and giving way after basketball" | `(knee AND pain)` | `(knee AND "anterior cruciate ligament")` | `("Anterior Cruciate Ligament Injuries"[Mesh] OR "ACL tear"[tiab]) AND ("knee instability"[tiab] OR "knee giving way"[tiab])` |
+| "shoulder pain lifting overhead, 3 months" | `(shoulder AND pain)` | `(shoulder AND "rotator cuff")` | `("Rotator Cuff Injuries"[Mesh] OR "rotator cuff tear"[tiab]) AND ("Shoulder Impingement Syndrome"[Mesh] OR "subacromial impingement"[tiab])` |
 
-**How it works:**
+**How triage feeds the query:**
 
 1. Triage Agent processes the user's symptoms and generates a `suggestedDiagnoses` array (e.g., `["anterior cruciate ligament", "meniscus"]`) via `extractSuggestedDiagnoses()` in `src/agents/triage-agent.js`
-2. In fast mode, the triage result (including `suggestedDiagnoses`) is passed as `triageContext` to `curateRelevantStudies()` before PubMed is queried
-3. `extractClinicalTerms()` in the Research Agent prepends those diagnosis terms to the search text so the condition/body-part maps produce specific PubMed terms
-4. The abbreviation table ensures shorthand in triage output (e.g., "ACL") is already expanded before storage
+2. In fast mode, the triage result (including `suggestedDiagnoses` and `primaryFindings`) is passed as `triageContext` to `curateRelevantStudies()` before PubMed is queried
+3. **Heuristic builder**: `extractClinicalTerms()` prepends diagnosis terms to the search text so the condition/body-part maps produce specific PubMed terms
+4. **LLM builder**: triage diagnoses and findings are passed directly into the Haiku prompt
+5. The abbreviation table ensures shorthand in triage output (e.g., "ACL") is already expanded before storage
 
 This means the research quality automatically improves as triage confidence improves — no user action required.
 
@@ -78,15 +104,16 @@ Client                 API Server              PubMed
 
 ### Tier System
 
-| Tier | Max Citations | Query Method | Token Bonus |
-|------|--------------|--------------|-------------|
-| `basic` (default) | 3 | Keyword extraction from symptoms + triage output | — |
-| `premium` | 5 | Keyword extraction from symptoms + triage output | +2 (`PREMIUM_ACCESS`) |
-| `premium` *(planned)* | 10 | LLM-generated optimized queries + multi-query deduplication | +2 (`PREMIUM_ACCESS`) |
+| Tier | Max Citations | Token Bonus |
+|------|--------------|-------------|
+| `basic` (default) | 3 | — |
+| `premium` | 5 | +2 (`PREMIUM_ACCESS`) |
 
-All citations pass a minimum quality score threshold of **6/10** before being returned. Results are sorted descending by quality score, then by relevance score.
+Both tiers use the same query construction pipeline (see [Query Construction Pipeline](#query-construction-pipeline) above). Tier currently affects only the maximum citation count and token bonus.
 
-> **Planned Premium Enhancement**: A future upgrade will add LLM-generated PubMed query construction for premium users. A Haiku call will translate the triage diagnosis and symptoms into 2–3 optimized PubMed search strings, which run in parallel and are deduplicated by PMID before quality filtering. This will raise the citation cap to 10 and produce more condition-specific literature. See TODO.md for implementation details.
+All citations pass a minimum quality score threshold of **6/10** before being returned. Results are sorted descending by combined score (40% quality + 60% relevance).
+
+> **Roadmap**: Phase 2 of the research-agent accuracy improvements will add LLM-based abstract reranking and a multi-query strategy with PMID deduplication. These will likely raise the premium citation cap to 10. See the plan at `~/.claude/plans/the-research-agent-provides-fizzy-sutherland.md` for the full sequencing.
 
 ### PubMed Configuration
 
@@ -97,6 +124,9 @@ Controlled via environment variables (see `src/config/agent-config.js`):
 | `PUBMED_API_KEY` | `null` | NCBI API key (raises rate limit from 3 to 10 req/s) |
 | `PUBMED_REQUEST_TIMEOUT` | `15000` | Per-request timeout in milliseconds |
 | `PUBMED_MAX_RESULTS` | `20` | Maximum PMIDs fetched per search |
+| `RESEARCH_TIMEOUT_SECONDS` | `25` | Total wall-clock budget for the async research job (was `15`; bumped to accommodate LLM query gen) |
+| `RESEARCH_LLM_QUERY_ENABLED` | `false` | When `true`, Haiku generates a MeSH-tagged PubMed query before falling back to the heuristic builder |
+| `RESEARCH_LLM_QUERY_TIMEOUT_MS` | `3000` | Per-attempt budget for the Haiku query-generation call |
 
 ---
 
@@ -178,7 +208,7 @@ POST /research/trigger
   "success": true,
   "consultationId": "cons_20240115_abc123",
   "status": "pending",
-  "estimatedSeconds": 15
+  "estimatedSeconds": 25
 }
 ```
 
@@ -187,7 +217,7 @@ POST /research/trigger
 | `success` | `boolean` | Always `true` for a valid trigger |
 | `consultationId` | `string` | Echoed from the request |
 | `status` | `string` | Always `"pending"` on trigger |
-| `estimatedSeconds` | `number` | Expected wait time before polling returns results (always `15`) |
+| `estimatedSeconds` | `number` | Expected wait time before polling returns results — equals `RESEARCH_TIMEOUT_SECONDS` (default `25`) |
 
 #### Error Codes
 
@@ -221,16 +251,16 @@ There are four possible response shapes depending on the current state of the jo
 
 **Pending — `200 OK`**
 
-Research is still running. The `estimatedSeconds` field counts down from 15 based on elapsed time since the trigger.
+Research is still running. The `estimatedSeconds` field counts down from `RESEARCH_TIMEOUT_SECONDS` (default 25) based on elapsed time since the trigger.
 
 ```json
 {
   "status": "pending",
-  "estimatedSeconds": 9
+  "estimatedSeconds": 19
 }
 ```
 
-`estimatedSeconds` = `max(0, 15 - round(elapsed_seconds))`
+`estimatedSeconds` = `max(0, RESEARCH_TIMEOUT_SECONDS - round(elapsed_seconds))`
 
 ---
 
@@ -244,9 +274,11 @@ Research finished successfully. The `research` object contains the full result.
   "research": {
     "intro": "Recent research shows strong evidence for conservative management...",
     "citations": [ /* array of citation objects — see Section 3 */ ],
-    "searchQuery": "(knee instability) AND (\"2020\"[Date - Publication] : \"2025\"[Date - Publication]) AND ...",
+    "searchQuery": "(\"Anterior Cruciate Ligament Injuries\"[Mesh] OR \"ACL tear\"[tiab]) AND (\"knee instability\"[tiab] OR \"knee giving way\"[tiab]) AND English[la] AND Humans[MeSH]",
+    "queryMethod": "llm",
     "studiesReviewed": 18,
-    "tier": "premium"
+    "tier": "premium",
+    "timings": { "queryGenMs": 1820, "searchMs": 940, "fetchMs": 2110, "introMs": 4250 }
   }
 }
 ```
@@ -256,8 +288,10 @@ Research finished successfully. The `research` object contains the full result.
 | `research.intro` | `string` | Structured research summary generated by Claude Haiku (see format below). **Contains Markdown** (`##` headings, `**bold**`, `###` sub-headings) — pass through a Markdown renderer before display. |
 | `research.citations` | `array` | Curated citation objects (3 for basic, 5 for premium) |
 | `research.searchQuery` | `string` | Exact PubMed query that was executed |
+| `research.queryMethod` | `string` | `"llm"` if Haiku generated the query, `"heuristic"` if the keyword-map builder was used (always `"heuristic"` when `RESEARCH_LLM_QUERY_ENABLED=false` or LLM call failed/timed out) |
 | `research.studiesReviewed` | `number` | Total PMIDs retrieved before quality filtering |
 | `research.tier` | `string` | `"basic"` or `"premium"` |
+| `research.timings` | `object` | Per-phase latency in ms: `queryGenMs` (LLM query gen, 0 when disabled), `searchMs` (PubMed esearch), `fetchMs` (PubMed efetch + parse), `introMs` (Haiku intro generation). Useful for rollout monitoring. |
 
 ---
 
@@ -268,7 +302,7 @@ Research encountered an error (PubMed timeout, network failure, etc.).
 ```json
 {
   "status": "failed",
-  "error": "Research timed out after 15 seconds",
+  "error": "Research timed out after 25 seconds",
   "fallback": "Research unavailable - recommendations based on clinical guidelines"
 }
 ```
@@ -295,14 +329,14 @@ No research job was ever triggered for this `consultationId`.
 
 **Polling Recommendation**
 
-Poll every **2 seconds**. Stop polling after **20 seconds** regardless of status.
+Poll every **2 seconds**. Stop polling after **30 seconds** regardless of status (covers the 25s research budget plus a 5s safety margin).
 
 ```
-t=0s  → trigger, status=pending (estimatedSeconds=15)
-t=2s  → poll, status=pending  (estimatedSeconds=13)
-t=4s  → poll, status=pending  (estimatedSeconds=11)
+t=0s  → trigger, status=pending (estimatedSeconds=25)
+t=2s  → poll, status=pending  (estimatedSeconds=23)
+t=4s  → poll, status=pending  (estimatedSeconds=21)
 ...
-t=16s → poll, status=complete ✓  (or status=failed)
+t=14s → poll, status=complete ✓  (or status=failed)
 t=20s → timeout, treat as failed if still pending
 ```
 
@@ -443,11 +477,15 @@ qualityScore = min(base + journalTier + studyType + recency, 10)
 | `studyType` | Review | +1 |
 | `studyType` | Clinical Trial or Other | +0 |
 | `recency` | Year ≥ 2024 | +2 |
-| `recency` | Year = 2023 | +1.5 |
-| `recency` | Year 2020–2022 | +1 |
-| `recency` | Year < 2020 | +0 |
+| `recency` | Year = 2023 | +1.75 |
+| `recency` | Year 2021–2022 | +1.5 |
+| `recency` | Year 2018–2020 | +1 |
+| `recency` | Year 2015–2017 | +0.5 |
+| `recency` | Year < 2015 | +0 |
 
 **Quality Filter**: Citations with `qualityScore < 6` are discarded before returning results.
+
+**No hard date filter at retrieval**: As of Phase 1 (May 2026), the PubMed query no longer applies a hard `("YYYY"[Date - Publication] : "YYYY"[Date - Publication])` filter. Recency is scored downstream with graceful decay, so seminal older papers (e.g., MOON cohort 2014–2018, foundational systematic reviews) can still surface when highly relevant. Pre-2015 papers can pass `qualityScore >= 6` if combined with a Tier 1/2 journal and strong study type.
 
 **Maximum per-tier example**: A 2024 RCT from JBJS would score `5 + 3 + 2 + 2 = 12`, capped to **10**.
 
@@ -701,7 +739,12 @@ npm test
 
 ### Performance Benchmarks
 
-With mocked PubMed responses (the default in test environments), `curateRelevantStudies()` should complete in **< 1000ms**. In production, end-to-end time including real PubMed API calls typically runs **8–14 seconds**, well within the 15-second fire-and-forget budget.
+With mocked PubMed responses (the default in test environments), `curateRelevantStudies()` should complete in **< 1000ms**. In production, end-to-end time including real PubMed API calls typically runs:
+
+- **Heuristic-only** (`RESEARCH_LLM_QUERY_ENABLED=false`): **5–10 seconds**
+- **With LLM query gen** (`RESEARCH_LLM_QUERY_ENABLED=true`): **8–14 seconds**
+
+Both are within the 25-second fire-and-forget budget. The `timings` field on the result lets you observe per-phase latency in production. To diagnose slow research jobs, look for outliers in `queryGenMs` (Haiku query gen — falls back to heuristic on 3s timeout), `searchMs` / `fetchMs` (PubMed E-utilities), or `introMs` (Haiku intro generation, typically the largest single phase at 3–6s).
 
 The overall test suite targeting research modules includes:
 

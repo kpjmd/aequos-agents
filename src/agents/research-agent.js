@@ -28,6 +28,8 @@ export class ResearchAgent extends BaseAgent {
     // Research tracking
     this.researchHistory = [];
     this.searchCache = new Map();
+
+    logger.info(`Research agent initialized — LLM query enabled: ${agentConfig.research?.llmQueryEnabled === true} (RESEARCH_LLM_QUERY_ENABLED=${process.env.RESEARCH_LLM_QUERY_ENABLED ?? 'unset'})`);
   }
 
   initializeJournalTiers() {
@@ -136,23 +138,48 @@ Apply these notes in the Evidence Gaps section when relevant:
 
   async curateRelevantStudies(clinicalQuery, tier = 'basic') {
     const startTime = Date.now();
+    const timings = { queryGenMs: 0, searchMs: 0, fetchMs: 0, introMs: 0 };
 
     try {
       logger.info(`Research agent curating studies for: ${JSON.stringify(clinicalQuery).substring(0, 100)}`);
 
-      // Build optimized PubMed query
-      const searchQuery = this.buildPubMedQuery(clinicalQuery);
-      logger.info(`PubMed search query: ${searchQuery}`);
+      // Build PubMed query — try LLM first when enabled, fall back to heuristic on
+      // timeout or invalid output. The heuristic query is always computed so it's
+      // available as a fallback and for side-by-side logging.
+      const heuristicQuery = this.buildPubMedQuery(clinicalQuery);
+      let searchQuery = heuristicQuery;
+      let queryMethod = 'heuristic';
+
+      if (agentConfig.research?.llmQueryEnabled) {
+        const qStart = Date.now();
+        try {
+          const llmQuery = await this.buildQueryWithLLM(clinicalQuery);
+          searchQuery = llmQuery;
+          queryMethod = 'llm';
+          logger.info(`LLM PubMed query: ${llmQuery}`);
+          logger.info(`Heuristic PubMed query (comparison): ${heuristicQuery}`);
+        } catch (llmErr) {
+          logger.warn(`LLM query generation failed, using heuristic: ${llmErr.message}`);
+        }
+        timings.queryGenMs = Date.now() - qStart;
+      } else {
+        logger.info('LLM query gen skipped (flag off) — using heuristic query');
+      }
+      logger.info(`PubMed search query (${queryMethod}): ${searchQuery}`);
 
       // Search PubMed for relevant PMIDs
+      const searchStart = Date.now();
       let pmids = await this.searchPubMed(searchQuery);
+      timings.searchMs = Date.now() - searchStart;
 
-      // Fallback: if no results with strict query, retry without study-type filter
+      // Fallback: if no results with primary query, retry with broader heuristic
       if (!pmids || pmids.length === 0) {
-        logger.info('No PubMed results with structured query — retrying with broader search');
+        logger.info('No PubMed results with primary query — retrying with broader search');
         const broaderQuery = this.buildBroaderQuery(clinicalQuery);
         logger.info(`Broader PubMed query: ${broaderQuery}`);
+        const fallbackStart = Date.now();
         pmids = await this.searchPubMed(broaderQuery);
+        timings.searchMs += Date.now() - fallbackStart;
       }
 
       if (!pmids || pmids.length === 0) {
@@ -162,14 +189,18 @@ Apply these notes in the Evidence Gaps section when relevant:
           citations: [],
           intro: 'No relevant studies were found for this specific query. This may indicate a gap in the current literature or that the search terms need refinement.',
           searchQuery,
+          queryMethod,
           totalFound: 0,
           tier,
           responseTime: Date.now() - startTime,
+          timings,
         };
       }
 
       // Fetch article details
+      const fetchStart = Date.now();
       const articles = await this.fetchArticleDetails(pmids);
+      timings.fetchMs = Date.now() - fetchStart;
 
       // Filter, score, and limit by quality
       let citations = this.filterByQuality(articles, clinicalQuery, tier);
@@ -191,30 +222,37 @@ Apply these notes in the Evidence Gaps section when relevant:
       }
 
       // Generate research intro summary
+      const introStart = Date.now();
       const intro = await this.generateResearchIntro(citations, clinicalQuery);
+      timings.introMs = Date.now() - introStart;
 
       // Track research history
       const researchRecord = {
         query: clinicalQuery,
         searchQuery,
+        queryMethod,
+        heuristicQuery: queryMethod === 'llm' ? heuristicQuery : undefined,
         totalFound: pmids.length,
         citationsReturned: citations.length,
         tier,
         responseTime: Date.now() - startTime,
+        timings,
         timestamp: new Date().toISOString(),
       };
       this.researchHistory.push(researchRecord);
 
-      logger.info(`Research complete: ${citations.length} citations curated from ${pmids.length} results`);
+      logger.info(`Research complete: ${citations.length} citations curated from ${pmids.length} results (${queryMethod} query, ${Date.now() - startTime}ms total: query=${timings.queryGenMs}ms search=${timings.searchMs}ms fetch=${timings.fetchMs}ms intro=${timings.introMs}ms)`);
 
       return {
         success: true,
         citations,
         intro,
         searchQuery,
+        queryMethod,
         totalFound: pmids.length,
         tier,
         responseTime: Date.now() - startTime,
+        timings,
       };
     } catch (error) {
       logger.error(`Research curation failed: ${error.message}`);
@@ -226,9 +264,78 @@ Apply these notes in the Evidence Gaps section when relevant:
         totalFound: 0,
         tier,
         responseTime: Date.now() - startTime,
+        timings,
         error: error.message,
       };
     }
+  }
+
+  /**
+   * Generate a PubMed query using Haiku (LLM-driven). Translates the case context
+   * into a MeSH-tagged boolean query with field tags ([Mesh], [Majr], [tiab]).
+   *
+   * Failure modes (any of these → caller falls back to the heuristic query):
+   *   - LLM call exceeds llmQueryTimeoutMs (default 3000ms)
+   *   - Output is empty or doesn't contain the required English/Humans filters
+   *   - Network/API error from the Anthropic SDK
+   */
+  async buildQueryWithLLM(clinicalQuery) {
+    const ctx = typeof clinicalQuery === 'object' ? (clinicalQuery || {}) : { primaryComplaint: clinicalQuery };
+    const triage = ctx.triageContext || {};
+    const suggestedDiagnoses = Array.isArray(triage.suggestedDiagnoses) ? triage.suggestedDiagnoses : [];
+    const primaryFindings = Array.isArray(triage.assessment?.primaryFindings) ? triage.assessment.primaryFindings : [];
+
+    const userPrompt = [
+      'Generate a focused PubMed search query for the following orthopedic case.',
+      '',
+      `Primary complaint: ${ctx.primaryComplaint || '(none)'}`,
+      ctx.symptoms ? `Symptoms: ${ctx.symptoms}` : null,
+      ctx.bodyPart ? `Body part: ${ctx.bodyPart}` : null,
+      ctx.location ? `Location: ${ctx.location}` : null,
+      ctx.diagnosis ? `Suspected diagnosis: ${ctx.diagnosis}` : null,
+      ctx.procedure ? `Procedure of interest: ${ctx.procedure}` : null,
+      suggestedDiagnoses.length ? `Triage-suggested diagnoses: ${suggestedDiagnoses.join(', ')}` : null,
+      primaryFindings.length ? `Triage findings: ${primaryFindings.slice(0, 3).join('; ')}` : null,
+      '',
+      'Rules:',
+      '- Output ONLY the PubMed query string on a single line. No explanation, no markdown, no JSON.',
+      '- Use MeSH headings ([Mesh] or [Majr]) when a canonical term applies.',
+      '- Use title/abstract tags ([tiab]) for clinical terms not in MeSH.',
+      '- Combine concepts with AND; combine synonyms inside each concept with OR.',
+      '- Always end with: AND English[la] AND Humans[MeSH]',
+      '- Do NOT include date filters (recency is scored downstream).',
+      '- Do NOT include publication-type filters (study type is scored downstream).',
+      '',
+      'Examples:',
+      '("Anterior Cruciate Ligament Reconstruction"[Mesh] OR "ACL reconstruction"[tiab]) AND ("return to sport"[tiab] OR "return to play"[tiab]) AND English[la] AND Humans[MeSH]',
+      '("Rotator Cuff Injuries"[Mesh] OR "rotator cuff tear"[tiab]) AND ("conservative management"[tiab] OR "Exercise Therapy"[Mesh] OR "physical therapy"[tiab]) AND English[la] AND Humans[MeSH]',
+      '("Menisci, Tibial"[Mesh] AND "Arthroscopy"[Majr]) AND ("partial meniscectomy"[tiab] OR "meniscal repair"[tiab]) AND English[la] AND Humans[MeSH]',
+    ].filter(Boolean).join('\n');
+
+    const systemPrompt = 'You are a medical librarian specializing in PubMed search syntax for orthopedic literature. You generate precise, MeSH-aware boolean queries that maximize retrieval of high-quality clinical evidence relevant to the patient case described.';
+
+    const timeoutMs = agentConfig.research?.llmQueryTimeoutMs || 3000;
+    const llmPromise = this.fastLLM.invoke([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ]);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`LLM query gen exceeded ${timeoutMs}ms`)), timeoutMs)
+    );
+
+    const response = await Promise.race([llmPromise, timeoutPromise]);
+    const raw = String(response?.content ?? '').trim();
+
+    // Strip markdown fences if the LLM wrapped output despite instructions
+    const cleaned = raw.replace(/^```[a-z]*\n?/i, '').replace(/\n?```\s*$/, '').trim();
+    // Take the first non-trivial line (LLM occasionally prefixes with explanation)
+    const firstLine = cleaned.split('\n').map(l => l.trim()).find(l => l.length > 10) || '';
+
+    // Validate: must contain required filters and at least one boolean operator
+    if (!firstLine || !firstLine.includes('English[la]') || !firstLine.includes('Humans[MeSH]')) {
+      throw new Error('LLM output missing required English[la]/Humans[MeSH] filters');
+    }
+    return firstLine;
   }
 
   buildPubMedQuery(clinicalQuery) {
@@ -319,10 +426,9 @@ Apply these notes in the Evidence Gaps section when relevant:
       }
     }
 
-    // Note: no MeSH scope filter here — clinical terms already ensure orthopedic focus,
-    // and the scope filter combined with date+studytype filters was too restrictive (0 results).
-    // The relevance scoring in filterByQuality catches any stray off-topic results.
-    filters.push('("2020"[Date - Publication] : "2025"[Date - Publication])');
+    // Note: no MeSH scope filter — clinical terms already ensure orthopedic focus.
+    // No hard date filter either — recency is scored in filterByQuality so seminal
+    // older papers (e.g., MOON cohort 2014–2018) can still surface when highly relevant.
     filters.push('(Meta-Analysis[pt] OR Systematic Review[pt] OR Randomized Controlled Trial[pt] OR Clinical Trial[pt] OR Review[pt])');
     filters.push('English[la]');
     filters.push('Humans[MeSH]');
@@ -365,7 +471,6 @@ Apply these notes in the Evidence Gaps section when relevant:
 
     return [
       termClause,
-      '("2018"[Date - Publication] : "2025"[Date - Publication])',
       'English[la]',
       'Humans[MeSH]',
     ].join(' AND ');
@@ -863,12 +968,14 @@ Apply these notes in the Evidence Gaps section when relevant:
       };
       score += typeScores[study.studyType] || 0;
 
-      // Recency (0-2)
+      // Recency (0-2) — graceful decay so seminal older papers can still pass
       const year = parseInt(study.year);
       if (!isNaN(year)) {
         if (year >= 2024) score += 2;
-        else if (year === 2023) score += 1.5;
-        else if (year >= 2020) score += 1;
+        else if (year === 2023) score += 1.75;
+        else if (year >= 2021) score += 1.5;
+        else if (year >= 2018) score += 1;
+        else if (year >= 2015) score += 0.5;
       }
 
       // Cap at 10
@@ -1028,7 +1135,9 @@ Apply these notes in the Evidence Gaps section when relevant:
       ];
       const queryBodyPart = bodyParts.find(bp => expandedQuery.includes(bp));
       if (queryBodyPart && (expandedTitle.includes(queryBodyPart) || expandedAbstract.includes(queryBodyPart))) {
-        score += 3;
+        // Body-part-only match is insufficient on its own to clear the relevance
+        // threshold (3); requires at least 1 point from term-matching above.
+        score += 2;
       }
     }
 
@@ -1099,6 +1208,13 @@ Studies (${studies.length} total; highest evidence level: Level ${highestLevel})
 
 ${studySummaries}
 
+STRICT CITATION RULES — these are non-negotiable:
+- You may ONLY cite studies from the "Studies" list above.
+- Each citation MUST use the exact Authors, Year, Journal, and PMID values shown above — copy them verbatim.
+- You MUST NOT introduce any author names, years, or studies that are not in the list — not in Key Findings, not in Citations, not in Evidence Gaps, not anywhere.
+- In "Key Findings" and "Evidence Gaps", refer to studies by PMID (e.g., "PMID 12345678 found...") — never by an author/year string that isn't in the list above.
+- If you cannot find supporting evidence in the provided studies for a claim, omit the claim rather than inventing a citation.
+
 Produce the response in this exact structure:
 
 ## Research Summary: [fill in condition/question from the clinical query]
@@ -1136,12 +1252,54 @@ PubMed ID: [PMID]
 
 [1–2 related PubMed queries the user may want to run for adjacent evidence]`;
 
-      const intro = await this.processMessage(prompt);
-      return typeof intro === 'string' ? intro : String(intro);
+      const introRaw = await this.processMessage(prompt);
+      const intro = typeof introRaw === 'string' ? introRaw : String(introRaw);
+
+      const hallucinated = this.validateIntroCitations(intro, studies);
+      if (hallucinated.length > 0) {
+        logger.warn(`Intro contained ${hallucinated.length} fabricated citation(s): ${hallucinated.join(', ')} — falling back to plain-text summary`);
+        return `We found ${studies.length} relevant ${studies.length === 1 ? 'study' : 'studies'} related to your condition. Please review the citations below for the latest evidence-based recommendations.`;
+      }
+
+      return intro;
     } catch (error) {
       logger.warn(`Failed to generate research intro: ${error.message}`);
       return `We found ${studies.length} relevant ${studies.length === 1 ? 'study' : 'studies'} related to your condition. Please review the citations below for the latest evidence-based recommendations.`;
     }
+  }
+
+  /**
+   * Scan the generated intro for "LastName Year" patterns and flag any that
+   * don't match an author/year pair from the provided studies. Catches the
+   * common hallucination mode where Haiku produces plausible-looking
+   * citations that never went through the PubMed pipeline.
+   *
+   * Returns an array of fabricated reference strings (empty array = clean).
+   */
+  validateIntroCitations(intro, studies) {
+    if (!intro || !Array.isArray(studies)) return [];
+
+    const allowed = new Set();
+    for (const s of studies) {
+      const first = Array.isArray(s.authors) ? s.authors[0] : s.authors;
+      const lastName = String(first || '').trim().split(/[\s,]+/)[0];
+      if (lastName && s.year) {
+        allowed.add(`${lastName.toLowerCase()}|${s.year}`);
+      }
+    }
+
+    const refPattern = /\b([A-Z][a-z]+)(?:\s+et\s+al\.?,?)?\s+(\d{4})\b/g;
+    const hallucinated = [];
+    const seen = new Set();
+    let m;
+    while ((m = refPattern.exec(intro)) !== null) {
+      const key = `${m[1].toLowerCase()}|${m[2]}`;
+      if (!allowed.has(key) && !seen.has(key)) {
+        hallucinated.push(`${m[1]} ${m[2]}`);
+        seen.add(key);
+      }
+    }
+    return hallucinated;
   }
 
   getResearchStatistics() {

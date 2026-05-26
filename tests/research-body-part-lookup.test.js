@@ -253,10 +253,10 @@ describe('ResearchAgent - buildPubMedQuery: anatomical term in query string', ()
     expect(query).toContain('clavicle');
   });
 
-  test('all queries still include date and study-type filters', () => {
+  test('all queries still include study-type and language/human filters (no hard date filter)', () => {
     const query = agent.buildPubMedQuery('talus fracture management');
-    expect(query).toContain('2020');
-    expect(query).toContain('2025');
+    // Date filter intentionally removed — recency is scored in filterByQuality
+    expect(query).not.toContain('Date - Publication');
     expect(query).toContain('Meta-Analysis');
     expect(query).toContain('English[la]');
     expect(query).toContain('Humans[MeSH]');
