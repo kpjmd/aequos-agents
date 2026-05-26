@@ -1291,11 +1291,16 @@ PubMed ID: [PMID]
       }
     }
 
+    // Common English words that match [A-Z][a-z]+ but are never author last names.
+    // Prevents false positives like "The 2024 Cochrane review..." triggering the validator.
+    const notAnAuthor = new Set(['the','in','at','by','as','on','an','of','for','to','up','or','and','but','nor','yet','so','if','its','this','that','these','those','such','each','both','level','grade','evidence','studies','research','data','based','using','among','between','within','during','after','before','since','while','despite','although','however','therefore','furthermore']);
+
     const refPattern = /\b([A-Z][a-z]+)(?:\s+et\s+al\.?,?)?\s+(\d{4})\b/g;
     const hallucinated = [];
     const seen = new Set();
     let m;
     while ((m = refPattern.exec(intro)) !== null) {
+      if (notAnAuthor.has(m[1].toLowerCase())) continue;
       const key = `${m[1].toLowerCase()}|${m[2]}`;
       if (!allowed.has(key) && !seen.has(key)) {
         hallucinated.push(`${m[1]} ${m[2]}`);

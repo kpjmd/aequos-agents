@@ -1753,4 +1753,10 @@ describe('ResearchAgent - Intro Citation Validator', () => {
     const intro = 'PMID 12345678 found that PRP improved outcomes (PMID 87654321).';
     expect(agent.validateIntroCitations(intro, studies)).toEqual([]);
   });
+
+  test('should not flag common English words before years (false-positive guard)', () => {
+    // "The 2024 Cochrane review..." triggered the validator in production
+    const intro = 'The 2024 guidelines recommend PRP. In 2020, studies showed benefit. Evidence based on the 2018 data.';
+    expect(agent.validateIntroCitations(intro, studies)).toEqual([]);
+  });
 });
