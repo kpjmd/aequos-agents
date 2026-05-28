@@ -126,7 +126,7 @@ export class AgentCoordinator {
       }
 
       // Synthesize recommendations with coordination metadata
-      const synthesizedRecommendations = await this.synthesizeRecommendations(responses, caseData, coordinationMetadata);
+      const synthesizedRecommendations = await this.synthesizeRecommendations(responses, caseData, coordinationMetadata, mode);
 
       // Update consultation
       consultation.responses = responses;
@@ -463,7 +463,7 @@ export class AgentCoordinator {
           }
         } else {
           // Fallback - create consultation-specific response based on specialist type
-          response = await this.getConsultationSpecificResponse(specialist, caseData, consultationId);
+          response = await this.getConsultationSpecificResponse(specialist, caseData, consultationId, mode);
           dataCompleteness = 0.5;
         }
       }
@@ -611,7 +611,7 @@ export class AgentCoordinator {
     return activities;
   }
 
-  async getConsultationSpecificResponse(specialist, caseData, consultationId) {
+  async getConsultationSpecificResponse(specialist, caseData, consultationId, mode = 'normal') {
     try {
       const specialistType = specialist.agentType || specialist.name.toLowerCase();
       
@@ -763,7 +763,9 @@ ${JSON.stringify(caseData)}
       
       return await specialist.processMessage(consultationPrompt, {
         consultationId,
-        type: 'specialist_consultation'
+        type: 'specialist_consultation',
+        mode,
+        timeout: mode === 'fast' ? 35000 : 75000,
       });
     } catch (error) {
       logger.error(`Error getting consultation-specific response from ${specialist.name}: ${error.message}`);
@@ -771,7 +773,7 @@ ${JSON.stringify(caseData)}
     }
   }
 
-  async synthesizeRecommendations(responses, caseData, coordinationMetadata = null) {
+  async synthesizeRecommendations(responses, caseData, coordinationMetadata = null, mode = 'normal') {
     try {
       const successfulResponses = Array.from(responses.values())
         .filter(r => r.status === 'success');
@@ -838,7 +840,10 @@ ${JSON.stringify(caseData)}
         synthesizer = { processMessage: async () => 'Synthesis not available', name: 'System' };
       }
 
-      const rawSynthesis = await synthesizer.processMessage(synthesisPrompt);
+      const rawSynthesis = await synthesizer.processMessage(synthesisPrompt, {
+        mode,
+        timeout: mode === 'fast' ? 35000 : 75000,
+      });
 
       // Format user-friendly synthesis markdown
       const formattedSynthesis = this.formatSynthesisResponse(
