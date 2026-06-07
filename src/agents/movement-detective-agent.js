@@ -132,6 +132,10 @@ ${mechanism && bodyPart ? `
 
 Movement Data: ${JSON.stringify(movementData)}
 
+        ${enableDualTrack && rawQuery ? `
+🎯 REMEMBER: Your PRIMARY task is answering: "${rawQuery}"
+        ` : ''}
+
         Provide your response as readable prose with markdown headers (## for sections).
         Write naturally as a biomechanics specialist explaining your movement analysis and recommendations.
         Cover key areas like postural assessment, movement patterns, gait analysis, kinetic chain, and compensatory patterns.
@@ -647,6 +651,23 @@ Movement Data: ${JSON.stringify(movementData)}
       };
 
       Object.entries(elbowPatterns).forEach(([pattern, terms]) => {
+        if (terms.some(term => lowerAnalysis.includes(term))) {
+          patterns.push(pattern);
+        }
+      });
+    }
+
+    // Knee-related patterns
+    if (mentionsKnee) {
+      const kneePatterns = {
+        'valgus_collapse': ['valgus', 'knee collapse', 'medial collapse'],
+        'patellar_tracking': ['patella', 'kneecap', 'tracking', 'maltracking'],
+        'quad_weakness': ['quad weak', 'quadriceps weak', 'VMO'],
+        'ACL_pattern': ['ACL', 'anterior cruciate', 'instability'],
+        'meniscus_pattern': ['meniscus', 'locking', 'catching']
+      };
+
+      Object.entries(kneePatterns).forEach(([pattern, terms]) => {
         if (terms.some(term => lowerAnalysis.includes(term))) {
           patterns.push(pattern);
         }

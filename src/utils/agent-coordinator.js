@@ -777,8 +777,18 @@ ${JSON.stringify(caseData)}
       // Use the triage agent for synthesis if available
       let synthesizer = this.specialists.get('triage') || this.specialists.get('orthopedic_specialist');
       if (!synthesizer) {
-        // Fallback to first successful response
-        const firstResponse = responses.values().next().value;
+        // Fallback: use any specialist that produced a successful response
+        for (const [agentType, response] of responses.entries()) {
+          if (response.status === 'success') {
+            const candidate = this.specialists.get(agentType);
+            if (candidate) {
+              synthesizer = candidate;
+              break;
+            }
+          }
+        }
+      }
+      if (!synthesizer) {
         synthesizer = { processMessage: async () => 'Synthesis not available', name: 'System' };
       }
 
