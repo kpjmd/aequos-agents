@@ -1,5 +1,4 @@
 import { ethers } from 'ethers';
-import { CdpEvmWalletProvider } from '@coinbase/agentkit';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';

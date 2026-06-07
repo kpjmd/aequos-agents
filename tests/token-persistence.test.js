@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, jest } from '@jest/globals';
+import { describe, test, expect, jest } from '@jest/globals';
 
 // Mock the configuration
 jest.unstable_mockModule('../src/config/agent-config.js', () => ({

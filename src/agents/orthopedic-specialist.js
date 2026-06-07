@@ -1,8 +1,4 @@
 import { BaseAgent } from './base-agent.js';
-import agentkit from '@coinbase/agentkit';
-import langchain from '@coinbase/agentkit-langchain';
-const { CdpAgentkit } = agentkit;
-const { CdpTool } = langchain;
 import logger from '../utils/logger.js';
 
 export class OrthopedicSpecialist extends BaseAgent {

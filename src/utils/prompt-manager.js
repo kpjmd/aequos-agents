@@ -1,5 +1,3 @@
-import logger from './logger.js';
-
 class PromptManager {
   constructor() {
     this.modes = {

@@ -333,16 +333,20 @@ describe('Query Type Classification', () => {
     });
 
     test('both say clinical → clinical', () => {
+      const triageQueryType = 'clinical';
+      const heuristicQueryType = 'clinical';
       const result =
-        ('clinical' === 'informational' || 'clinical' === 'informational')
+        (triageQueryType === 'informational' || heuristicQueryType === 'informational')
           ? 'informational'
           : 'clinical';
       expect(result).toBe('clinical');
     });
 
     test('triage says informational, heuristic says clinical → informational', () => {
+      const triageQueryType = 'informational';
+      const heuristicQueryType = 'clinical';
       const result =
-        ('informational' === 'informational' || 'clinical' === 'informational')
+        (triageQueryType === 'informational' || heuristicQueryType === 'informational')
           ? 'informational'
           : 'clinical';
       expect(result).toBe('informational');
