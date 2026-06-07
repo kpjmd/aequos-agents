@@ -200,66 +200,6 @@ Patient-supplied data appears between <patient_input> and </patient_input> tags 
     logger.debug(`Agent ${this.name} experience updated to ${this.experience}`);
   }
 
-  async consultWithSpecialist(specialistType, caseData) {
-    try {
-      logger.info(`${this.name} consulting with ${specialistType} specialist`);
-      
-      // Find appropriate specialist from collaborating agents
-      const specialist = this.collaboratingAgents.get(specialistType);
-      
-      if (!specialist) {
-        logger.warn(`No ${specialistType} specialist available for consultation`);
-        return null;
-      }
-      
-      const consultation = await specialist.processMessage(
-        `Consultation request: ${JSON.stringify(caseData)}`,
-        { consultingAgent: this.name, type: 'specialist_consultation' }
-      );
-      
-      // Record collaboration for token bonus
-      this.recordCollaboration(specialist.name, 'consultation');
-      
-      return {
-        specialist: specialist.name,
-        consultation,
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      logger.error(`Error in specialist consultation:`, error);
-      throw error;
-    }
-  }
-
-  async synthesizeRecommendations(specialistResponses) {
-    try {
-      const synthesisPrompt = `
-        Synthesize the following specialist recommendations into a cohesive treatment plan:
-        ${JSON.stringify(specialistResponses, null, 2)}
-        
-        Provide:
-        1. Unified assessment
-        2. Prioritized treatment recommendations
-        3. Timeline and milestones
-        4. Potential conflicts or considerations
-        5. Next steps
-      `;
-      
-      const synthesis = await this.processMessage(synthesisPrompt);
-      
-      return {
-        synthesizedBy: this.name,
-        inputResponses: specialistResponses.length,
-        recommendations: synthesis,
-        confidence: this.getConfidence('synthesis'),
-        timestamp: new Date().toISOString()
-      };
-    } catch (error) {
-      logger.error(`Error synthesizing recommendations:`, error);
-      throw error;
-    }
-  }
-
   recordCollaboration(agentName, type) {
     const collaboration = {
       agent: agentName,

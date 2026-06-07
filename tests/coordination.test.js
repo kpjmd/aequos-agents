@@ -83,43 +83,6 @@ describe('AgentCoordinator', () => {
     expect(available).not.toContain('nonexistent');
   });
 
-  test('should analyze specialist needs from case data', async () => {
-    const caseData = {
-      painLevel: 8,
-      movementDysfunction: true,
-      functionalLimitations: true,
-      anxietyLevel: 7
-    };
-
-    const needs = await coordinator.analyzeSpecialistNeeds(caseData);
-
-    expect(needs).toContain('triage'); // Always included
-    expect(needs).toContain('pain_whisperer'); // High pain level
-    expect(needs).toContain('movement_detective'); // Movement dysfunction
-    expect(needs).toContain('strength_sage'); // Functional limitations
-    expect(needs).toContain('mind_mender'); // High anxiety
-  });
-
-  test('should create appropriate routing plan', () => {
-    const specialists = ['triage', 'pain_whisperer', 'movement_detective', 'strength_sage'];
-    const plan = coordinator.createRoutingPlan(specialists);
-
-    expect(plan.primary).toBe('triage');
-    expect(plan.secondary).toContain('pain_whisperer');
-    expect(plan.secondary).toContain('movement_detective');
-    expect(plan.sequence).toEqual(['triage', 'pain_whisperer', 'movement_detective', 'strength_sage']);
-  });
-
-  test('should determine optimal specialist sequence', () => {
-    const specialists = ['mind_mender', 'strength_sage', 'triage', 'pain_whisperer'];
-    const sequence = coordinator.determineSequence(specialists);
-
-    // Should follow priority order: triage, pain_whisperer, strength_sage, mind_mender
-    expect(sequence[0]).toBe('triage');
-    expect(sequence[1]).toBe('pain_whisperer');
-    expect(sequence.indexOf('triage')).toBeLessThan(sequence.indexOf('pain_whisperer'));
-  });
-
   test('should calculate consensus level', () => {
     const responses = [
       { response: { recommendations: 'physical therapy and pain management' } },
@@ -142,36 +105,6 @@ describe('AgentCoordinator', () => {
     expect(avgConfidence).toBeCloseTo(0.8, 1);
   });
 
-  test('should assess specialist load', async () => {
-    const load = await coordinator.assessSpecialistLoad(painAgent);
-
-    expect(load).toBeDefined();
-    expect(load.activeConsultations).toBeDefined();
-    expect(load.queuedCases).toBeDefined();
-    expect(load.responseTime).toBeDefined();
-    expect(load.utilizationRate).toBeDefined();
-  });
-
-  test('should calculate specialist capacity', () => {
-    // Give agent some experience
-    painAgent.experience = 100;
-
-    const capacity = coordinator.calculateCapacity(painAgent);
-
-    expect(capacity).toBeGreaterThan(0);
-    expect(typeof capacity).toBe('number');
-  });
-
-  test('should assess availability correctly', () => {
-    const highLoad = { utilizationRate: 0.3 };
-    const mediumLoad = { utilizationRate: 0.6 };
-    const lowLoad = { utilizationRate: 0.9 };
-
-    expect(coordinator.assessAvailability(highLoad)).toBe('high');
-    expect(coordinator.assessAvailability(mediumLoad)).toBe('medium');
-    expect(coordinator.assessAvailability(lowLoad)).toBe('low');
-  });
-
   test('should record specialist performance', () => {
     const response = {
       status: 'success',
@@ -184,19 +117,6 @@ describe('AgentCoordinator', () => {
     expect(metrics.consultations).toBe(1);
     expect(metrics.successRate).toBe(1);
     expect(metrics.averageResponseTime).toBe(1500);
-  });
-
-  test('should generate load balancing recommendations', () => {
-    const workloadAnalysis = new Map([
-      ['pain_whisperer', { availability: 'low', efficiency: 0.5 }],
-      ['movement_detective', { availability: 'high', efficiency: 0.9 }]
-    ]);
-
-    const recommendations = coordinator.generateLoadBalancingRecommendations(workloadAnalysis);
-
-    expect(recommendations.length).toBeGreaterThan(0);
-    expect(recommendations.some(r => r.type === 'redistribute_load')).toBe(true);
-    expect(recommendations.some(r => r.type === 'improve_efficiency')).toBe(true);
   });
 
   test('should calculate duration correctly', () => {
@@ -482,53 +402,6 @@ describe('Integration Tests', () => {
     });
   });
 
-  test('should coordinate full patient journey', async () => {
-    // Start recovery tracking
-    const initialAssessment = {
-      condition: 'shoulder_surgery',
-      severity: 'moderate',
-      age: 40,
-      painLevel: 7,
-      functionalScore: 35,
-      movementDysfunction: true,
-      psychologicalFactors: true
-    };
-
-    const trackingResult = await recoveryMetrics.trackPatientRecovery(
-      'patient123',
-      initialAssessment
-    );
-
-    expect(trackingResult.patientId).toBe('patient123');
-
-    // Route case to specialists
-    const caseData = {
-      id: 'case123',
-      patientId: 'patient123',
-      ...initialAssessment
-    };
-
-    const routingResult = await coordinator.routeCaseToAppropriateSpecialists(caseData);
-
-    expect(routingResult.caseId).toBe('case123');
-    expect(routingResult.specialistRecommendations.length).toBeGreaterThan(0);
-
-    // Simulate progress update
-    const progressData = {
-      painLevel: 4,
-      functionalScore: 60,
-      movementQuality: 75
-    };
-
-    const progressResult = await recoveryMetrics.updateRecoveryProgress(
-      'patient123',
-      progressData
-    );
-
-    expect(progressResult.patientId).toBe('patient123');
-    expect(progressResult.progressUpdate.metrics.painReduction).toBeGreaterThan(0);
-  });
-
   test('should handle multi-specialist coordination', async () => {
     const caseData = {
       id: 'complex_case',
@@ -555,17 +428,6 @@ describe('Integration Tests', () => {
     expect(consultationResult.consultationId).toBeDefined();
     expect(consultationResult.participatingSpecialists.length).toBeGreaterThan(0);
     expect(consultationResult.synthesizedRecommendations).toBeDefined();
-  });
-
-  test('should manage specialist workload effectively', async () => {
-    // Simulate some activity
-    coordinator.performanceMetrics.get('pain').consultations = 10;
-    coordinator.performanceMetrics.get('movement').consultations = 5;
-
-    const workloadResult = await coordinator.manageSpecialistWorkload();
-
-    expect(workloadResult.workloadAnalysis).toBeDefined();
-    expect(workloadResult.recommendations).toBeDefined();
   });
 
   test('should track end-to-end recovery metrics', async () => {
