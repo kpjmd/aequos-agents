@@ -80,6 +80,19 @@ GET /status                    -- includes all agent balances
 
 ---
 
+### ✅ Phase 3.5 — agent_tasks Column Extraction + Deploy Fixes (completed 2026-05-11)
+
+- [x] **Agent response shape** — `triageClassificationConfidence` (heuristic classifier 0–1 score for informational/clinical decision) attached to triage response in both fast-mode and normal-mode paths in `src/index.js`. Field is distinct from overall `confidence`.
+- [x] **Strength Sage emission** — `predictedRecoveryDays` (INTEGER, nullable) added as structured top-level field. Prompt asks Claude to emit `PREDICTED_RECOVERY_DAYS: <int|null>` tag; `extractPredictedRecoveryDays()` parses it.
+- [x] **Phase 1 stragglers committed** — `prompt-manager.js` `<patient_input>` tags (T1-6) + `scope-validator.js` PHI log scrub (T1-10) + `package-lock.json` sync were uncommitted; landed in `feat/agent-tasks-column-extraction` branch.
+- [x] **blockchain-utils.js startup crash fixed** — Task 5 audit changed `logger.warn` → `throw new Error` at module load; reverted to graceful warning so Railway can bind. `compiledToken = null` mock fallbacks already handle absent artifact.
+- [x] **Railway env vars** — Added `CORS_ORIGINS` (allowed frontend origins, comma-list) and `FARCASTER_AUTH_DOMAIN` (single production hostname for Farcaster JWT verification). Both were new in Phase 1 but never set in Railway.
+- [x] **OrthoIQ frontend** — `lib/database.ts` updated: `createAgentTask` / `updateAgentTask` now project all 7 new columns (`consultation_id`, `agent_confidence`, `urgency_level`, `triage_classification`, `triage_confidence`, `predicted_recovery_days`, `result_schema_version`) with try/catch fallback to legacy write. Schema migration (ALTER TABLE IF NOT EXISTS) included.
+
+**⚠️ Known issue found in first test consults (2026-05-11):** `validation_error` (HTTP 400) from `src/schemas/validate.js` on `/consultation` endpoint when frontend attempts comprehensive upgrade after fast triage. Zod schema uses `.strict()` — likely the frontend is sending fields not declared in `consultationSchema`. Feedback modal also non-functional when consult fails. Needs investigation before testnet.
+
+---
+
 ### ✅ Phase 3 — Prediction Market Reset + Tier 0 Hardening (completed 2026-05-10)
 
 **Decision: Option B — prediction market removed.** Rationale: hardcoded prediction generation, no real escrow, cascade re-mints. Capturing that on-chain at testnet would be incoherent. This is a reset, not abandonment — V2 will resolve specialist LLM-driven stakes against PROMIS outcome data. See `memory/prediction-market-v2-intent.md`.
@@ -118,6 +131,15 @@ Only worth doing once testnet flip is stable and there is real reward-event data
 - [ ] **T2-4** Embed conference dialogue verbatim in synthesis prompt (currently summarized to 3 integers at `agent-coordinator.js:825-830`)
 - [ ] **T2-5** LLM-emitted predictions with confidence calibrated to past accuracy
 - [ ] **T2-6** Differential influence in synthesis — verbatim quotes for high performers, summary for low
+- [ ] **T2-7** Feed Research Agent literature into the position pass (`OrthopedicSpecialist.statePosition`)
+      so specialist stances are calibrated to retrieved evidence, not the base-model prior alone.
+      **Motivated by the conservatism-bias probe (2026-06-08):** positions are demonstrably
+      evidence-corrigible — strong *real* contrary evidence flips 100% of specialists (calibrated vs 0%
+      on length-matched sham, no motivated-updating asymmetry), so baseline equipoise conservatism
+      partly reflects deciding *without the trial evidence in hand*, not a fixed prior. The Research
+      Agent already retrieves the literature; thread its citations/summary into the `statePosition`
+      prompt on contested decision points. See `docs/divergence-spike-findings.md` ("Conservatism-bias
+      probe") and `examples/conservatism-bias-probe.js`.
 
 ---
 
