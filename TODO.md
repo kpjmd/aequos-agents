@@ -318,6 +318,21 @@ Prediction market removed in Phase 3 (incoherent mechanics). V2 will be built fr
 - [ ] Add agent response streaming
 - [ ] Implement real-time token balance display
 
+### Inter-Agent Divergence Surfacing
+- [x] **Backend: divergence payload always exposed** (2026-06-08, commit c0ad6da) —
+      `coordinationMetadata.divergences` is now a guaranteed array on every consultation path
+      (normal/fast/cached/error) at `result.synthesizedRecommendations.coordinationMetadata`, served by
+      `/consultation/:id/status`. Verified end-to-end (`examples/verify-divergence-payload.js`).
+- [x] **Frontend `/api/v1` external endpoint forwards divergences** (orthoiq repo, 2026-06-08) — the
+      external query payload used by kpjmd.com now includes the inter-agent dialogue / divergence data.
+- [ ] **Frontend `/admin` + `/stats` rendering** (orthoiq repo, in progress) — surface divergences on
+      /admin (per-consult conference cards: sides → dialogue → persisted/resolved outcome; recent feed)
+      and /stats (gate-open rate, persisted-vs-resolved ratio, recurring contested decisions,
+      per-specialist revision frequency). NOTE shape difference: live API is **nested**
+      (`decisionPoint`/`sides`/`dialogue`/`postDialogue`, plus `rationale`/`deferred`/`belowFloor`) while
+      the durable `coordination_divergences` DB table is **flattened** (`decision_question`,
+      `persisted`/`resolved`/`changed_count` columns). See `docs/divergence-spike-findings.md`.
+
 ---
 
 ## Completed ✅

@@ -15,6 +15,10 @@ const { CoordinationConference } = await import('../src/utils/coordination-confe
 const { default: AgentCoordinator } = await import('../src/utils/agent-coordinator.js');
 const { makePositionSchema, makeReconsiderSchema, DecisionPointsSchema } = await import('../src/utils/dialogue-schemas.js');
 const { storeCoordinationDivergences, getCoordinationDivergences } = await import('../src/utils/divergence-storage.js');
+const { resolvePersona, PERSONA_BY_KEY } = await import('../src/utils/specialist-identity.js');
+
+const CANONICAL_NAMES = new Set(Object.values(PERSONA_BY_KEY).map(p => p.specialist));
+const CANONICAL_KEYS = new Set(Object.values(PERSONA_BY_KEY).map(p => p.specialistType));
 
 // ---- helpers --------------------------------------------------------------
 const pos = (dpId, stance, confidence, specialist) => ({
@@ -49,6 +53,23 @@ function panel(decisionPoints, stanceFor) {
     ['strengthSage', mockSpecialist('Strength', dp => stanceFor('strengthSage', dp))],
     ['mindMender', mockSpecialist('Mind', dp => stanceFor('mindMender', dp))],
   ]);
+}
+
+// Like mockSpecialist but reports a clinical-label specialistType and revises its stance on
+// reconsider — used to prove the conference normalizes identity and never leaks raw labels.
+function mockLeakyRevisingSpecialist(rawLabel, stance, revisesTo = null) {
+  return {
+    statePosition: jest.fn(async (_caseData, dp) => ({
+      decisionPointId: dp.id, specialist: rawLabel, specialistType: rawLabel,
+      stance, confidence: 0.8, reasoning: `${rawLabel} reasoning`, evidenceGrade: 'B',
+    })),
+    reconsiderPosition: jest.fn(async (_caseData, dp, own) => ({
+      decisionPointId: dp.id, specialist: rawLabel, specialistType: rawLabel,
+      originalStance: own.stance, revisedStance: revisesTo || own.stance,
+      changed: revisesTo != null && revisesTo !== own.stance,
+      reasoning: 'rr', changeReason: revisesTo ? 'persuaded' : 'hold', confidence: 0.8,
+    })),
+  };
 }
 
 // ---- detectDivergence -----------------------------------------------------
@@ -214,5 +235,69 @@ describe('divergence-storage (no DATABASE_URL)', () => {
 
   test('get returns empty array without DB', async () => {
     expect(await getCoordinationDivergences('c1')).toEqual([]);
+  });
+});
+
+// ---- specialist identity mapping ------------------------------------------
+describe('resolvePersona', () => {
+  test('maps all 5 panel agents + research to canonical { specialistType, specialist }', () => {
+    expect(resolvePersona('triage')).toEqual({ specialistType: 'triage', specialist: 'OrthoTriage Master' });
+    expect(resolvePersona('painWhisperer')).toEqual({ specialistType: 'painWhisperer', specialist: 'Pain Whisperer' });
+    expect(resolvePersona('movementDetective')).toEqual({ specialistType: 'movementDetective', specialist: 'Movement Detective' });
+    expect(resolvePersona('strengthSage')).toEqual({ specialistType: 'strengthSage', specialist: 'Strength Sage' });
+    expect(resolvePersona('mindMender')).toEqual({ specialistType: 'mindMender', specialist: 'Mind Mender' });
+    expect(resolvePersona('research')).toEqual({ specialistType: 'research', specialist: 'Research Agent' });
+  });
+
+  test('normalizes snake_case agentType aliases to the canonical camelCase key', () => {
+    expect(resolvePersona('pain_whisperer')).toEqual({ specialistType: 'painWhisperer', specialist: 'Pain Whisperer' });
+    expect(resolvePersona('movement_detective')).toEqual({ specialistType: 'movementDetective', specialist: 'Movement Detective' });
+    expect(resolvePersona('strength_sage')).toEqual({ specialistType: 'strengthSage', specialist: 'Strength Sage' });
+    expect(resolvePersona('mind_mender')).toEqual({ specialistType: 'mindMender', specialist: 'Mind Mender' });
+    expect(resolvePersona('research_pioneer')).toEqual({ specialistType: 'research', specialist: 'Research Agent' });
+  });
+
+  test('falls back to the raw value (no throw) for an unknown identifier', () => {
+    expect(resolvePersona('Sports Medicine Specialist')).toEqual({
+      specialistType: 'Sports Medicine Specialist', specialist: 'Sports Medicine Specialist',
+    });
+  });
+});
+
+// ---- no clinical-label leak through a real divergence ----------------------
+describe('CoordinationConference identity normalization (leak guard)', () => {
+  test('every specialist in sides/dialogue/deltas/deferred carries a canonical persona', async () => {
+    const conf = new CoordinationConference();
+    // Split panel that also reports clinical labels and revises — the conference must
+    // normalize all of it to persona identity regardless of what agents return.
+    const specialists = new Map([
+      ['triage', mockTriage([DP])],
+      ['painWhisperer', mockLeakyRevisingSpecialist('Pain Management Specialist', 'surgery', 'rehab')],
+      ['movementDetective', mockLeakyRevisingSpecialist('Sports Medicine Specialist', 'rehab')],
+      ['strengthSage', mockLeakyRevisingSpecialist('Physical Therapy', 'rehab')],
+      ['mindMender', mockLeakyRevisingSpecialist('Psychologist', 'defer')],
+    ]);
+
+    const cm = await conf.conductConferenceRound(new Map(), specialists, {}, { mode: 'normal' });
+    expect(cm.gateOpen).toBe(true);
+    const div = cm.divergences[0];
+
+    const names = [
+      ...div.sides.flatMap(s => s.specialists.map(sp => sp.specialist)),
+      ...div.dialogue.map(t => t.specialist),
+      ...div.postDialogue.deltas.map(d => d.specialist),
+      ...div.deferred.map(d => d.specialist),
+    ];
+    const keys = [
+      ...div.sides.flatMap(s => s.specialists.map(sp => sp.specialistType)),
+      ...div.dialogue.map(t => t.specialistType),
+      ...div.deferred.map(d => d.specialistType),
+    ];
+
+    expect(names.length).toBeGreaterThan(0);
+    expect(div.postDialogue.deltas.length).toBeGreaterThan(0); // a revision happened
+    expect(div.deferred.length).toBeGreaterThan(0);            // mindMender deferred
+    for (const n of names) expect(CANONICAL_NAMES.has(n)).toBe(true);
+    for (const k of keys) expect(CANONICAL_KEYS.has(k)).toBe(true);
   });
 });

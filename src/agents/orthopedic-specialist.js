@@ -1,6 +1,7 @@
 import { BaseAgent } from './base-agent.js';
 import logger from '../utils/logger.js';
 import { makePositionSchema, makeReconsiderSchema } from '../utils/dialogue-schemas.js';
+import { resolvePersona } from '../utils/specialist-identity.js';
 
 export class OrthopedicSpecialist extends BaseAgent {
   constructor(name, subspecialty = 'general orthopedics', accountManager = null, agentId = null) {
@@ -47,8 +48,7 @@ Instructions:
       });
       return {
         decisionPointId: decisionPoint.id,
-        specialist: this.name,
-        specialistType: this.agentType || this.subspecialty,
+        ...resolvePersona(this.agentType || this.subspecialty),
         stance: result.stance,
         defer: result.stance === 'defer',
         confidence: result.confidence,
@@ -59,8 +59,7 @@ Instructions:
       logger.error(`${this.name}: statePosition failed for "${decisionPoint.id}": ${error.message}`);
       return {
         decisionPointId: decisionPoint.id,
-        specialist: this.name,
-        specialistType: this.agentType || this.subspecialty,
+        ...resolvePersona(this.agentType || this.subspecialty),
         stance: 'defer',
         defer: true,
         confidence: 0,
@@ -113,8 +112,7 @@ Engage honestly with their reasoning from your specialty lens. HOLD your positio
       });
       return {
         decisionPointId: decisionPoint.id,
-        specialist: this.name,
-        specialistType: this.agentType || this.subspecialty,
+        ...resolvePersona(this.agentType || this.subspecialty),
         originalStance: ownPosition.stance,
         revisedStance: result.revisedStance,
         changed: result.revisedStance !== ownPosition.stance,
@@ -126,8 +124,7 @@ Engage honestly with their reasoning from your specialty lens. HOLD your positio
       logger.error(`${this.name}: reconsiderPosition failed for "${decisionPoint.id}": ${error.message}`);
       return {
         decisionPointId: decisionPoint.id,
-        specialist: this.name,
-        specialistType: this.agentType || this.subspecialty,
+        ...resolvePersona(this.agentType || this.subspecialty),
         originalStance: ownPosition.stance,
         revisedStance: ownPosition.stance,
         changed: false,

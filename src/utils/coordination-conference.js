@@ -1,4 +1,5 @@
 import logger from './logger.js';
+import { resolvePersona } from './specialist-identity.js';
 
 /**
  * CoordinationConference — real inter-agent dialogue via triage-framed decision points.
@@ -143,8 +144,7 @@ export class CoordinationConference {
         specialists: substantive
           .filter(p => p.stance === stance)
           .map(p => ({
-            specialist: p.specialist,
-            specialistType: p.specialistType,
+            ...resolvePersona(p.specialistType),
             confidence: p.confidence,
             evidenceGrade: p.evidenceGrade,
             reasoning: p.reasoning,
@@ -153,7 +153,7 @@ export class CoordinationConference {
 
       const deferred = dpPositions
         .filter(p => p.stance === 'defer')
-        .map(p => ({ specialist: p.specialist, specialistType: p.specialistType, reasoning: p.reasoning }));
+        .map(p => ({ ...resolvePersona(p.specialistType), reasoning: p.reasoning }));
 
       divergences.push({
         decisionPoint: dp,
@@ -192,7 +192,11 @@ export class CoordinationConference {
           .filter(o => o.stance !== part.stance)
           .map(o => ({ specialist: o.specialist, stance: o.stance, reasoning: o.reasoning }));
         if (opposing.length === 0) return Promise.resolve(null);
-        return agent.reconsiderPosition(caseData, dp, ownPosition, opposing, { mode });
+        // Normalize the turn's identity to the canonical persona, keyed off the routing
+        // key (registration key) so dialogue joins to sides on a consistent specialistType.
+        return agent
+          .reconsiderPosition(caseData, dp, ownPosition, opposing, { mode })
+          .then(turn => (turn ? { ...turn, ...resolvePersona(part.specialistType) } : turn));
       });
 
       const turns = (await Promise.all(tasks)).filter(Boolean);
