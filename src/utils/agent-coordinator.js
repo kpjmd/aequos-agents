@@ -118,12 +118,12 @@ export class AgentCoordinator {
           logger.info(`Conference complete: ${coordinationMetadata.decisionPoints?.length || 0} decision point(s), ${coordinationMetadata.divergences?.length || 0} genuine divergence(s), gate ${coordinationMetadata.gateOpen ? 'OPEN' : 'closed'}`);
         } catch (error) {
           logger.error(`Coordination conference error: ${error.message}`);
-          coordinationMetadata = {
-            interAgentDialogue: [],
-            disagreements: [],
-            emergentFindings: [],
-            error: error.message
-          };
+          // Canonical empty shape so synthesizedRecommendations.coordinationMetadata.divergences
+          // is ALWAYS a present array (the documented frontend/API contract), even on error.
+          coordinationMetadata = this.coordinationConference.emptyMetadata(
+            `conference error: ${error.message}`,
+            { error: error.message }
+          );
         }
       }
 
@@ -820,12 +820,11 @@ ${JSON.stringify(caseData)}
 
       // Task 1.4: Enhanced synthesis structure
       return {
-        // Task 1.3: Coordination metadata
-        coordinationMetadata: coordinationMetadata || {
-          interAgentDialogue: [],
-          disagreements: [],
-          emergentFindings: []
-        },
+        // Task 1.3: Coordination metadata — canonical empty shape when no conference ran (e.g.
+        // <2 specialist responses) so coordinationMetadata.divergences is always a present array.
+        coordinationMetadata: coordinationMetadata || this.coordinationConference.emptyMetadata(
+          'no conference (insufficient specialist responses)'
+        ),
 
         // Enhanced synthesizedRecommendations
         rawSynthesis,
