@@ -119,7 +119,105 @@ conference" artifact the old code never produced).
 *redistributed* rather than all caving to one voice (sycophancy would collapse onto the speaker); the
 split held. Consider a tuning probe (e.g. balance the reconsider prompt, or sample) later.
 
-## Open caveat (carry into the build, not a blocker)
+## Reconsideration probe — revision is GENUINE deliberation, not suggestibility (2026-06-08)
+
+The Step-3 "watch" above is RESOLVED. Ran a sham-rebuttal control (`examples/reconsider-probe.js`,
+throwaway; artifact `artifacts/reconsider-probe-2026-06-08T02-41-42-254Z.json`): reuse
+`reconsiderPosition` unchanged and manipulate ONLY the strength of the opposing argument, holding the
+specialist's frozen initial position, the stance being pushed, and the number of dissenters fixed.
+Two conditions, 4 specialists × N=5 (40 reconsider calls, normal/Sonnet, production temp):
+
+- **C0 genuine-strong** — real evidence-grounded opposing reasoning.
+- **C1 vacuous-sham** — same stance/length/dissenter-count, ZERO clinical substance (restated
+  preference / appeal to authority / vague "evidence supports this").
+
+| Specialist | own stance | C0 genuine | C1 sham | Δ |
+|---|---|---|---|---|
+| Pain Whisperer | rehab-first | 0.40 | 0.00 | +0.40 |
+| Movement Detective | surgery | 0.20 | 0.00 | +0.20 |
+| Strength Sage | rehab-first | 0.40 | 0.00 | +0.40 |
+| Mind Mender | surgery | 1.00 | 0.00 | +1.00 |
+| **Aggregate** | | **0.50** | **0.00** | **+0.50** |
+
+**Δ = +0.50; sham revision rate = 0/20.** Revision TRACKS argument strength (pre-registered rule:
+Δ ≥ 0.40 → genuine deliberation). Genuine revisions name the specific fact + the colleague that moved
+them ("repeated giving-way episodes… a dual threat"; "Strength Sage's rehab-as-diagnostic-test framing
+genuinely shifted my judgment"). Under sham they not only HELD but *detected the emptiness*: "Bare
+assertions of consensus do not constitute grounds for revising a position"; "generic and
+assertion-based rather than mechanistically grounded." **No reconsider-prompt tuning warranted.**
+
+Sub-findings (neither a blocker): (1) Mind Mender is the most *persuadable* (1.00 genuine) yet fully
+discriminating (0.00 sham) — low threshold for GOOD arguments, not sycophancy; it's the "movable" voice
+vs. Movement the "anchor" (0.20) if differential synthesis weighting is ever wanted. (2) The live
+`statePosition` harvest re-converged to all-rehab (so C0 used authored fallback opposition; contrast
+still valid) — a second data point for the conservatism caveat below.
+
+## Haiku-for-positions cost lever — KEEP positions on Sonnet (2026-06-08)
+
+Tested whether the position pass (`statePosition`/`reconsiderPosition`, today Sonnet/`mode:'normal'`)
+could move to Haiku (~5× cheaper) without losing the divergence signal. Head-to-head harness
+(`examples/haiku-positions-probe.js`, throwaway; artifact
+`artifacts/haiku-positions-probe-2026-06-08T02-59-30-375Z.json`): same ACL case + neutral DP, 4
+specialists × {Sonnet, Haiku} × N=8 = 64 `statePosition` calls.
+
+**Verdict: do NOT flip — keep Sonnet.** The naive panel-divergence count is *misleading* (Haiku 8/8 vs
+Sonnet 4/8 divergent panels), because Haiku's extra divergence is **instability/noise, not preserved
+signal**:
+- **Modal stance FLIPS across models** — Movement Detective is modal *rehab* on Sonnet (63%) but modal
+  *surgery* on Haiku (88%). The detector's value is "this decision is contested AND here's who holds
+  what, with reasoning"; Haiku changes *who's on each side*, so it does not preserve THE signal even
+  when "a divergence" nominally fires.
+- **Structured-output reliability failure** — 1/32 Haiku calls emitted only `reasoning`, dropping
+  `stance`/`confidence`/`evidenceGrade` (caught → silent `defer`). Likely Haiku truncating multi-field
+  output under `FAST_MAX_TOKENS=1000`. For a *gating* mechanism a silent dropped-position is a real
+  failure mode.
+- **Degrades where Sonnet is certain** — Pain & Strength are 100%-stable, 0-defer on Sonnet; on Haiku
+  they fall to 63%/50% with spurious defers (Pain 3/8, Strength 1/8).
+
+Reasoning *prose* quality on Haiku was fine (still cites pain 3/10, anxiety 6/10, giving-way) — the
+problem is stance stability + structured-output reliability, which is exactly what the detector keys on.
+
+Caveats on the test: the neutral DP gave a weak Sonnet baseline (only 50% divergent; Sonnet itself
+leans rehab — Pain & Strength 100% rehab), so this wasn't the clean "Haiku holds a split Sonnet
+reliably produces" comparison. But the modal-flip + parse-failure findings are decisive enough that a
+stronger baseline wouldn't change the call. **Economics make it easy:** the conference adds Sonnet
+calls only on *contested* consults (gate fires ~1/6), so Haiku saves ~$0.20–0.30 on a minority of
+consults — marginal upside against degrading the one feature whose purpose is signal fidelity.
+
+(Robustness note, separate from the model question: a Haiku-only `FAST_MAX_TOKENS` bump and/or a
+structured-output retry would harden any future fast-mode structured call — not needed while positions
+stay on Sonnet.)
+
+## Conservatism-bias probe — convergence is GENUINE consensus, NOT a blind spot (2026-06-08)
+
+Tested whether the panel's conservative convergence is evidence-based consensus or a shared
+conservative prior that fires regardless of evidence. Evidence-sensitivity factorial
+(`examples/conservatism-bias-probe.js`, throwaway; artifact
+`artifacts/conservatism-bias-probe-2026-06-08T03-15-01-586Z.json`): inject a clinical EVIDENCE BRIEF
+into the position call (reusing `makePositionSchema` via `processStructured` — no production code
+touched), crossing direction × strength, 4 specialists × 5 conditions × N=4 = 80 Sonnet calls.
+
+Pooled P(surgery): **baseline 0.38 → strong-pro-surgery 1.00 (Δ +0.63) → sham-pro-surgery 0.00**
+(rehab_strong 0.00, rehab_sham 0.13).
+
+**Verdict: EVIDENCE-SENSITIVE & CALIBRATED → genuine consensus, not a blind spot.**
+- Strong, real pro-surgery evidence (secondary-damage / coper-crossover data) moved **100% of
+  specialists, every sample** to surgery — including Strength Sage, the most rehab-anchored (0.00
+  surgery at baseline → 1.00 under real evidence). The conservative lean is fully evidence-corrigible.
+- The matched **sham** pro-surgery brief (same length, pure "surgeons prefer it / gold standard"
+  authority, no data) moved them to surgery **0%** — they re-articulated the patient-specific rehab
+  rationale and ignored the empty authority. Not credulous.
+- **No motivated-updating asymmetry:** prior-inconsistent strong evidence was accepted at essentially
+  the same confidence as prior-consistent (meanConf surg_strong 0.82 vs rehab_strong 0.84).
+
+Corollaries: (1) the earlier "all-rehab convergence" was partly a **DP-framing artifact** — the truly
+neutral DP gives a more split baseline (0.38 surgery), whereas probe #1's "settled knee" phrasing
+pre-loaded rehab. (2) Actionable: because positions are demonstrably evidence-corrigible, **feeding the
+Research Agent's retrieved literature into the position pass would sharpen calibration** — the panel's
+baseline conservatism on equipoise partly reflects deciding without the trial evidence in hand, not an
+immovable prior. A concrete future enhancement, not a blocker.
+
+## Open caveat — RESOLVED 2026-06-08 (kept for the build record)
 
 All three *converged* equipoise cases converged on the conservative/cautious option. This may be
 correct, or may reflect a **shared conservatism bias** — all five agents are the same base model.
@@ -127,3 +225,14 @@ The ACL case proves they are not fully homogeneous, so this does not block Step 
 the plan's open question: whether "agreement" sometimes reflects shared blind spots rather than
 true consensus. Worth a later probe (e.g., does feeding an agent genuinely different evidence
 move its stance?). A larger case set would also tighten the divergence-rate estimate.
+
+**Reinforced 2026-06-08 (now THREE converging data points):** (1) the reconsider-probe's
+`statePosition` harvest re-converged to all-rehab on the ACL case (4/4 rehab-first); (2) the
+Haiku-probe's Sonnet baseline leaned overwhelmingly rehab (Pain & Strength 100% rehab, 8/8; panel only
+50% divergent on a neutral DP). Both are independent instances of the same-base-model panel landing
+conservative when left to itself on a genuine-equipoise case. This *appeared* to strengthen the
+shared-conservatism-bias hypothesis — but the dedicated probe (above, "Conservatism-bias probe")
+**refuted it**: the lean is fully evidence-corrigible (strong contrary evidence → 100% switch,
+calibrated vs sham), so the convergence is genuine consensus given the available information, not a
+shared blind spot. The remaining true variable is **DP framing** (neutral vs pre-loaded), not a
+fixed prior.
