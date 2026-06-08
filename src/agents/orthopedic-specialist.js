@@ -1,5 +1,6 @@
 import { BaseAgent } from './base-agent.js';
 import logger from '../utils/logger.js';
+import { makePositionSchema, makeReconsiderSchema } from '../utils/dialogue-schemas.js';
 
 export class OrthopedicSpecialist extends BaseAgent {
   constructor(name, subspecialty = 'general orthopedics', accountManager = null, agentId = null) {
@@ -8,6 +9,134 @@ export class OrthopedicSpecialist extends BaseAgent {
     this.medicalKnowledge = this.initializeMedicalKnowledge();
     this.recoveryMetrics = new Map();
     this.digitalRxHistory = [];
+  }
+
+  /**
+   * State a structured position on one triage-framed decision point, from this specialist's lens.
+   * Deferral ("defer") is a first-class, valued outcome when the decision is outside this
+   * specialist's expertise or the evidence is insufficient — never fabricate a stance.
+   * @param {Object} caseData
+   * @param {{id:string,question:string,options:string[],rationale?:string}} decisionPoint
+   * @param {Object} context - { mode, timeout }
+   * @returns {Promise<{decisionPointId,specialist,specialistType,stance,confidence,reasoning,evidenceGrade}>}
+   */
+  async statePosition(caseData, decisionPoint, context = {}) {
+    const schema = makePositionSchema(decisionPoint.options);
+    const optionList = decisionPoint.options.map((o, i) => `  ${i + 1}. ${o}`).join('\n');
+
+    const prompt = `As ${this.name} (${this.subspecialty}), state YOUR position on the following clinical decision for this patient, reasoning ONLY from your area of expertise.
+
+DECISION: ${decisionPoint.question}
+OPTIONS:
+${optionList}
+
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
+Instructions:
+- Choose exactly one option you support, OR choose "defer".
+- DEFER if this decision is outside your specialty lens, or if the evidence available to you is insufficient to take a responsible position. Deferring is appropriate and expected — do not invent a stance to seem decisive.
+- Ground your reasoning in THIS patient's specifics, from your specialty's perspective.`;
+
+    try {
+      const result = await this.processStructured(prompt, schema, {
+        mode: context.mode || 'normal',
+        timeout: context.timeout || 75000,
+        schemaName: 'specialist_position',
+      });
+      return {
+        decisionPointId: decisionPoint.id,
+        specialist: this.name,
+        specialistType: this.agentType || this.subspecialty,
+        stance: result.stance,
+        defer: result.stance === 'defer',
+        confidence: result.confidence,
+        reasoning: result.reasoning,
+        evidenceGrade: result.evidenceGrade,
+      };
+    } catch (error) {
+      logger.error(`${this.name}: statePosition failed for "${decisionPoint.id}": ${error.message}`);
+      return {
+        decisionPointId: decisionPoint.id,
+        specialist: this.name,
+        specialistType: this.agentType || this.subspecialty,
+        stance: 'defer',
+        defer: true,
+        confidence: 0,
+        reasoning: `Position unavailable (${error.message})`,
+        evidenceGrade: 'none',
+        error: true,
+      };
+    }
+  }
+
+  /**
+   * Dialogue round: reconsider this specialist's position in light of the opposing positions,
+   * then HOLD (with rebuttal) or REVISE (with reason). Captures the pre/post position delta.
+   * @param {Object} caseData
+   * @param {{id,question,options}} decisionPoint
+   * @param {{stance,reasoning}} ownPosition - this specialist's initial position
+   * @param {Array<{specialist,stance,reasoning}>} opposingPositions
+   * @param {Object} context - { mode, timeout }
+   * @returns {Promise<Object>} dialogue entry with originalStance/revisedStance/changed/changeReason
+   */
+  async reconsiderPosition(caseData, decisionPoint, ownPosition, opposingPositions, context = {}) {
+    const schema = makeReconsiderSchema(decisionPoint.options);
+    const optionList = decisionPoint.options.map((o, i) => `  ${i + 1}. ${o}`).join('\n');
+    const opposingText = opposingPositions
+      .map(p => `- ${p.specialist} argues for "${p.stance}": ${p.reasoning}`)
+      .join('\n');
+
+    const prompt = `You are ${this.name} (${this.subspecialty}) in a multi-specialist panel discussing this patient. The panel DISAGREES on a decision. Reconsider YOUR position in light of your colleagues' reasoning.
+
+DECISION: ${decisionPoint.question}
+OPTIONS:
+${optionList}
+
+YOUR INITIAL POSITION: "${ownPosition.stance}" — ${ownPosition.reasoning}
+
+COLLEAGUES WHO DISAGREE:
+${opposingText}
+
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
+Engage honestly with their reasoning from your specialty lens. HOLD your position (and rebut) if you still believe it is right for this patient; REVISE it only if their reasoning genuinely changes your clinical judgment. A well-reasoned persistent disagreement is valuable — do not revise merely to reach consensus, and do not hold out of stubbornness.`;
+
+    try {
+      const result = await this.processStructured(prompt, schema, {
+        mode: context.mode || 'normal',
+        timeout: context.timeout || 75000,
+        schemaName: 'reconsidered_position',
+      });
+      return {
+        decisionPointId: decisionPoint.id,
+        specialist: this.name,
+        specialistType: this.agentType || this.subspecialty,
+        originalStance: ownPosition.stance,
+        revisedStance: result.revisedStance,
+        changed: result.revisedStance !== ownPosition.stance,
+        reasoning: result.reconsideration,
+        changeReason: result.changeReason,
+        confidence: result.confidence,
+      };
+    } catch (error) {
+      logger.error(`${this.name}: reconsiderPosition failed for "${decisionPoint.id}": ${error.message}`);
+      return {
+        decisionPointId: decisionPoint.id,
+        specialist: this.name,
+        specialistType: this.agentType || this.subspecialty,
+        originalStance: ownPosition.stance,
+        revisedStance: ownPosition.stance,
+        changed: false,
+        reasoning: `Reconsideration unavailable (${error.message})`,
+        changeReason: 'held (reconsideration error)',
+        confidence: ownPosition.confidence ?? 0,
+        error: true,
+      };
+    }
   }
 
   initializeMedicalKnowledge() {

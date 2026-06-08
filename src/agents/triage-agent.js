@@ -1,5 +1,6 @@
 import { OrthopedicSpecialist } from './orthopedic-specialist.js';
 import logger from '../utils/logger.js';
+import { DecisionPointsSchema } from '../utils/dialogue-schemas.js';
 
 export class TriageAgent extends OrthopedicSpecialist {
   constructor(name = 'OrthoTriage Master', accountManager = null) {
@@ -9,6 +10,43 @@ export class TriageAgent extends OrthopedicSpecialist {
     this.specialistNetwork = new Map();
     this.urgencyLevels = ['emergency', 'urgent', 'semi-urgent', 'routine'];
     this.caseHistory = [];
+  }
+
+  /**
+   * Identify the case's central decision points where specialists could genuinely disagree.
+   * Returns an EMPTY list for clear-cut cases — that empty list is the gate that skips the
+   * downstream position-elicitation and dialogue passes (no cost on non-contested cases).
+   * @param {Object} caseData
+   * @param {Object} context - { mode, timeout }
+   * @returns {Promise<Array<{id,question,options,rationale}>>}
+   */
+  async identifyDecisionPoints(caseData, context = {}) {
+    const prompt = `Identify the clinical DECISION POINTS for the case below where well-informed specialists could REASONABLY DISAGREE — i.e. genuine clinical equipoise where guidelines/evidence do not give one clearly correct answer for this patient.
+
+<patient_input>
+${JSON.stringify(caseData)}
+</patient_input>
+
+Rules:
+- Only include a decision point if there is REAL equipoise for THIS specific patient. Surgery-vs-conservative, timing-of-intervention, return-to-activity timing, and medication choices with genuine trade-offs are common examples.
+- Do NOT manufacture disagreement. If the evidence-based answer is clear and not genuinely contested (e.g. a routine acute sprain with no red flags, or a question where guidelines give one clear answer), return an EMPTY list. A decision is NOT equipoise just because more than one option is nameable.
+- Each decision point must have 2-4 mutually exclusive options.
+- Frame the options NEUTRALLY and SYMMETRICALLY. State each as a fair, standalone choice a reasonable specialist might genuinely advocate. Do NOT pre-load one option with reassuring hedges (e.g. avoid "rehabilitation, with surgery reserved only for failure" — instead "structured rehabilitation / delayed reconstruction"). Asymmetric framing biases every specialist toward the option that sounds safest and hides real disagreement.
+- Return at most 3, ordered by how central they are to this patient's care.`;
+
+    try {
+      const result = await this.processStructured(prompt, DecisionPointsSchema, {
+        mode: context.mode || 'fast',
+        timeout: context.timeout || 35000,
+        schemaName: 'decision_points',
+      });
+      const points = result?.decisionPoints || [];
+      logger.info(`${this.name}: identified ${points.length} contested decision point(s)`);
+      return points;
+    } catch (error) {
+      logger.error(`${this.name}: decision-point identification failed: ${error.message}`);
+      return [];
+    }
   }
 
   getSystemPrompt() {

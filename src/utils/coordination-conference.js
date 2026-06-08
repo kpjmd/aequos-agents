@@ -1,698 +1,255 @@
 import logger from './logger.js';
 
 /**
- * CoordinationConference - Manages inter-agent dialogue and collaboration
- * Implements Task 1.3: Agent Coordination Conference
+ * CoordinationConference — real inter-agent dialogue via triage-framed decision points.
+ *
+ * Flow (see plan / inter-agent-dialogue-decision memory):
+ *   1. Triage identifies genuinely CONTESTED decision points (clinical equipoise).
+ *      Clear-cut cases yield an EMPTY list -> gate closed, no further work, no cost.
+ *   2. Each specialist states a structured POSITION on each decision point (stance +
+ *      reasoning + confidence + evidenceGrade), or defers.
+ *   3. Divergence is DETECTED STRUCTURALLY by comparing positions — never self-reported.
+ *      A decision point is divergent when >=2 distinct substantive stances clear the
+ *      confidence floor. The gate (gateOpen) is true only when real divergence exists;
+ *      it controls whether the Step-3 dialogue round runs.
+ *
+ * Anti-fabrication guarantees:
+ *   - We never ask an agent "do you disagree?"; disagreement is computed from positions.
+ *   - Deferral and below-floor positions never count as divergence.
  */
+
+const CONFIDENCE_FLOOR = 0.6;        // a stance must clear this to count toward divergence
+// Evaluate ALL of triage's contested decision points (schema caps triage at 3), not just the
+// top one. Diagnostic finding: positions are stable & genuinely lens-divergent on a well-framed
+// equipoise decision, but triage's *ranking* of which decision is "most central" varies run-to-run.
+// Capping at 1 gambled on a single decision and missed real splits on the others.
+const MAX_DECISION_POINTS = 3;       // cost cap: up to 3 contested decisions × specialists, contested cases only
+const POSITION_SPECIALISTS = ['painWhisperer', 'movementDetective', 'strengthSage', 'mindMender'];
+
 export class CoordinationConference {
   constructor() {
     this.dialogueHistory = [];
   }
 
   /**
-   * Conduct a full coordination conference round
-   * @param {Map} initialResponses - Initial agent responses with questionsForAgents
-   * @param {Map} specialists - Map of available specialist agents
-   * @param {Object} caseData - Original case data for context
-   * @returns {Object} Coordination metadata with dialogue, disagreements, emergent findings
+   * @param {Map} initialResponses - initial specialist responses (kept for context/compat)
+   * @param {Map} specialists - registered specialist agents (keyed by type)
+   * @param {Object} caseData
+   * @param {Object} options - { mode }
+   * @returns {Object} coordination metadata (see emptyMetadata for shape)
    */
-  async conductConferenceRound(initialResponses, specialists, caseData) {
+  async conductConferenceRound(initialResponses, specialists, caseData, options = {}) {
+    const startTime = Date.now();
+    const mode = options.mode || 'normal';
+
+    // Fast-mode consults stay fast: skip the position/divergence machinery.
+    if (mode === 'fast') {
+      return this.emptyMetadata('fast mode — conference skipped');
+    }
+
     try {
-      logger.info('Running cross-specialist synthesis round');
-      const startTime = Date.now();
+      const triage = specialists.get('triage');
+      if (!triage || typeof triage.identifyDecisionPoints !== 'function') {
+        logger.warn('Conference: triage agent unavailable for decision-point framing');
+        return this.emptyMetadata('triage agent unavailable');
+      }
 
-      // Step 1: Collect all inter-agent questions
-      const interAgentQuestions = this.collectInterAgentQuestions(initialResponses);
-      logger.info(`Extracted ${interAgentQuestions.length} cross-specialist synthesis prompts`);
+      // 1. Triage frames contested decision points (gate 1: empty -> done)
+      const allPoints = await triage.identifyDecisionPoints(caseData, { mode: 'fast' });
+      const decisionPoints = (allPoints || []).slice(0, MAX_DECISION_POINTS);
+      if (decisionPoints.length === 0) {
+        logger.info('Conference: no contested decision points — gate closed');
+        return this.emptyMetadata('no contested decision points', { decisionPoints: [] });
+      }
 
-      // Step 2: Route questions to target agents and collect responses
-      const dialogue = await this.routeQuestionsToAgents(
-        interAgentQuestions,
-        specialists,
-        initialResponses,
-        caseData
+      // 2. Elicit each specialist's structured position on each decision point (parallel)
+      const positionAgents = POSITION_SPECIALISTS
+        .map(type => [type, specialists.get(type)])
+        .filter(([, agent]) => agent && typeof agent.statePosition === 'function');
+
+      const positionTasks = [];
+      for (const dp of decisionPoints) {
+        for (const [type, agent] of positionAgents) {
+          // Force specialistType to the REGISTRATION key so the dialogue round can route
+          // reconsideration back to the same agent via specialists.get(type).
+          positionTasks.push(
+            agent.statePosition(caseData, dp, { mode }).then(p => ({ ...p, specialistType: type }))
+          );
+        }
+      }
+      const positions = await Promise.all(positionTasks);
+
+      // 3. Detect divergence structurally (gate 2: no divergence -> gate closed)
+      const divergences = this.detectDivergence(decisionPoints, positions);
+      const gateOpen = divergences.length > 0;
+
+      // 4. Dialogue round — ONLY when the gate is open. Specialists on each side see the
+      //    opposing positions and hold (rebut) or revise (reason). Captures position deltas.
+      let interAgentDialogue = [];
+      if (gateOpen) {
+        interAgentDialogue = await this.conductDialogueRound(divergences, caseData, specialists, mode);
+      }
+
+      logger.info(
+        `Conference: ${decisionPoints.length} decision point(s), ${positions.length} positions, ` +
+        `${divergences.length} genuine divergence(s) [gate ${gateOpen ? 'OPEN' : 'closed'}]` +
+        (gateOpen ? `, ${interAgentDialogue.length} dialogue turns` : '')
       );
-      logger.info(`Completed ${dialogue.length} specialist follow-up responses`);
 
-      // Step 3: Detect disagreements between agents
-      const disagreements = this.detectDisagreements(initialResponses, dialogue);
-      logger.info(`Found ${disagreements.length} recommendation divergences`);
-
-      // Step 4: Track emergent findings from coordination
-      const emergentFindings = this.trackEmergentFindings(dialogue, initialResponses, disagreements);
-      logger.info(`Flagged ${emergentFindings.length} high-priority cross-specialist findings`);
-
-      const coordinationMetadata = {
-        interAgentDialogue: dialogue,
-        disagreements: disagreements,
-        emergentFindings: emergentFindings,
+      const metadata = {
+        decisionPoints,
+        positions,
+        divergences,
+        gateOpen,
+        interAgentDialogue,
+        // Compat keys for existing downstream consumers.
+        disagreements: divergences,
+        emergentFindings: [],
         coordinationDuration: Date.now() - startTime,
-        participatingAgents: Array.from(initialResponses.keys()),
-        timestamp: new Date().toISOString()
+        participatingAgents: positionAgents.map(([type]) => type),
+        timestamp: new Date().toISOString(),
       };
 
-      // Store in history
-      this.dialogueHistory.push(coordinationMetadata);
-
-      return coordinationMetadata;
+      this.dialogueHistory.push(metadata);
+      return metadata;
     } catch (error) {
       logger.error(`Error in coordination conference: ${error.message}`);
-      return {
-        interAgentDialogue: [],
-        disagreements: [],
-        emergentFindings: [],
-        error: error.message,
-        timestamp: new Date().toISOString()
-      };
+      return this.emptyMetadata(error.message);
     }
   }
 
   /**
-   * Collect all inter-agent questions from initial responses
-   * @param {Map} responses - Agent responses
-   * @returns {Array} Array of questions with routing info
+   * Compare positions per decision point and report genuine divergences.
+   * Divergent = >=2 distinct stances among substantive positions (not deferred, >= floor).
+   * @param {Array} decisionPoints
+   * @param {Array} positions
+   * @returns {Array} divergences, each: { decisionPoint, sides[], deferred[], belowFloor }
    */
-  collectInterAgentQuestions(responses) {
-    const questions = [];
+  detectDivergence(decisionPoints, positions) {
+    const divergences = [];
 
-    for (const [agentType, response] of responses.entries()) {
-      if (response.status !== 'success' || !response.response) {
-        continue;
-      }
+    for (const dp of decisionPoints) {
+      const dpPositions = positions.filter(p => p.decisionPointId === dp.id);
 
-      const agentResponse = response.response;
+      const substantive = dpPositions.filter(
+        p => p.stance && p.stance !== 'defer' && (p.confidence ?? 0) >= CONFIDENCE_FLOOR
+      );
+      const distinctStances = [...new Set(substantive.map(p => p.stance))];
 
-      // Extract questionsForAgents array
-      if (agentResponse.questionsForAgents && Array.isArray(agentResponse.questionsForAgents)) {
-        for (const questionObj of agentResponse.questionsForAgents) {
-          questions.push({
-            fromAgent: agentType,
-            toAgent: questionObj.targetAgent,
-            question: questionObj.question,
-            priority: questionObj.priority || 'medium',
-            context: {
-              fromSpecialist: agentResponse.specialist,
-              confidence: agentResponse.confidence,
-              clinicalImportance: agentResponse.assessment?.clinicalImportance
-            }
-          });
-        }
-      }
+      if (distinctStances.length < 2) continue; // converged or insufficient substantive positions
+
+      const sides = distinctStances.map(stance => ({
+        stance,
+        specialists: substantive
+          .filter(p => p.stance === stance)
+          .map(p => ({
+            specialist: p.specialist,
+            specialistType: p.specialistType,
+            confidence: p.confidence,
+            evidenceGrade: p.evidenceGrade,
+            reasoning: p.reasoning,
+          })),
+      }));
+
+      const deferred = dpPositions
+        .filter(p => p.stance === 'defer')
+        .map(p => ({ specialist: p.specialist, specialistType: p.specialistType, reasoning: p.reasoning }));
+
+      divergences.push({
+        decisionPoint: dp,
+        sides,
+        deferred,
+        belowFloor: dpPositions.filter(
+          p => p.stance !== 'defer' && (p.confidence ?? 0) < CONFIDENCE_FLOOR
+        ).length,
+      });
     }
 
-    // Sort by priority (high -> medium -> low)
-    const priorityOrder = { high: 0, medium: 1, low: 2 };
-    questions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-
-    return questions;
+    return divergences;
   }
 
   /**
-   * Route questions to target agents and collect responses
-   * @param {Array} questions - Questions to route
-   * @param {Map} specialists - Available specialists
-   * @param {Map} initialResponses - Initial agent responses for context
-   * @param {Object} caseData - Case data
-   * @returns {Array} Dialogue exchanges
+   * Dialogue round: for each divergence, every participating specialist reconsiders its
+   * position against the OPPOSING positions and holds or revises. Mutates each divergence
+   * with `dialogue` (the turns) and `postDialogue` (resolution summary + deltas).
+   * @returns {Array} flattened dialogue turns across all divergences
    */
-  async routeQuestionsToAgents(questions, specialists, initialResponses, caseData) {
-    const dialogue = [];
-    const questionsRouted = new Map(); // Track questions by target agent
+  async conductDialogueRound(divergences, caseData, specialists, mode) {
+    const allDialogue = [];
 
-    // Group questions by target agent
-    for (const question of questions) {
-      const targetKey = this.normalizeAgentType(question.toAgent);
-      if (!questionsRouted.has(targetKey)) {
-        questionsRouted.set(targetKey, []);
-      }
-      questionsRouted.get(targetKey).push(question);
-    }
-
-    // Route to each target agent IN PARALLEL (Option 1 optimization)
-    const routingPromises = Array.from(questionsRouted.entries()).map(async ([targetAgentType, agentQuestions]) => {
-      const specialist = specialists.get(targetAgentType);
-
-      if (!specialist) {
-        logger.warn(`Target specialist ${targetAgentType} not available for questions`);
-
-        // Record failed routing
-        return agentQuestions.map(q => ({
-          fromAgent: q.fromAgent,
-          toAgent: targetAgentType,
-          question: q.question,
-          response: 'Specialist not available',
-          impactOnDiagnosis: false,
-          status: 'failed'
-        }));
-      }
-
-      // Get the initial response from this agent for context
-      const initialResponse = initialResponses.get(targetAgentType);
-
-      // Create coordination prompt with all questions
-      const coordinationPrompt = this.buildCoordinationPrompt(
-        specialist,
-        agentQuestions,
-        initialResponse,
-        caseData
+    for (const div of divergences) {
+      const dp = div.decisionPoint;
+      // Participants = every specialist that took a substantive side on this decision.
+      const participants = div.sides.flatMap(side =>
+        side.specialists.map(sp => ({ ...sp, stance: side.stance }))
       );
 
-      try {
-        // Get specialist's response to the questions
-        const coordinationResponse = await specialist.processMessage(
-          coordinationPrompt,
-          { type: 'coordination_conference', consultationId: 'conference' }
-        );
+      const tasks = participants.map(part => {
+        const agent = specialists.get(part.specialistType);
+        if (!agent || typeof agent.reconsiderPosition !== 'function') return Promise.resolve(null);
+        const ownPosition = { stance: part.stance, reasoning: part.reasoning, confidence: part.confidence };
+        const opposing = participants
+          .filter(o => o.stance !== part.stance)
+          .map(o => ({ specialist: o.specialist, stance: o.stance, reasoning: o.reasoning }));
+        if (opposing.length === 0) return Promise.resolve(null);
+        return agent.reconsiderPosition(caseData, dp, ownPosition, opposing, { mode });
+      });
 
-        // Parse response and create dialogue entries
-        const parsedResponses = this.parseCoordinationResponse(
-          coordinationResponse,
-          agentQuestions
-        );
+      const turns = (await Promise.all(tasks)).filter(Boolean);
+      div.dialogue = turns;
+      div.postDialogue = this.summarizePostDialogue(turns);
+      allDialogue.push(...turns);
+    }
 
-        return agentQuestions.map((q, i) => {
-          const answer = parsedResponses[i] || coordinationResponse;
-          return {
-            fromAgent: q.fromAgent,
-            toAgent: targetAgentType,
-            question: q.question,
-            response: answer,
-            impactOnDiagnosis: this.assessDiagnosticImpact(answer, q.priority),
-            refinedInsight: this.extractRefinedInsight(answer),
-            priority: q.priority,
-            timestamp: new Date().toISOString()
-          };
-        });
-
-      } catch (error) {
-        logger.error(`Error routing to ${targetAgentType}: ${error.message}`);
-
-        return agentQuestions.map(q => ({
-          fromAgent: q.fromAgent,
-          toAgent: targetAgentType,
-          question: q.question,
-          response: `Error: ${error.message}`,
-          impactOnDiagnosis: false,
-          status: 'error'
-        }));
-      }
-    });
-
-    // Execute all routing in parallel and flatten results
-    const dialogueResults = await Promise.all(routingPromises);
-    dialogue.push(...dialogueResults.flat());
-
-    return dialogue;
+    return allDialogue;
   }
 
   /**
-   * Build coordination prompt for specialist
-   * @param {Object} specialist - Target specialist
-   * @param {Array} questions - Questions for this specialist
-   * @param {Object} initialResponse - Initial response from this specialist
-   * @param {Object} caseData - Case data
-   * @returns {String} Coordination prompt
+   * Summarize a decision point's dialogue: did the split resolve or persist, and who moved.
+   * A persistent split AFTER each side has seen the other is the strongest disagreement signal.
    */
-  buildCoordinationPrompt(specialist, questions, initialResponse, caseData) {
-    const questionList = questions.map((q, i) =>
-      `${i + 1}. From ${q.fromAgent} (Priority: ${q.priority}): ${q.question}`
-    ).join('\n');
-
-    return `INTER-AGENT COORDINATION CONFERENCE
-
-Case Data: ${JSON.stringify(caseData)}
-
-Your Initial Assessment: ${initialResponse ? JSON.stringify(initialResponse.response?.assessment) : 'Not provided'}
-
-QUESTIONS FROM FELLOW SPECIALISTS:
-${questionList}
-
-Please provide focused, evidence-based responses to each question from your area of expertise. For each question:
-
-1. **Direct Answer**: Address the specific question asked
-2. **Clinical Relevance**: Explain how this impacts the patient's care
-3. **Recommendations**: Any specific actions or considerations based on this insight
-4. **Confidence Level**: Your confidence in this assessment (0-1)
-
-Format your response clearly for each numbered question.
-
-IMPORTANT: Be specific and actionable. Focus on insights that will improve the coordinated treatment plan.`;
-  }
-
-  /**
-   * Parse coordination response into individual answers
-   * @param {String} response - Full response text
-   * @param {Array} questions - Questions that were asked
-   * @returns {Array} Individual parsed answers
-   */
-  parseCoordinationResponse(response, questions) {
-    const answers = [];
-
-    // Try to split by numbered responses
-    const numberPattern = /(\d+)\.\s*(.*?)(?=\d+\.\s*|$)/gs;
-    const matches = [...response.matchAll(numberPattern)];
-
-    if (matches.length > 0) {
-      for (const match of matches) {
-        answers.push(match[2].trim());
-      }
-    } else {
-      // If no numbered format, return whole response for each question
-      for (let i = 0; i < questions.length; i++) {
-        answers.push(response);
-      }
-    }
-
-    return answers;
-  }
-
-  /**
-   * Assess if response has diagnostic impact
-   * @param {String} response - Response text
-   * @param {String} priority - Question priority
-   * @returns {Boolean} Whether it impacts diagnosis
-   */
-  assessDiagnosticImpact(response, priority) {
-    const impactKeywords = [
-      'diagnosis', 'critical', 'significant', 'important', 'concern',
-      'contraindication', 'warning', 'risk', 'requires', 'must'
-    ];
-
-    const responseLower = response.toLowerCase();
-    const hasImpactKeyword = impactKeywords.some(keyword =>
-      responseLower.includes(keyword)
-    );
-
-    return priority === 'high' || hasImpactKeyword;
-  }
-
-  /**
-   * Extract refined insight from response
-   * @param {String} response - Response text
-   * @returns {String} Key insight
-   */
-  extractRefinedInsight(response) {
-    // Extract first sentence or first 150 characters as key insight
-    const sentences = response.split(/[.!?]\s+/);
-    const firstSentence = sentences[0];
-
-    if (firstSentence.length > 150) {
-      return firstSentence.substring(0, 147) + '...';
-    }
-
-    return firstSentence;
-  }
-
-  /**
-   * Detect disagreements between agents
-   * @param {Map} initialResponses - Initial agent responses
-   * @param {Array} dialogue - Inter-agent dialogue
-   * @returns {Array} Detected disagreements
-   */
-  detectDisagreements(initialResponses, dialogue) {
-    const disagreements = [];
-
-    // Check for explicit disagreements in agreementWithTriage field
-    for (const [agentType, response] of initialResponses.entries()) {
-      if (response.status !== 'success' || !response.response) {
-        continue;
-      }
-
-      const agentResponse = response.response;
-
-      if (agentResponse.agreementWithTriage === 'disagree' ||
-          agentResponse.agreementWithTriage === 'partial') {
-
-        disagreements.push({
-          agents: ['triage', agentType],
-          topic: 'Initial assessment',
-          disagreementType: agentResponse.agreementWithTriage,
-          reason: agentResponse.disagreementReason || 'Not specified',
-          resolution: this.proposeResolution(agentResponse, agentType),
-          confidence: this.calculateDisagreementConfidence(agentResponse),
-          severity: agentResponse.agreementWithTriage === 'disagree' ? 'high' : 'medium'
-        });
-      }
-    }
-
-    // Check for conflicting recommendations
-    const recommendationConflicts = this.detectRecommendationConflicts(initialResponses);
-    disagreements.push(...recommendationConflicts);
-
-    // Check for conflicting clinical importance assessments
-    const importanceConflicts = this.detectImportanceConflicts(initialResponses);
-    disagreements.push(...importanceConflicts);
-
-    return disagreements;
-  }
-
-  /**
-   * Detect conflicts in recommendations across agents
-   * @param {Map} responses - Agent responses
-   * @returns {Array} Recommendation conflicts
-   */
-  detectRecommendationConflicts(responses) {
-    const conflicts = [];
-    const recommendations = new Map();
-
-    // Collect all recommendations
-    for (const [agentType, response] of responses.entries()) {
-      if (response.status === 'success' && response.response?.recommendations) {
-        for (const rec of response.response.recommendations) {
-          const key = this.normalizeIntervention(rec.intervention);
-
-          if (!recommendations.has(key)) {
-            recommendations.set(key, []);
-          }
-
-          recommendations.get(key).push({
-            agent: agentType,
-            recommendation: rec,
-            specialist: response.response.specialist
-          });
-        }
-      }
-    }
-
-    // Check for conflicts in same intervention
-    for (const [intervention, agents] of recommendations.entries()) {
-      if (agents.length > 1) {
-        // Check for priority conflicts
-        const priorities = agents.map(a => a.recommendation.priority);
-        const maxPriority = Math.max(...priorities);
-        const minPriority = Math.min(...priorities);
-
-        if (maxPriority - minPriority >= 3) {
-          conflicts.push({
-            agents: agents.map(a => a.agent),
-            topic: intervention,
-            disagreementType: 'priority_conflict',
-            reason: `Priority mismatch: ${minPriority} to ${maxPriority}`,
-            resolution: `Recommended priority: ${Math.round((maxPriority + minPriority) / 2)}`,
-            confidence: 0.7,
-            severity: 'medium'
-          });
-        }
-
-        // Check for timeline conflicts
-        const timelines = agents.map(a => a.recommendation.timeline).filter(t => t);
-        if (timelines.length > 1 && new Set(timelines).size > 1) {
-          conflicts.push({
-            agents: agents.map(a => a.agent),
-            topic: intervention,
-            disagreementType: 'timeline_conflict',
-            reason: `Different timelines suggested: ${timelines.join(', ')}`,
-            resolution: `Use earliest conservative timeline: ${timelines[0]}`,
-            confidence: 0.6,
-            severity: 'low'
-          });
-        }
-      }
-    }
-
-    return conflicts;
-  }
-
-  /**
-   * Detect conflicts in clinical importance ratings
-   * @param {Map} responses - Agent responses
-   * @returns {Array} Importance conflicts
-   */
-  detectImportanceConflicts(responses) {
-    const conflicts = [];
-    const importanceRatings = [];
-
-    for (const [agentType, response] of responses.entries()) {
-      if (response.status === 'success' && response.response?.assessment?.clinicalImportance) {
-        importanceRatings.push({
-          agent: agentType,
-          importance: response.response.assessment.clinicalImportance,
-          specialist: response.response.specialist
-        });
-      }
-    }
-
-    // Check for significant variance in importance ratings
-    const importanceLevels = { low: 1, medium: 2, high: 3, critical: 4 };
-    const ratings = importanceRatings.map(r => importanceLevels[r.importance] || 2);
-
-    if (ratings.length >= 2) {
-      const maxRating = Math.max(...ratings);
-      const minRating = Math.min(...ratings);
-
-      if (maxRating - minRating >= 2) {
-        conflicts.push({
-          agents: importanceRatings.map(r => r.agent),
-          topic: 'Clinical importance assessment',
-          disagreementType: 'importance_conflict',
-          reason: `Ratings vary from ${Object.keys(importanceLevels)[minRating - 1]} to ${Object.keys(importanceLevels)[maxRating - 1]}`,
-          resolution: `Consensus importance: ${Object.keys(importanceLevels)[Math.round((maxRating + minRating) / 2) - 1]}`,
-          confidence: 0.65,
-          severity: maxRating === 4 ? 'high' : 'medium'
-        });
-      }
-    }
-
-    return conflicts;
-  }
-
-  /**
-   * Propose resolution for disagreement
-   * @param {Object} agentResponse - Agent response with disagreement
-   * @param {String} agentType - Agent type
-   * @returns {String} Proposed resolution
-   */
-  proposeResolution(agentResponse, agentType) {
-    if (agentResponse.disagreementReason) {
-      return `Consider ${agentType} perspective: ${agentResponse.disagreementReason}. Recommend multi-specialist review.`;
-    }
-    return `Recommend consultation between triage and ${agentType} to align on assessment approach.`;
-  }
-
-  /**
-   * Calculate confidence in disagreement detection
-   * @param {Object} agentResponse - Agent response
-   * @returns {Number} Confidence level
-   */
-  calculateDisagreementConfidence(agentResponse) {
-    const baseConfidence = agentResponse.confidence || 0.5;
-    const hasReason = agentResponse.disagreementReason ? 0.2 : 0;
-    return Math.min(baseConfidence + hasReason, 1.0);
-  }
-
-  /**
-   * Track emergent findings from coordination
-   * @param {Array} dialogue - Inter-agent dialogue
-   * @param {Map} initialResponses - Initial responses
-   * @returns {Array} Emergent findings
-   */
-  trackEmergentFindings(dialogue, initialResponses, disagreements = []) {
-    const findings = [];
-
-    // Findings from high-impact dialogue
-    const highImpactDialogue = dialogue.filter(d => d.impactOnDiagnosis === true);
-
-    for (const exchange of highImpactDialogue) {
-      const novelty = this.assessNovelty(exchange, initialResponses);
-
-      if (novelty !== 'routine') {
-        findings.push({
-          finding: exchange.refinedInsight || exchange.response.substring(0, 200),
-          discoveredBy: [exchange.fromAgent, exchange.toAgent],
-          clinicalSignificance: this.assessClinicalSignificance(exchange),
-          novelty: novelty,
-          confidence: 0.75,
-          source: 'inter_agent_dialogue',
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-
-    // Findings from resolved disagreements in this consultation
-    const resolvedDisagreements = disagreements.filter(d => d.resolution);
-    for (const disagreement of resolvedDisagreements) {
-      if (disagreement.severity === 'high') {
-        findings.push({
-          finding: `Resolved disagreement: ${disagreement.topic}`,
-          discoveredBy: disagreement.agents,
-          clinicalSignificance: 'May impact treatment approach',
-          novelty: 'unusual',
-          confidence: disagreement.confidence,
-          source: 'disagreement_resolution',
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-
-    // Cross-specialty insights (when 3+ specialists contribute to same topic)
-    const crossSpecialtyInsights = this.identifyCrossSpecialtyInsights(dialogue);
-    findings.push(...crossSpecialtyInsights);
-
-    return findings;
-  }
-
-  /**
-   * Assess novelty of finding
-   * @param {Object} exchange - Dialogue exchange
-   * @param {Map} initialResponses - Initial responses
-   * @returns {String} Novelty level
-   */
-  assessNovelty(exchange, initialResponses) {
-    const responseLower = exchange.response.toLowerCase();
-
-    // Novel indicators
-    if (responseLower.includes('unexpected') ||
-        responseLower.includes('unusual') ||
-        responseLower.includes('atypical') ||
-        responseLower.includes('rare')) {
-      return 'novel';
-    }
-
-    // Unusual indicators
-    if (responseLower.includes('uncommon') ||
-        responseLower.includes('noteworthy') ||
-        responseLower.includes('significant concern')) {
-      return 'unusual';
-    }
-
-    return 'routine';
-  }
-
-  /**
-   * Assess clinical significance of exchange
-   * @param {Object} exchange - Dialogue exchange
-   * @returns {String} Clinical significance
-   */
-  assessClinicalSignificance(exchange) {
-    const responseLower = exchange.response.toLowerCase();
-
-    if (responseLower.includes('critical') ||
-        responseLower.includes('urgent') ||
-        responseLower.includes('immediate')) {
-      return 'High - impacts immediate care decisions';
-    }
-
-    if (responseLower.includes('important') ||
-        responseLower.includes('significant')) {
-      return 'Moderate - influences treatment approach';
-    }
-
-    return 'Low - provides additional context';
-  }
-
-  /**
-   * Identify cross-specialty insights
-   * @param {Array} dialogue - Dialogue exchanges
-   * @returns {Array} Cross-specialty findings
-   */
-  identifyCrossSpecialtyInsights(dialogue) {
-    const insights = [];
-    const topicMap = new Map();
-
-    // Group by topic keywords
-    for (const exchange of dialogue) {
-      const keywords = this.extractKeywords(exchange.question + ' ' + exchange.response);
-
-      for (const keyword of keywords) {
-        if (!topicMap.has(keyword)) {
-          topicMap.set(keyword, []);
-        }
-        topicMap.get(keyword).push(exchange);
-      }
-    }
-
-    // Find topics with 3+ specialist contributions
-    for (const [topic, exchanges] of topicMap.entries()) {
-      const uniqueAgents = new Set(exchanges.flatMap(e => [e.fromAgent, e.toAgent]));
-
-      if (uniqueAgents.size >= 3) {
-        insights.push({
-          finding: `Cross-specialty consensus on ${topic}`,
-          discoveredBy: Array.from(uniqueAgents),
-          clinicalSignificance: 'Multiple specialists identify this as key concern',
-          novelty: 'unusual',
-          confidence: 0.85,
-          source: 'cross_specialty_collaboration',
-          timestamp: new Date().toISOString()
-        });
-      }
-    }
-
-    return insights;
-  }
-
-  /**
-   * Extract keywords from text
-   * @param {String} text - Text to analyze
-   * @returns {Array} Keywords
-   */
-  extractKeywords(text) {
-    const keywords = [];
-    const medicalTerms = [
-      'pain', 'movement', 'strength', 'function', 'anxiety', 'stress',
-      'range of motion', 'mobility', 'stability', 'biomechanics',
-      'inflammation', 'rehabilitation', 'recovery', 'compensation'
-    ];
-
-    const lowerText = text.toLowerCase();
-
-    for (const term of medicalTerms) {
-      if (lowerText.includes(term)) {
-        keywords.push(term);
-      }
-    }
-
-    return keywords;
-  }
-
-  /**
-   * Normalize agent type for consistent matching
-   * @param {String} agentType - Agent type string
-   * @returns {String} Normalized type
-   */
-  normalizeAgentType(agentType) {
-    const normalized = agentType.toLowerCase().replace(/[_-]/g, '');
-
-    const typeMap = {
-      'painwhisperer': 'painWhisperer',
-      'pain': 'painWhisperer',
-      'movementdetective': 'movementDetective',
-      'movement': 'movementDetective',
-      'strengthsage': 'strengthSage',
-      'strength': 'strengthSage',
-      'mindmender': 'mindMender',
-      'mind': 'mindMender',
-      'triage': 'triage'
-    };
-
-    return typeMap[normalized] || agentType;
-  }
-
-  /**
-   * Normalize intervention name for comparison
-   * @param {String} intervention - Intervention name
-   * @returns {String} Normalized name
-   */
-  normalizeIntervention(intervention) {
-    return intervention.toLowerCase()
-      .replace(/[^\w\s]/g, '')
-      .replace(/\s+/g, '_')
-      .substring(0, 50);
-  }
-
-  /**
-   * Get coordination statistics
-   * @returns {Object} Statistics
-   */
-  getStatistics() {
+  summarizePostDialogue(turns) {
+    const distinctFinal = [...new Set(turns.filter(t => t.revisedStance !== 'defer').map(t => t.revisedStance))];
+    const deltas = turns
+      .filter(t => t.changed)
+      .map(t => ({ specialist: t.specialist, from: t.originalStance, to: t.revisedStance, reason: t.changeReason }));
     return {
-      totalConferences: this.dialogueHistory.length,
-      averageDialogueCount: this.dialogueHistory.length > 0
-        ? this.dialogueHistory.reduce((sum, h) => sum + h.interAgentDialogue.length, 0) / this.dialogueHistory.length
+      resolved: distinctFinal.length < 2,
+      persisted: distinctFinal.length >= 2,
+      distinctFinalStances: distinctFinal,
+      changedCount: deltas.length,
+      deltas,
+    };
+  }
+
+  /**
+   * Uniform empty/closed-gate metadata (keeps downstream consumers safe).
+   */
+  emptyMetadata(reason, extra = {}) {
+    return {
+      decisionPoints: extra.decisionPoints || [],
+      positions: [],
+      divergences: [],
+      gateOpen: false,
+      interAgentDialogue: [],
+      disagreements: [],
+      emergentFindings: [],
+      note: reason,
+      timestamp: new Date().toISOString(),
+      ...extra,
+    };
+  }
+
+  getStatistics() {
+    const n = this.dialogueHistory.length;
+    return {
+      totalConferences: n,
+      averageDivergences: n > 0
+        ? this.dialogueHistory.reduce((sum, h) => sum + (h.divergences?.length || 0), 0) / n
         : 0,
-      averageEmergentFindings: this.dialogueHistory.length > 0
-        ? this.dialogueHistory.reduce((sum, h) => sum + h.emergentFindings.length, 0) / this.dialogueHistory.length
-        : 0
+      gateOpenRate: n > 0
+        ? this.dialogueHistory.filter(h => h.gateOpen).length / n
+        : 0,
     };
   }
 }
