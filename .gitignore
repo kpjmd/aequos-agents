@@ -20,6 +20,10 @@ build/
 logs
 *.log
 
+# Local run outputs / dev caches
+artifacts/
+cache/
+
 # Runtime data
 pids
 *.pid

@@ -178,7 +178,42 @@ export class BaseAgent {
       throw error;
     }
   }
-  
+
+  /**
+   * Get a validated structured object from the LLM via tool-use (replaces regex-on-prose).
+   * @param {string} message - user message (prompt)
+   * @param {import('zod').ZodTypeAny} schema - zod schema for the expected object
+   * @param {Object} context - { mode, timeout, schemaName }
+   * @returns {Promise<Object>} validated object matching schema
+   */
+  async processStructured(message, schema, context = {}) {
+    const { mode = 'fast', timeout = 35000, schemaName = 'structured_response' } = context;
+
+    const messageContent = typeof message === 'string' ? message : String(message ?? '');
+    if (!messageContent.trim()) {
+      throw new Error('Empty or invalid message content');
+    }
+
+    const llm = mode === 'fast' ? this.fastLLM : this.llm;
+    const structuredLlm = llm.withStructuredOutput(schema, { name: schemaName });
+
+    const llmPromise = structuredLlm.invoke([
+      {
+        role: 'system',
+        content: mode === 'fast' ? this.getFastSystemPrompt() : this.getSystemPrompt(),
+      },
+      { role: 'user', content: messageContent },
+    ]);
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Structured processing timeout after ${timeout}ms`)), timeout)
+    );
+
+    const result = await Promise.race([llmPromise, timeoutPromise]);
+    this.updateExperience();
+    return result;
+  }
+
   getFastSystemPrompt() {
     return `You are ${this.name}, specialized in ${this.specialization}.
 Provide clear, concise prose responses with markdown formatting.

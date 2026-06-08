@@ -2,6 +2,7 @@ import logger from './logger.js';
 import { agentConfig } from '../config/agent-config.js';
 import promptManager from './prompt-manager.js';
 import { CoordinationConference } from './coordination-conference.js';
+import { storeCoordinationDivergences } from './divergence-storage.js';
 export class AgentCoordinator {
   constructor(tokenManager = null) {
     this.specialists = new Map();
@@ -107,13 +108,14 @@ export class AgentCoordinator {
       let coordinationMetadata = null;
       if (responses.size >= 2) {
         try {
-          logger.info('Running multi-specialist synthesis');
+          logger.info('Running coordination conference (decision points → positions → divergence)');
           coordinationMetadata = await this.coordinationConference.conductConferenceRound(
             responses,
             this.specialists,
-            caseData
+            caseData,
+            { mode }
           );
-          logger.info(`Synthesis complete: ${coordinationMetadata.interAgentDialogue.length} follow-up responses, ${coordinationMetadata.disagreements.length} recommendation divergences`);
+          logger.info(`Conference complete: ${coordinationMetadata.decisionPoints?.length || 0} decision point(s), ${coordinationMetadata.divergences?.length || 0} genuine divergence(s), gate ${coordinationMetadata.gateOpen ? 'OPEN' : 'closed'}`);
         } catch (error) {
           logger.error(`Coordination conference error: ${error.message}`);
           coordinationMetadata = {
@@ -127,6 +129,13 @@ export class AgentCoordinator {
 
       // Synthesize recommendations with coordination metadata
       const synthesizedRecommendations = await this.synthesizeRecommendations(responses, caseData, coordinationMetadata, mode);
+
+      // Persist genuine divergences (best-effort, non-blocking; no-op without DATABASE_URL)
+      if (coordinationMetadata?.gateOpen) {
+        storeCoordinationDivergences(consultationId, coordinationMetadata).catch(error => {
+          logger.error(`Divergence persistence failed: ${error.message}`);
+        });
+      }
 
       // Update consultation
       consultation.responses = responses;
@@ -753,12 +762,7 @@ ${JSON.stringify(caseData)}
         ${JSON.stringify(r.response)}
         `).join('\n')}
 
-        ${coordinationMetadata ? `
-        Inter-Agent Coordination Results:
-        - Dialogues: ${coordinationMetadata.interAgentDialogue.length}
-        - Disagreements: ${coordinationMetadata.disagreements.length}
-        - Emergent Findings: ${coordinationMetadata.emergentFindings.length}
-        ` : ''}
+        ${this.formatDivergencesForSynthesis(coordinationMetadata)}
 
         Synthesize these specialist recommendations into a unified, readable care plan using markdown headers (## for sections) and prose paragraphs.
 
@@ -769,6 +773,7 @@ ${JSON.stringify(caseData)}
         - Timeline and sequencing of care
         - Patient-centered education and goals
         - Recovery milestones and success metrics
+        - If (and ONLY if) the GENUINE SPECIALIST DISAGREEMENTS section above is present: a clearly-labelled "## Where Your Specialists Differ" section that presents each side of the contested decision and the underlying reasoning in plain language, names it as genuine clinical uncertainty (equipoise), and frames it as a trade-off for the patient to discuss with their physician. Do NOT manufacture or imply disagreement if that section is absent — most cases have none.
 
         Provide a comprehensive, actionable synthesis in clear clinical narrative format that leverages all specialist expertise.
         Use markdown headers (##) and bullet points where appropriate, but write as readable prose, not structured JSON.
@@ -853,6 +858,46 @@ ${JSON.stringify(caseData)}
       logger.error(`Error synthesizing recommendations: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Render genuine divergences (content, not counts) for the synthesis prompt so the care
+   * plan can present disagreements honestly. Uses post-dialogue final positions when available.
+   * Returns '' when there is no real divergence (so synthesis never manufactures one).
+   */
+  formatDivergencesForSynthesis(coordinationMetadata) {
+    const divergences = coordinationMetadata?.divergences || [];
+    if (!coordinationMetadata?.gateOpen || divergences.length === 0) return '';
+
+    let block = '\n        GENUINE SPECIALIST DISAGREEMENTS — surfaced by structured panel deliberation. Present these honestly; do NOT paper over them:\n';
+
+    for (const d of divergences) {
+      block += `\n        Contested decision: ${d.decisionPoint?.question || 'unspecified'}\n`;
+      const turns = d.dialogue || [];
+
+      if (turns.length > 0) {
+        // Group by post-dialogue (final) stance — the considered positions after deliberation.
+        const byStance = {};
+        for (const t of turns) {
+          (byStance[t.revisedStance] ||= []).push(t);
+        }
+        for (const [stance, ts] of Object.entries(byStance)) {
+          const who = ts.map(t => t.specialist).join(', ');
+          const reason = ts[0]?.changeReason || ts[0]?.reasoning || '';
+          block += `          • ${who} → "${stance}": ${reason}\n`;
+        }
+        block += d.postDialogue?.persisted
+          ? '          → After discussion the disagreement PERSISTED — genuine clinical equipoise.\n'
+          : '          → After discussion the panel converged.\n';
+      } else {
+        for (const side of (d.sides || [])) {
+          const who = side.specialists.map(s => s.specialist).join(', ');
+          block += `          • ${who} → "${side.stance}": ${side.specialists[0]?.reasoning || ''}\n`;
+        }
+      }
+    }
+
+    return block;
   }
 
   isSpecialistAvailable(specialist, metrics) {

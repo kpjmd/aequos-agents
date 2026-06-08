@@ -374,6 +374,24 @@ class OrthoIQAgentSystem {
       await sql`ALTER TABLE consultation_feedback ALTER COLUMN patient_id DROP NOT NULL`;
       await sql`CREATE INDEX IF NOT EXISTS idx_feedback_consultation_id ON consultation_feedback(consultation_id, feedback_type)`;
 
+      // Inter-agent divergences (genuine, gated disagreements) — training corpus + V2 settlement substrate
+      await sql`CREATE TABLE IF NOT EXISTS coordination_divergences (
+        id SERIAL PRIMARY KEY,
+        consultation_id TEXT NOT NULL,
+        decision_point_id TEXT,
+        decision_question TEXT,
+        decision_options JSONB,
+        persisted BOOLEAN,
+        resolved BOOLEAN,
+        changed_count INTEGER DEFAULT 0,
+        sides JSONB,
+        dialogue JSONB,
+        post_dialogue JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      )`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_coord_div_consultation_id ON coordination_divergences(consultation_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_coord_div_persisted ON coordination_divergences(persisted)`;
+
       logger.info('✅ Database migrations complete');
     } catch (error) {
       logger.error(`⚠️  Database migration failed: ${error.message}`);
