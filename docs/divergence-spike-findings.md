@@ -353,3 +353,19 @@ third which_operation axis. Re-run of the 8 which_operation DPs:
 only) — none is redundant. **Caveat: this is N=1 on a 20-DP curated pilot.** The 1.000 is a strong
 signal, not final validation — N>1 reproducibility and the full 122-sweep are the real tests (a perfect
 score on N=1 could also mask run-to-run variance, the next thing to measure).
+
+### N=3 reproducibility — verdict is stable; the multi-axis combine absorbs axis-level variance (2026-06-24)
+
+Ran N=3 on a 10-DP representative subset (the 3 single-axis which_operation cases + a both-axis case +
+2 conservative_vs_operative genuine + all 4 settled controls; `--slug` added to the harness for precise
+selection). **Result: 0/10 slugs had an unstable verdict — every slug returned the SAME verdict all 3
+runs (overall v_benchmark_accuracy 1.000).**
+
+The important nuance is at the axis level: individual axes DO vary run-to-run (as the spike predicted —
+positions carry stochastic variance). E.g. `acl-graft-choice` was contested by pathology+demand in runs
+1-2 but demand-only in run 3 (pathology went stable); `pkr-vs-tka`'s fracture_pattern axis fired only
+in run 2. **But the DP verdict held every time, because the OR-combine across axes makes the signal
+redundant** — when one axis wobbles, another carries it. This is the reproducibility argument for the
+multi-axis design: the combined verdict is more stable than any single axis. Settled controls were rock
+stable (converged ×3 each). Still to do: the full 122-sweep at N≥3, and the first-class `archetype`
+column if production adopts this.
