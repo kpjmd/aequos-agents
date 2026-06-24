@@ -333,3 +333,23 @@ candidate for a pattern-specific archetype, or it may be genuinely near-settled 
 standard). conservative_vs_operative stayed 8/8 on demand×risk alone. specialist_positions stores the
 demand_risk `average` archetype as the representative snapshot; full per-axis/per-archetype detail
 lives in `panel_runs.split_summary` (`groups[]` + `contestedBy`).
+
+### A third axis — fracture_pattern / technical feasibility — closes which_operation to 8/8 (2026-06-24)
+
+Clinical input (kpjohnsonmd): `nail-vs-plate` for a subtrochanteric fracture is settled (nail is gold
+standard) UNTIL a technical-feasibility context forces the alternative — periprosthetic fracture with
+retained hardware blocking the canal, failed prior nailing, or a pattern requiring precise open control
+of fragments. Added `FRACTURE_PATTERN_ARCHETYPES` (standard / intermediate / constrained-context) as a
+third which_operation axis. Re-run of the 8 which_operation DPs:
+
+- `nail-vs-plate` → **contested** via `fracture_pattern=flip` (standard→nail, constrained→plate) — the
+  surgeon's axis, confirmed.
+- The new axis was **stable on the other 7** which_operation cases — specific, not a flip-manufacturing
+  knob (no spurious flips, specificity intact).
+
+**which_operation 7/8 → 8/8; full pilot now genuine_equipoise 16/16 = 1.000, settled controls 4/4 =
+1.000, overall 20/20.** Each of the three axes is uniquely load-bearing for at least one case:
+`acl-graft-choice` (demand only), `pkr-vs-tka` (pathology only), `nail-vs-plate` (fracture_pattern
+only) — none is redundant. **Caveat: this is N=1 on a 20-DP curated pilot.** The 1.000 is a strong
+signal, not final validation — N>1 reproducibility and the full 122-sweep are the real tests (a perfect
+score on N=1 could also mask run-to-run variance, the next thing to measure).

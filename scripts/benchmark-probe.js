@@ -68,8 +68,9 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const { stratifiedSample } = await import('../src/utils/benchmark-sampler.js');
   const { toStanceEnum } = await import('../src/utils/equipoise-mappers.js');
-  const { DEMAND_RISK_ARCHETYPES, PATHOLOGY_ARCHETYPES, archetypeGroupsForDecisionType,
-    computeArchetypeFlipVerdict, combineGroupVerdicts } = await import('../src/utils/archetype-flip.js');
+  const { DEMAND_RISK_ARCHETYPES, PATHOLOGY_ARCHETYPES, FRACTURE_PATTERN_ARCHETYPES,
+    archetypeGroupsForDecisionType, computeArchetypeFlipVerdict, combineGroupVerdicts } =
+    await import('../src/utils/archetype-flip.js');
 
   // ---------- DRY RUN: sample from the CSV, print plan + mapping, no DB/LLM ----------
   if (opts.dryRun) {
@@ -104,6 +105,8 @@ async function main() {
       for (const arch of DEMAND_RISK_ARCHETYPES) console.log(`    ${arch.key.padEnd(24)} ${arch.label}`);
       console.log('  pathology (which_operation):');
       for (const arch of PATHOLOGY_ARCHETYPES) console.log(`    ${arch.key.padEnd(24)} ${arch.label}`);
+      console.log('  fracture_pattern (which_operation):');
+      for (const arch of FRACTURE_PATTERN_ARCHETYPES) console.log(`    ${arch.key.padEnd(24)} ${arch.label}`);
     } else {
       console.log('\ndetection: population mode (single panel/DP)');
     }

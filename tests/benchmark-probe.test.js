@@ -156,9 +156,9 @@ describe('computeArchetypeFlipVerdict', () => {
     expect(archetypesForDecisionType('which_operation').set).toHaveLength(3);
   });
 
-  test('archetypeGroupsForDecisionType: which_operation runs both axes, others run demand_risk only', () => {
+  test('archetypeGroupsForDecisionType: which_operation runs all three axes, others run demand_risk only', () => {
     const wo = archetypeGroupsForDecisionType('which_operation');
-    expect(wo.map(g => g.name).sort()).toEqual(['demand_risk', 'pathology']);
+    expect(wo.map(g => g.name).sort()).toEqual(['demand_risk', 'fracture_pattern', 'pathology']);
     const cvo = archetypeGroupsForDecisionType('conservative_vs_operative');
     expect(cvo.map(g => g.name)).toEqual(['demand_risk']);
   });

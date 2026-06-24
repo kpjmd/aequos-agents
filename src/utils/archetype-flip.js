@@ -87,6 +87,42 @@ export const PATHOLOGY_ARCHETYPES = [
   },
 ];
 
+// For which_operation fixation choices whose answer turns on TECHNICAL FEASIBILITY, not demand or
+// disease extent: the standard construct is preferred until a context makes it infeasible or
+// inferior — e.g. a subtrochanteric fracture is nailed by default, but a surgeon chooses a plate for
+// a periprosthetic fracture (retained hardware blocks the canal), after failed prior nailing, or when
+// the pattern requires precise open control of individual fragments (clinical input, kpjohnsonmd).
+// Descriptions are factual context; the goal is held constant so the set doesn't pre-load a construct.
+export const FRACTURE_PATTERN_ARCHETYPES = [
+  {
+    key: 'standard_pattern',
+    label: 'standard pattern, conventional construct feasible',
+    case: {
+      pattern: 'a typical fracture pattern in the usual location; no retained hardware or prior fixation',
+      technicalContext: 'closed/indirect reduction is feasible and the medullary canal is accessible',
+      priorities: 'the most appropriate fixation construct for this pattern and technical context',
+    },
+  },
+  {
+    key: 'intermediate_pattern',
+    label: 'moderate complexity',
+    case: {
+      pattern: 'a moderately complex pattern with some comminution',
+      technicalContext: 'reduction is achievable but not entirely straightforward',
+      priorities: 'the most appropriate fixation construct for this pattern and technical context',
+    },
+  },
+  {
+    key: 'constrained_context',
+    label: 'constrained context (retained hardware / failed prior fixation / needs direct control)',
+    case: {
+      pattern: 'a context where the conventional construct is constrained — e.g. a periprosthetic fracture with retained hardware blocking the intramedullary canal, a failed prior fixation, or a pattern requiring precise open control of individual fragments',
+      technicalContext: 'intramedullary access is limited and/or direct anatomic fragment control is required',
+      priorities: 'the most appropriate fixation construct for this pattern and technical context',
+    },
+  },
+];
+
 // Back-compat default (the validated demand×risk set).
 export const ARCHETYPES = DEMAND_RISK_ARCHETYPES;
 
@@ -115,6 +151,7 @@ export function archetypeGroupsForDecisionType(decisionType) {
     return [
       { name: 'pathology', set: PATHOLOGY_ARCHETYPES },
       { name: 'demand_risk', set: DEMAND_RISK_ARCHETYPES },
+      { name: 'fracture_pattern', set: FRACTURE_PATTERN_ARCHETYPES },
     ];
   }
   return [{ name: 'demand_risk', set: DEMAND_RISK_ARCHETYPES }];
