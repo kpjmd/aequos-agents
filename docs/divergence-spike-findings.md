@@ -236,3 +236,74 @@ shared-conservatism-bias hypothesis — but the dedicated probe (above, "Conserv
 calibrated vs sham), so the convergence is genuine consensus given the available information, not a
 shared blind spot. The remaining true variable is **DP framing** (neutral vs pre-loaded), not a
 fixed prior.
+
+## Phase 2a benchmark probe — population mode gives 0% equipoise sensitivity (2026-06-24)
+
+First real run of the detector against the curated 122-row benchmark via the new probe harness
+(`scripts/benchmark-probe.js`, `npm run benchmark:probe`; reuses `runDecisionPoints` extracted from
+`coordination-conference.js`). Pilot: 20 stratified DPs (16 `genuine_equipoise` = 8 `which_operation`
++ 8 `conservative_vs_operative`, plus 4 settled controls), **population mode** (canonical question +
+neutral "typical adult", no patient specifics), N=1, dialogue off, Sonnet. Persisted to
+`panel_runs`/`specialist_positions` on a Neon dev branch; read via `v_benchmark_accuracy`.
+
+| expected label | DPs | detector_hit_rate |
+|---|---|---|
+| settled_conservative | 2 | **1.000** |
+| settled_operative | 2 | **1.000** |
+| genuine_equipoise | 16 | **0.000** |
+
+**Specificity perfect, sensitivity zero.** Every settled control converged (correct); every
+genuine-equipoise DP *also* converged — both `which_operation` AND `conservative_vs_operative`,
+mostly 4-0 (e.g. ACL all 4 → rehab, conf 0.74-0.82). All 20 runs → `converged`.
+
+Two conclusions:
+1. **The `which_operation` all-`defer` fear was WRONG.** Abstentions were rare (~2/80 positions). The
+   lenses *do* take technique sides — they just all pick the **same** side (all-converge, not
+   all-defer). The risk for technique choices is shared consensus, not deferral.
+2. **Equipoise-divergence is patient-specific, not population-level.** The spike's ACL split came from
+   a *concrete* 28yo athlete whose specifics pulled Strength/Movement toward surgery. Population mode
+   strips exactly those specifics, so the panel falls back to its shared modal answer. "Population-level
+   equipoise" (reasonable experts disagree across the population) ≠ what the panel computes ("best
+   answer for a typical patient"). The harness/schema/views are all correct — they measured a real 0%;
+   the probe **input** was wrong for the construct.
+
+The detector is NOT broken (specificity proves discrimination). **Next:** measure equipoise the way it
+actually manifests — see the archetype-flip section below.
+
+## Archetype-flip restores sensitivity — the instrument works (2026-06-24)
+
+Operationalized population equipoise as **archetype-flip** (`src/utils/archetype-flip.js`): run each DP
+under 3 age-agnostic patient archetypes that vary the two levers which actually flip orthopedic
+decisions — functional demand × surgical risk: `high_demand_low_risk`, `average`,
+`low_demand_high_risk`. A DP is **contested** if the panel's modal answer FLIPS across archetypes OR
+any single archetype is internally split; **converged** if the modal answer is stable across all three.
+Same 20-DP pilot (Sonnet, N=1, dialogue off), persisted to `panel_runs` (verdict) + `split_summary`
+(per-archetype modal stances) + `specialist_positions` (the `average` archetype as the representative
+snapshot — a pilot simplification; a first-class `archetype` column is deferred until the method is
+locked).
+
+| expected label | DPs | hit_rate (population → archetype) |
+|---|---|---|
+| genuine_equipoise | 16 | **0.000 → 0.875** |
+| settled_conservative | 2 | 1.000 → 1.000 |
+| settled_operative | 2 | 1.000 → 1.000 |
+| **overall** | | **→ 0.900** |
+
+**Sensitivity 0% → 87.5%, specificity held at 100%.** The flips are clinically faithful:
+femoral-neck fracture → THA for high-demand/average, **hemiarthroplasty** for low-demand-high-risk
+(the real THA-vs-hemi decision); ACL → surgery for high-demand, rehab for low-demand (reproduces the
+spike's ACL split systematically). All 4 settled controls stayed stable across archetypes (cauda
+equina → surgery for all; septic joint → drainage for all; degenerative meniscus & subacromial →
+conservative for all).
+
+The **2 which_operation misses** are interpretable, not failures: `pkr-vs-tka` and
+`nail-vs-plate` are driven by **anatomy / fracture pattern**, not demand or risk, so the demand×risk
+archetypes don't activate the deciding axis. → which_operation may need decision-type-specific
+archetype axes (or some technique choices carry genuinely less demand-driven equipoise). conservative_vs_operative,
+where demand×risk IS the deciding axis, scored a clean 8/8.
+
+**Conclusion:** archetype-flip is the right equipoise measure. The detector diverges iff the decision
+is genuinely patient-dependent, reproducibly and with faithful per-side reasoning, while staying quiet
+on settled cases. This is the validated moat metric Phase 2a set out to produce. Open items before the
+full 122-sweep: decision-type-specific archetype axes for which_operation, N>1 reproducibility runs,
+and a first-class `archetype` column if the method is adopted for production.

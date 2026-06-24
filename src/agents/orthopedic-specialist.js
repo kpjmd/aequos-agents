@@ -25,7 +25,23 @@ export class OrthopedicSpecialist extends BaseAgent {
     const schema = makePositionSchema(decisionPoint.options);
     const optionList = decisionPoint.options.map((o, i) => `  ${i + 1}. ${o}`).join('\n');
 
-    const prompt = `As ${this.name} (${this.subspecialty}), state YOUR position on the following clinical decision for this patient, reasoning ONLY from your area of expertise.
+    // Population mode (benchmark probe): reason at the population level on a canonical decision,
+    // not for a specific patient. Isolates the detector's intrinsic equipoise sensitivity and
+    // avoids the vignette-framing confounds that drive convergence (see divergence-spike-findings).
+    const prompt = context.population === true
+      ? `As ${this.name} (${this.subspecialty}), state YOUR position on the following clinical decision at the POPULATION level, reasoning ONLY from your area of expertise.
+
+DECISION: ${decisionPoint.question}
+OPTIONS:
+${optionList}
+
+Reason for a TYPICAL adult patient for whom this decision arises — assume no atypical comorbidities or contraindications, and do not invent patient specifics beyond this.
+
+Instructions:
+- Choose exactly one option you support, OR choose "defer".
+- DEFER if this decision is outside your specialty lens, or if the evidence available to you is insufficient to take a responsible position. Deferring is appropriate and expected — do not invent a stance to seem decisive.
+- Ground your reasoning in your specialty's evidence and judgment for this population.`
+      : `As ${this.name} (${this.subspecialty}), state YOUR position on the following clinical decision for this patient, reasoning ONLY from your area of expertise.
 
 DECISION: ${decisionPoint.question}
 OPTIONS:
@@ -87,7 +103,20 @@ Instructions:
       .map(p => `- ${p.specialist} argues for "${p.stance}": ${p.reasoning}`)
       .join('\n');
 
-    const prompt = `You are ${this.name} (${this.subspecialty}) in a multi-specialist panel discussing this patient. The panel DISAGREES on a decision. Reconsider YOUR position in light of your colleagues' reasoning.
+    const prompt = context.population === true
+      ? `You are ${this.name} (${this.subspecialty}) in a multi-specialist panel debating a canonical clinical decision at the POPULATION level. The panel DISAGREES. Reconsider YOUR position in light of your colleagues' reasoning.
+
+DECISION: ${decisionPoint.question}
+OPTIONS:
+${optionList}
+
+YOUR INITIAL POSITION: "${ownPosition.stance}" — ${ownPosition.reasoning}
+
+COLLEAGUES WHO DISAGREE:
+${opposingText}
+
+Reason for a TYPICAL adult patient for whom this decision arises — no atypical comorbidities or contraindications. Engage honestly with their reasoning from your specialty lens. HOLD your position (and rebut) if you still believe it is right for this population; REVISE it only if their reasoning genuinely changes your clinical judgment. A well-reasoned persistent disagreement is valuable — do not revise merely to reach consensus, and do not hold out of stubbornness.`
+      : `You are ${this.name} (${this.subspecialty}) in a multi-specialist panel discussing this patient. The panel DISAGREES on a decision. Reconsider YOUR position in light of your colleagues' reasoning.
 
 DECISION: ${decisionPoint.question}
 OPTIONS:

@@ -9,6 +9,7 @@
     "dev": "node --watch src/index.js",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
     "seed:equipoise": "node scripts/seed-equipoise.js",
+    "benchmark:probe": "node scripts/benchmark-probe.js",
     "lint": "eslint src/ tests/ examples/",
     "example": "node examples/basic-agent.js",
     "compile:contract": "hardhat compile",

@@ -63,51 +63,28 @@ export class CoordinationConference {
         return this.emptyMetadata('no contested decision points', { decisionPoints: [] });
       }
 
-      // 2. Elicit each specialist's structured position on each decision point (parallel)
-      const positionAgents = POSITION_SPECIALISTS
-        .map(type => [type, specialists.get(type)])
-        .filter(([, agent]) => agent && typeof agent.statePosition === 'function');
-
-      const positionTasks = [];
-      for (const dp of decisionPoints) {
-        for (const [type, agent] of positionAgents) {
-          // Force specialistType to the REGISTRATION key so the dialogue round can route
-          // reconsideration back to the same agent via specialists.get(type).
-          positionTasks.push(
-            agent.statePosition(caseData, dp, { mode }).then(p => ({ ...p, specialistType: type }))
-          );
-        }
-      }
-      const positions = await Promise.all(positionTasks);
-
-      // 3. Detect divergence structurally (gate 2: no divergence -> gate closed)
-      const divergences = this.detectDivergence(decisionPoints, positions);
-      const gateOpen = divergences.length > 0;
-
-      // 4. Dialogue round — ONLY when the gate is open. Specialists on each side see the
-      //    opposing positions and hold (rebut) or revise (reason). Captures position deltas.
-      let interAgentDialogue = [];
-      if (gateOpen) {
-        interAgentDialogue = await this.conductDialogueRound(divergences, caseData, specialists, mode);
-      }
+      // 2-4. Run the shared panel pass (positions -> structural detection -> dialogue) over
+      //      triage's contested decision points. Same core the benchmark probe drives.
+      const result = await this.runDecisionPoints(decisionPoints, caseData, specialists, { mode });
 
       logger.info(
-        `Conference: ${decisionPoints.length} decision point(s), ${positions.length} positions, ` +
-        `${divergences.length} genuine divergence(s) [gate ${gateOpen ? 'OPEN' : 'closed'}]` +
-        (gateOpen ? `, ${interAgentDialogue.length} dialogue turns` : '')
+        `Conference: ${decisionPoints.length} decision point(s), ${result.positions.length} positions, ` +
+        `${result.divergences.length} genuine divergence(s) [gate ${result.gateOpen ? 'OPEN' : 'closed'}]` +
+        (result.gateOpen ? `, ${result.interAgentDialogue.length} dialogue turns` : '')
       );
 
       const metadata = {
         decisionPoints,
-        positions,
-        divergences,
-        gateOpen,
-        interAgentDialogue,
+        positions: result.positions,
+        divergences: result.divergences,
+        gateOpen: result.gateOpen,
+        interAgentDialogue: result.interAgentDialogue,
+        perDecisionPoint: result.perDecisionPoint,
         // Compat keys for existing downstream consumers.
-        disagreements: divergences,
+        disagreements: result.divergences,
         emergentFindings: [],
         coordinationDuration: Date.now() - startTime,
-        participatingAgents: positionAgents.map(([type]) => type),
+        participatingAgents: result.participatingAgents,
         timestamp: new Date().toISOString(),
       };
 
@@ -117,6 +94,116 @@ export class CoordinationConference {
       logger.error(`Error in coordination conference: ${error.message}`);
       return this.emptyMetadata(error.message);
     }
+  }
+
+  /**
+   * Core panel pass over an EXTERNALLY-supplied decision-point list: elicit each specialist's
+   * structured position, detect divergence structurally, and (optionally) run the dialogue round.
+   * Reused by the live conference (triage-sourced DPs) and the benchmark probe (curated DPs).
+   *
+   * @param {Array<{id,question,options,rationale?}>} decisionPoints
+   * @param {Object} caseData
+   * @param {Map} specialists - registered specialist agents keyed by registration key
+   * @param {Object} opts - { mode, population, dialogue }
+   *   - population: reason at the population level (benchmark) vs for a specific patient (live)
+   *   - dialogue: run the Step-3 dialogue round when the gate opens (default true)
+   * @returns {Promise<{positions, divergences, gateOpen, interAgentDialogue,
+   *                     participatingAgents, perDecisionPoint}>}
+   *   perDecisionPoint: one entry per DP (converged OR contested) for benchmark/persistence —
+   *   { decisionPoint, verdict, positions(initial+final), divergence, splitSummary }.
+   */
+  async runDecisionPoints(decisionPoints, caseData, specialists, opts = {}) {
+    const mode = opts.mode || 'normal';
+    const population = opts.population === true;
+    const runDialogue = opts.dialogue !== false; // live behavior: dialogue when the gate opens
+
+    const positionAgents = POSITION_SPECIALISTS
+      .map(type => [type, specialists.get(type)])
+      .filter(([, agent]) => agent && typeof agent.statePosition === 'function');
+
+    const positionTasks = [];
+    for (const dp of decisionPoints) {
+      for (const [type, agent] of positionAgents) {
+        // Force specialistType to the REGISTRATION key so the dialogue round can route
+        // reconsideration back to the same agent via specialists.get(type).
+        positionTasks.push(
+          agent.statePosition(caseData, dp, { mode, population }).then(p => ({ ...p, specialistType: type }))
+        );
+      }
+    }
+    const positions = await Promise.all(positionTasks);
+
+    const divergences = this.detectDivergence(decisionPoints, positions);
+    const gateOpen = divergences.length > 0;
+
+    let interAgentDialogue = [];
+    if (gateOpen && runDialogue) {
+      interAgentDialogue = await this.conductDialogueRound(divergences, caseData, specialists, mode, population);
+    }
+
+    // One summary per decision point — verdict is the AUTHORITATIVE detector signal (the gate).
+    const perDecisionPoint = decisionPoints.map(dp =>
+      this.summarizeDecisionPoint(
+        dp,
+        positions,
+        divergences.find(d => d.decisionPoint.id === dp.id) || null
+      )
+    );
+
+    return {
+      positions,
+      divergences,
+      gateOpen,
+      interAgentDialogue,
+      participatingAgents: positionAgents.map(([type]) => type),
+      perDecisionPoint,
+    };
+  }
+
+  /**
+   * Per-decision-point summary for benchmark/persistence: the detector verdict plus each agent's
+   * initial vs final stance (final differs only where the dialogue round actually revised it).
+   * Converged DPs have no divergence -> verdict 'converged', final === initial, no dialogue.
+   */
+  summarizeDecisionPoint(dp, allPositions, divergence) {
+    const dpPositions = allPositions.filter(p => p.decisionPointId === dp.id);
+    const verdict = divergence ? 'contested' : 'converged';
+
+    // Map any dialogue revisions back onto each agent's final stance (keyed on registration key).
+    const turnByType = new Map();
+    for (const turn of (divergence?.dialogue || [])) turnByType.set(turn.specialistType, turn);
+
+    const positions = dpPositions.map(p => {
+      const turn = turnByType.get(p.specialistType);
+      return {
+        specialistType: p.specialistType,
+        initialStance: p.stance,
+        finalStance: turn ? turn.revisedStance : p.stance,
+        revised: turn ? !!turn.changed : false,
+        confidence: turn ? turn.confidence : p.confidence,
+        reasoning: p.reasoning,
+        changeReason: turn?.changeReason ?? null,
+        evidenceGrade: p.evidenceGrade,
+      };
+    });
+
+    const substantive = dpPositions.filter(
+      p => p.stance && p.stance !== 'defer' && (p.confidence ?? 0) >= CONFIDENCE_FLOOR
+    );
+    const stanceCounts = {};
+    for (const p of substantive) stanceCounts[p.stance] = (stanceCounts[p.stance] || 0) + 1;
+
+    const splitSummary = {
+      verdict,
+      distinctStances: [...new Set(substantive.map(p => p.stance))],
+      stanceCounts,
+      deferredCount: dpPositions.filter(p => p.stance === 'defer').length,
+      belowFloor: dpPositions.filter(p => p.stance !== 'defer' && (p.confidence ?? 0) < CONFIDENCE_FLOOR).length,
+      sides: divergence?.sides ?? null,
+      postDialogue: divergence?.postDialogue ?? null,
+    };
+
+    return { decisionPoint: dp, verdict, positions, divergence, splitSummary };
   }
 
   /**
@@ -174,7 +261,7 @@ export class CoordinationConference {
    * with `dialogue` (the turns) and `postDialogue` (resolution summary + deltas).
    * @returns {Array} flattened dialogue turns across all divergences
    */
-  async conductDialogueRound(divergences, caseData, specialists, mode) {
+  async conductDialogueRound(divergences, caseData, specialists, mode, population = false) {
     const allDialogue = [];
 
     for (const div of divergences) {
@@ -195,7 +282,7 @@ export class CoordinationConference {
         // Normalize the turn's identity to the canonical persona, keyed off the routing
         // key (registration key) so dialogue joins to sides on a consistent specialistType.
         return agent
-          .reconsiderPosition(caseData, dp, ownPosition, opposing, { mode })
+          .reconsiderPosition(caseData, dp, ownPosition, opposing, { mode, population })
           .then(turn => (turn ? { ...turn, ...resolvePersona(part.specialistType) } : turn));
       });
 
@@ -236,6 +323,7 @@ export class CoordinationConference {
       divergences: [],
       gateOpen: false,
       interAgentDialogue: [],
+      perDecisionPoint: [],
       disagreements: [],
       emergentFindings: [],
       note: reason,
