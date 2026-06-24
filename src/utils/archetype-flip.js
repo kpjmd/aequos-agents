@@ -9,12 +9,19 @@
  * CONTESTED if the panel's modal answer FLIPS across them (the decision is patient-dependent) or if
  * any single archetype is itself internally split.
  *
- * The archetypes vary the two levers that genuinely flip orthopedic operative-vs-conservative /
- * technique decisions — functional demand and surgical risk — and are deliberately AGE-AGNOSTIC so
- * they never contradict a decision point that already specifies its population (e.g. "older adult").
+ * Different decision types flip along different axes (see divergence-spike-findings, "Archetype-flip
+ * restores sensitivity" + the which_operation follow-up):
+ *   - conservative_vs_operative / timing_of_surgery / which_intervention flip on FUNCTIONAL DEMAND ×
+ *     SURGICAL RISK (operate-or-not, intervene-or-not is patient-demand driven).
+ *   - which_operation (technique/implant choice) flips on PATHOLOGY EXTENT × HOST BONE QUALITY
+ *     (anatomy/fracture-pattern/disease-extent driven, NOT demand). Using demand×risk here misses
+ *     the deciding axis (pkr-vs-tka, nail-vs-plate converged in the demand×risk pilot).
+ * All archetypes are AGE-AGNOSTIC so they never contradict a DP that already specifies its population
+ * ("older adult"). Within a set, the differentiating fields are clinical FACTS (demand/risk, or
+ * extent/bone-quality); the stated goal is held constant so the set doesn't steer toward an option.
  */
 
-export const ARCHETYPES = [
+export const DEMAND_RISK_ARCHETYPES = [
   {
     key: 'high_demand_low_risk',
     label: 'high-demand, low surgical risk',
@@ -43,6 +50,85 @@ export const ARCHETYPES = [
     },
   },
 ];
+
+// For which_operation: vary the local clinical FACTS that drive technique/implant selection
+// (disease extent / injury pattern / bone quality), holding the goal constant and neutral so the
+// set doesn't pre-load a particular technique.
+export const PATHOLOGY_ARCHETYPES = [
+  {
+    key: 'limited_pathology',
+    label: 'limited extent, favorable local factors',
+    case: {
+      pathologyExtent: 'limited/localized disease or a simple, well-aligned injury pattern',
+      boneQuality: 'good bone stock',
+      localFactors: 'favorable anatomy with no complicating features',
+      priorities: 'the most appropriate operative choice given these local factors',
+    },
+  },
+  {
+    key: 'intermediate_pathology',
+    label: 'intermediate extent and host factors',
+    case: {
+      pathologyExtent: 'moderate extent of disease or a moderately complex injury pattern',
+      boneQuality: 'average bone stock',
+      localFactors: 'some complicating anatomic features',
+      priorities: 'the most appropriate operative choice given these local factors',
+    },
+  },
+  {
+    key: 'extensive_pathology',
+    label: 'extensive disease/comminution, poor host factors',
+    case: {
+      pathologyExtent: 'extensive/multifocal disease, or a comminuted/complex injury pattern',
+      boneQuality: 'poor bone quality / osteoporotic',
+      localFactors: 'complicating anatomic features',
+      priorities: 'the most appropriate operative choice given these local factors',
+    },
+  },
+];
+
+// Back-compat default (the validated demand×risk set).
+export const ARCHETYPES = DEMAND_RISK_ARCHETYPES;
+
+/**
+ * Select the archetype set whose flip axis matches the decision type.
+ * @param {string} decisionType
+ * @returns {{set: Array, name: string}}
+ */
+export function archetypesForDecisionType(decisionType) {
+  if (decisionType === 'which_operation') {
+    return { set: PATHOLOGY_ARCHETYPES, name: 'pathology' };
+  }
+  return { set: DEMAND_RISK_ARCHETYPES, name: 'demand_risk' };
+}
+
+/**
+ * Archetype groups (axes) to evaluate for a decision type. which_operation technique choices do not
+ * share one axis — pkr-vs-tka flips on pathology, acl-graft-choice flips on demand — so they are run
+ * across BOTH axes and labelled contested if EITHER flips (equipoise = case-dependent along any
+ * clinically real axis). Other decision types flip on demand×risk alone (validated 8/8).
+ * @param {string} decisionType
+ * @returns {Array<{name:string, set:Array}>}
+ */
+export function archetypeGroupsForDecisionType(decisionType) {
+  if (decisionType === 'which_operation') {
+    return [
+      { name: 'pathology', set: PATHOLOGY_ARCHETYPES },
+      { name: 'demand_risk', set: DEMAND_RISK_ARCHETYPES },
+    ];
+  }
+  return [{ name: 'demand_risk', set: DEMAND_RISK_ARCHETYPES }];
+}
+
+/**
+ * Combine per-axis flip verdicts: contested if ANY axis is contested (flip or internal split).
+ * @param {Array<{name:string, flip:{verdict:string}}>} groupResults
+ * @returns {{verdict:'converged'|'contested', contestedBy:string[]}}
+ */
+export function combineGroupVerdicts(groupResults) {
+  const contestedBy = groupResults.filter((g) => g.flip.verdict === 'contested').map((g) => g.name);
+  return { verdict: contestedBy.length ? 'contested' : 'converged', contestedBy };
+}
 
 /**
  * Aggregate per-archetype panel results into a single decision-point verdict.

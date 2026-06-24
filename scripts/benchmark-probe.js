@@ -37,12 +37,13 @@ const POSITION_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 const POPULATION_CASE = { population: true, note: 'equipoise benchmark probe — population-level' };
 
 function parseArgs(argv) {
-  const opts = { decisionTypes: [], n: 1, dialogue: false, dryRun: false, all: false, limit: null, population: false };
+  const opts = { decisionTypes: [], n: 1, dialogue: false, dryRun: false, all: false, limit: null, population: false, noControls: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') opts.dryRun = true;
     else if (a === '--dialogue') opts.dialogue = true;
     else if (a === '--population') opts.population = true;
+    else if (a === '--no-controls') opts.noControls = true;
     else if (a === '--all') opts.all = true;
     else if (a === '--limit') opts.limit = parseInt(argv[++i], 10);
     else if (a === '--n') opts.n = Math.max(1, parseInt(argv[++i], 10) || 1);
@@ -54,19 +55,21 @@ function parseArgs(argv) {
 /** Build the sampler options from CLI flags. */
 function samplerOpts(opts) {
   if (opts.all) return null; // signal: take everything
+  const settledFloor = opts.noControls ? 0 : undefined; // --no-controls: skip the settled-control floor
   if (opts.decisionTypes.length > 0) {
     const each = opts.limit ? Math.ceil(opts.limit / opts.decisionTypes.length) : 8;
     const perType = Object.fromEntries(opts.decisionTypes.map((t) => [t, each]));
-    return { perType, limit: opts.limit ?? undefined };
+    return { perType, limit: opts.limit ?? undefined, settledFloor };
   }
-  return { limit: opts.limit ?? undefined };
+  return { limit: opts.limit ?? undefined, settledFloor };
 }
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const { stratifiedSample } = await import('../src/utils/benchmark-sampler.js');
   const { toStanceEnum } = await import('../src/utils/equipoise-mappers.js');
-  const { ARCHETYPES, computeArchetypeFlipVerdict } = await import('../src/utils/archetype-flip.js');
+  const { DEMAND_RISK_ARCHETYPES, PATHOLOGY_ARCHETYPES, archetypeGroupsForDecisionType,
+    computeArchetypeFlipVerdict, combineGroupVerdicts } = await import('../src/utils/archetype-flip.js');
 
   // ---------- DRY RUN: sample from the CSV, print plan + mapping, no DB/LLM ----------
   if (opts.dryRun) {
@@ -96,9 +99,11 @@ async function main() {
     if (sample.length > 8) console.log(`  … and ${sample.length - 8} more`);
 
     if (!opts.population) {
-      console.log(`\ndetection: archetype-flip across ${ARCHETYPES.length} archetypes ` +
-        `(${ARCHETYPES.length}× panel cost/DP):`);
-      for (const arch of ARCHETYPES) console.log(`  ${arch.key.padEnd(22)} ${arch.label}`);
+      console.log('\ndetection: archetype-flip, decision-type-specific axes (3 archetypes/DP):');
+      console.log('  demand_risk (conservative_vs_operative, timing_of_surgery, which_intervention):');
+      for (const arch of DEMAND_RISK_ARCHETYPES) console.log(`    ${arch.key.padEnd(24)} ${arch.label}`);
+      console.log('  pathology (which_operation):');
+      for (const arch of PATHOLOGY_ARCHETYPES) console.log(`    ${arch.key.padEnd(24)} ${arch.label}`);
     } else {
       console.log('\ndetection: population mode (single panel/DP)');
     }
@@ -147,7 +152,7 @@ async function main() {
   const sOpts = samplerOpts(opts);
   const sample = sOpts === null ? all : stratifiedSample(all, sOpts);
 
-  const detection = opts.population ? 'population' : `archetype-flip (${ARCHETYPES.length} archetypes)`;
+  const detection = opts.population ? 'population' : 'archetype-flip (decision-type-specific axes)';
   console.log(`\n› LIVE PROBE — ${sample.length} DP(s) × ${opts.n} run(s), model=${POSITION_MODEL}, ` +
     `detection=${detection}\n`);
 
@@ -194,37 +199,47 @@ async function main() {
         positions = s.positions;
         detail = stanceLine(s.splitSummary);
       } else {
-        // Archetype-flip: run the panel under each archetype, label contested if the modal
-        // answer flips across them (or any archetype is internally split).
-        const archetypeResults = [];
-        for (const arch of ARCHETYPES) {
-          const r = await conference.runDecisionPoints(
-            [decisionPoint], { archetype: arch.label, ...arch.case }, specialists,
-            { mode: 'normal', population: false, dialogue: false }
-          );
-          const s = r.perDecisionPoint[0];
-          archetypeResults.push({
-            key: arch.key, label: arch.label, verdict: s.verdict,
-            stanceCounts: s.splitSummary.stanceCounts, deferredCount: s.splitSummary.deferredCount,
-            positions: s.positions,
-          });
+        // Archetype-flip: evaluate each axis group for this decision_type (which_operation runs both
+        // pathology and demand_risk), contested if ANY axis flips or is internally split.
+        const groups = archetypeGroupsForDecisionType(dp.decision_type);
+        const groupResults = [];
+        for (const group of groups) {
+          const archetypeResults = [];
+          for (const arch of group.set) {
+            const r = await conference.runDecisionPoints(
+              [decisionPoint], { archetype: arch.label, ...arch.case }, specialists,
+              { mode: 'normal', population: false, dialogue: false }
+            );
+            const s = r.perDecisionPoint[0];
+            archetypeResults.push({
+              key: arch.key, label: arch.label, verdict: s.verdict,
+              stanceCounts: s.splitSummary.stanceCounts, deferredCount: s.splitSummary.deferredCount,
+              positions: s.positions,
+            });
+          }
+          groupResults.push({ name: group.name, flip: computeArchetypeFlipVerdict(archetypeResults), archetypeResults });
         }
-        const flip = computeArchetypeFlipVerdict(archetypeResults);
-        verdict = flip.verdict;
+        const combined = combineGroupVerdicts(groupResults);
+        verdict = combined.verdict;
         splitSummary = {
           method: 'archetype_flip',
-          flipDetected: flip.flipDetected,
-          internalContested: flip.internalContested,
-          modalByArchetype: flip.modalByArchetype,
-          distinctOptionModals: flip.distinctOptionModals,
-          archetypes: archetypeResults.map(({ key, label, verdict: v, stanceCounts, deferredCount }) =>
-            ({ key, label, verdict: v, stanceCounts, deferredCount })),
+          contestedBy: combined.contestedBy,
+          groups: groupResults.map(g => ({
+            name: g.name,
+            verdict: g.flip.verdict,
+            flipDetected: g.flip.flipDetected,
+            internalContested: g.flip.internalContested,
+            modalByArchetype: g.flip.modalByArchetype,
+            archetypes: g.archetypeResults.map(({ key, label, verdict: v, stanceCounts, deferredCount }) =>
+              ({ key, label, verdict: v, stanceCounts, deferredCount })),
+          })),
         };
-        // Representative single-panel snapshot for specialist_positions = the 'average' archetype.
-        positions = (archetypeResults.find(a => a.key === 'average') || archetypeResults[0]).positions;
-        detail = Object.entries(flip.modalByArchetype)
-          .map(([k, v]) => `${k}=${v === 'split' || v === 'abstain' ? v : toStanceEnum(v, dp.option_a_label, dp.option_b_label)}`)
-          .join(' ') + (flip.flipDetected ? ' [FLIP]' : '');
+        // Representative single-panel snapshot = the 'average' demand_risk archetype (or first group's).
+        const repGroup = groupResults.find(g => g.name === 'demand_risk') || groupResults[0];
+        positions = (repGroup.archetypeResults.find(a => a.key === 'average') || repGroup.archetypeResults[0]).positions;
+        detail = groupResults
+          .map(g => `${g.name}=${g.flip.verdict === 'contested' ? (g.flip.flipDetected ? 'flip' : 'split') : 'stable'}`)
+          .join(' ') + (combined.verdict === 'contested' ? ` → CONTESTED(${combined.contestedBy.join(',')})` : '');
       }
 
       await storePanelRun(sql, {

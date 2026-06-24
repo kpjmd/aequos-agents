@@ -6,7 +6,7 @@
 import { describe, test, expect } from '@jest/globals';
 import { toStanceEnum, toAgentEnum } from '../src/utils/equipoise-mappers.js';
 import { stratifiedSample, DEFAULT_PER_TYPE } from '../src/utils/benchmark-sampler.js';
-import { computeArchetypeFlipVerdict } from '../src/utils/archetype-flip.js';
+import { computeArchetypeFlipVerdict, archetypesForDecisionType, archetypeGroupsForDecisionType, combineGroupVerdicts } from '../src/utils/archetype-flip.js';
 import { CoordinationConference } from '../src/utils/coordination-conference.js';
 
 describe('equipoise-mappers', () => {
@@ -146,6 +146,33 @@ describe('computeArchetypeFlipVerdict', () => {
     expect(r.verdict).toBe('contested');
     expect(r.internalContested).toBe(true);
     expect(r.modalByArchetype.high_demand_low_risk).toBe('split');
+  });
+
+  test('archetypesForDecisionType picks pathology axis for which_operation, demand_risk otherwise', () => {
+    expect(archetypesForDecisionType('which_operation').name).toBe('pathology');
+    expect(archetypesForDecisionType('conservative_vs_operative').name).toBe('demand_risk');
+    expect(archetypesForDecisionType('timing_of_surgery').name).toBe('demand_risk');
+    expect(archetypesForDecisionType('which_intervention').name).toBe('demand_risk');
+    expect(archetypesForDecisionType('which_operation').set).toHaveLength(3);
+  });
+
+  test('archetypeGroupsForDecisionType: which_operation runs both axes, others run demand_risk only', () => {
+    const wo = archetypeGroupsForDecisionType('which_operation');
+    expect(wo.map(g => g.name).sort()).toEqual(['demand_risk', 'pathology']);
+    const cvo = archetypeGroupsForDecisionType('conservative_vs_operative');
+    expect(cvo.map(g => g.name)).toEqual(['demand_risk']);
+  });
+
+  test('combineGroupVerdicts: contested if ANY axis is contested', () => {
+    expect(combineGroupVerdicts([
+      { name: 'pathology', flip: { verdict: 'contested' } },
+      { name: 'demand_risk', flip: { verdict: 'converged' } },
+    ])).toEqual({ verdict: 'contested', contestedBy: ['pathology'] });
+
+    expect(combineGroupVerdicts([
+      { name: 'pathology', flip: { verdict: 'converged' } },
+      { name: 'demand_risk', flip: { verdict: 'converged' } },
+    ])).toEqual({ verdict: 'converged', contestedBy: [] });
   });
 
   test('abstain archetypes are ignored for flip detection', () => {

@@ -307,3 +307,29 @@ is genuinely patient-dependent, reproducibly and with faithful per-side reasonin
 on settled cases. This is the validated moat metric Phase 2a set out to produce. Open items before the
 full 122-sweep: decision-type-specific archetype axes for which_operation, N>1 reproducibility runs,
 and a first-class `archetype` column if the method is adopted for production.
+
+### which_operation needs BOTH axes — combined demand×risk + pathology (2026-06-24)
+
+The demand×risk pilot scored which_operation 6/8, but a pathology×bone-quality re-run also scored 6/8
+on a DIFFERENT set: pathology FIXED `pkr-vs-tka` (limited→PKR, extensive→TKA) but BROKE
+`acl-graft-choice` (graft choice flips on athletic DEMAND, not pathology). So which_operation
+technique choices don't share one axis. Fix (`archetypeGroupsForDecisionType`): for which_operation
+run **both** axes and label contested if EITHER flips/splits (equipoise = case-dependent along any
+clinically real axis); other decision types keep demand×risk alone.
+
+Full 20-DP pilot with combined which_operation axes:
+
+| label | DPs | hit_rate |
+|---|---|---|
+| genuine_equipoise | 16 | **0.938** (15/16) |
+| settled controls | 4 | **1.000** |
+| **overall** | 20 | **0.950** |
+
+which_operation rose to **7/8** (0.875). The `contestedBy` attribution proves both axes are load-bearing:
+5 cases contested by both, **1 by demand_risk only** (`acl-graft-choice`), **1 by pathology only**
+(`pkr-vs-tka`) — dropping either axis loses a case. The lone remaining miss, `nail-vs-plate`, flips on
+neither demand nor pathology: it's a **fracture-pattern** decision (a third axis we don't yet model;
+candidate for a pattern-specific archetype, or it may be genuinely near-settled — nailing is broadly
+standard). conservative_vs_operative stayed 8/8 on demand×risk alone. specialist_positions stores the
+demand_risk `average` archetype as the representative snapshot; full per-axis/per-archetype detail
+lives in `panel_runs.split_summary` (`groups[]` + `contestedBy`).
