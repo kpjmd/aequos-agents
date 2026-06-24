@@ -392,6 +392,10 @@ class OrthoIQAgentSystem {
       await sql`CREATE INDEX IF NOT EXISTS idx_coord_div_consultation_id ON coordination_divergences(consultation_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_coord_div_persisted ON coordination_divergences(persisted)`;
 
+      // Equipoise benchmark & proprietary core (Phase 1) — additive, idempotent.
+      const { runEquipoiseMigrations } = await import('./utils/equipoise-schema.js');
+      await runEquipoiseMigrations(sql);
+
       logger.info('✅ Database migrations complete');
     } catch (error) {
       logger.error(`⚠️  Database migration failed: ${error.message}`);
