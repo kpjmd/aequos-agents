@@ -28,6 +28,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const modelVersions = JSON.parse(
   readFileSync(join(__dirname, '..', 'db', 'seeds', 'model-versions.json'), 'utf8')
 );
+const absoluteIndications = JSON.parse(
+  readFileSync(join(__dirname, '..', 'db', 'seeds', 'absolute-indications.json'), 'utf8')
+);
 
 /** Empty string -> null (optional columns); leave everything else intact. */
 const nz = (v) => (v === undefined || v === null || String(v).trim() === '' ? null : v);
@@ -76,6 +79,11 @@ async function main() {
     `;
   }
   console.log(`✓ decision_points: ${rows.length} upserted`);
+
+  // ---- absolute_indication overlay (red-flag DPs: tag, don't suppress) ----
+  // Idempotent: sets true for the curated slugs and false for everything else.
+  await sql`UPDATE decision_points SET absolute_indication = (slug = ANY(${absoluteIndications}::text[]))`;
+  console.log(`✓ absolute_indication: ${absoluteIndications.length} tagged`);
 
   // ---- report the ground-truth distribution (moat sanity check) ----
   const dist = await sql`

@@ -77,9 +77,15 @@ export async function runEquipoiseMigrations(sql) {
     label_provenance   label_provenance,
     label_source_refs  JSONB,
     is_active          BOOLEAN     NOT NULL DEFAULT true,
+    absolute_indication BOOLEAN    NOT NULL DEFAULT false,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
   )`;
+  // Additive migration for DBs whose decision_points predates absolute_indication. Red-flag DPs
+  // (overwhelming-operative with bailout-only exceptions, e.g. cord compression, open joint) carry
+  // this flag: the detector may over-flag them as contested, but that routes to urgent surgical
+  // consultation (product-safe), so the benchmark SEGMENTS them rather than scoring them as equipoise.
+  await sql`ALTER TABLE decision_points ADD COLUMN IF NOT EXISTS absolute_indication BOOLEAN NOT NULL DEFAULT false`;
 
   // ---- queries: every query run through the platform (live OR curated benchmark probe) ----
   await sql`CREATE TABLE IF NOT EXISTS queries (
@@ -214,13 +220,14 @@ export async function runEquipoiseMigrations(sql) {
                AND pr.detector_verdict = 'converged' THEN 1
           ELSE 0
         END
-      )::numeric(4,3) AS detector_hit_rate
+      )::numeric(4,3) AS detector_hit_rate,
+      dp.absolute_indication
     FROM panel_runs pr
     JOIN decision_points dp ON dp.id = pr.decision_point_id
     JOIN model_versions  mv ON mv.id = pr.model_version_id
     WHERE pr.run_kind = 'benchmark_probe'
       AND dp.expected_equipoise <> 'evolving'
-    GROUP BY dp.slug, dp.expected_equipoise, mv.model_string`;
+    GROUP BY dp.slug, dp.expected_equipoise, dp.absolute_indication, mv.model_string`;
 
   await sql`CREATE OR REPLACE VIEW v_detector_md_agreement AS
     SELECT

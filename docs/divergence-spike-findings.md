@@ -369,3 +369,43 @@ redundant** — when one axis wobbles, another carries it. This is the reproduci
 multi-axis design: the combined verdict is more stable than any single axis. Settled controls were rock
 stable (converged ×3 each). Still to do: the full 122-sweep at N≥3, and the first-class `archetype`
 column if production adopts this.
+
+## Full-control specificity sweep + MD adjudication + absolute_indication (2026-06-24)
+
+The pilot's 100% specificity was a 4-control artifact. **Tier A** ran all 35 settled controls at N=1
+(`--label` flag): real specificity was **26/35 = 0.743**, weak on settled_**operative** (0.60), with 9
+false positives almost all driven by the demand axis's `low_demand_high_risk` archetype manufacturing a
+non-operative/palliative option on operative cases.
+
+**MD adjudication** (the user is an ortho surgeon — the Phase 3 md_reviews loop, early) split the 9:
+**7 were MISLABELS** → relabeled `genuine_equipoise`, provenance `md_adjudication`, rationales rewritten
+(quad-tendon: complete-vs-partial; garden-I; periprosthetic B1: stem stability; talus & osteomyelitis:
+frail/nonambulatory; knee dislocation; morton neuroma: refractory). **2 were true FPs** kept
+settled_operative (atlantoaxial-myelopathy, pelvic-ring-vertical-shear). After relabel: benchmark is
+94 genuine / 14 settled_conservative / 14 settled_operative.
+
+**Method fix:** the demand archetypes' directional priority steers were neutralized to a constant goal
+(only the demand/risk FACTS vary now — consistent with the pathology/fracture axes). Re-run: **zero
+sensitivity cost (23/23 genuine still contested)**; it converged pelvic-ring but the demand FACTS alone
+still flip atlantoaxial (and surfaced scoliosis). Lesson: residual flips on absolute-indication cases
+are fact-driven, not steer-driven — archetype tuning can't fix them without risking sensitivity.
+
+**absolute_indication tag** (new `decision_points.boolean`, curated in `db/seeds/absolute-indications.json`,
+segmented in `v_benchmark_accuracy`): 11 red-flag DPs (overwhelming-operative with bailout-only
+exceptions — septic joint, cauda equina, compartment syndrome, open fractures, acute nerve compression,
+traumatic arthrotomy, atlantoaxial-myelopathy, etc.). A contested verdict on these routes to urgent
+surgical consultation (product-safe via Phase 2b `route_to_human`), so they are SEGMENTED, not suppressed.
+
+**Final post-adjudication picture (full control set + 23 genuine):**
+
+| segment | n | hit_rate |
+|---|---|---|
+| sensitivity (genuine_equipoise) | 23 | **1.000** |
+| specificity (settled, non-absolute) — the instrument | 17 | **0.941** |
+| absolute-indication (route-safe) | 11 | 0.909 |
+
+The only non-absolute settled FP is `scoliosis-cobb-55` (adolescent/progressive → operative as written;
+accepted FP — the demand axis over-flags, MD-confirmed). The one absolute-indication "miss"
+(`atlantoaxial`) routes to surgery, the correct action. Net: a calibrated instrument — 1.00 sensitivity,
+0.94 specificity on true-equipoise controls — with red-flag cases honestly segmented rather than gamed.
+Still to do: full 122-sweep at N≥3, MD review of the rest for more absolute-indication DPs, then Phase 2b.

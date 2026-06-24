@@ -24,6 +24,7 @@
  *   --limit N            cap total DPs sampled (default: the ~20-row stratified pilot)
  *   --decision-type T    restrict to decision_type T (repeatable)
  *   --slug S             run specific decision point(s) by slug (repeatable; bypasses sampling)
+ *   --label L            restrict to expected_equipoise label(s) (repeatable; e.g. settled_operative)
  *   --all                run every active decision point (full sweep; ignores stratification)
  *   --n RUNS             reproducibility runs per DP (run_index 1..N; default 1)
  *   --population         use single population-level run instead of archetype-flip (legacy probe)
@@ -38,7 +39,7 @@ const POSITION_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 const POPULATION_CASE = { population: true, note: 'equipoise benchmark probe — population-level' };
 
 function parseArgs(argv) {
-  const opts = { decisionTypes: [], slugs: [], n: 1, dialogue: false, dryRun: false, all: false, limit: null, population: false, noControls: false };
+  const opts = { decisionTypes: [], slugs: [], labels: [], n: 1, dialogue: false, dryRun: false, all: false, limit: null, population: false, noControls: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') opts.dryRun = true;
@@ -50,17 +51,21 @@ function parseArgs(argv) {
     else if (a === '--n') opts.n = Math.max(1, parseInt(argv[++i], 10) || 1);
     else if (a === '--decision-type') opts.decisionTypes.push(argv[++i]);
     else if (a === '--slug') opts.slugs.push(argv[++i]);
+    else if (a === '--label') opts.labels.push(argv[++i]);
   }
   return opts;
 }
 
-/** Resolve the DP set: explicit --slug list bypasses sampling; otherwise stratified-sample. */
+/** Resolve the DP set: --slug (explicit) > --label (filter) > stratified-sample. */
 function selectSample(rows, opts, stratifiedSample) {
   if (opts.slugs.length > 0) {
     const bySlug = new Map(rows.map((r) => [r.slug, r]));
     const missing = opts.slugs.filter((s) => !bySlug.has(s));
     if (missing.length) console.warn(`  ! unknown slug(s) ignored: ${missing.join(', ')}`);
     return opts.slugs.map((s) => bySlug.get(s)).filter(Boolean);
+  }
+  if (opts.labels.length > 0) {
+    return rows.filter((r) => opts.labels.includes(r.expected_equipoise));
   }
   const sOpts = samplerOpts(opts);
   return sOpts === null ? rows : stratifiedSample(rows, sOpts);
@@ -299,7 +304,7 @@ function stanceLine(splitSummary) {
 /** decision_type × expected_equipoise hit-rate — the which_operation reading + raw view. */
 async function printReadout(sql) {
   const seg = await sql`
-    SELECT dp.decision_type, dp.expected_equipoise,
+    SELECT dp.decision_type, dp.expected_equipoise, dp.absolute_indication,
            COUNT(*)::int AS n_runs,
            AVG(CASE
              WHEN dp.expected_equipoise = 'genuine_equipoise' AND pr.detector_verdict = 'contested' THEN 1
@@ -308,13 +313,14 @@ async function printReadout(sql) {
     FROM panel_runs pr
     JOIN decision_points dp ON dp.id = pr.decision_point_id
     WHERE pr.run_kind = 'benchmark_probe'
-    GROUP BY dp.decision_type, dp.expected_equipoise
-    ORDER BY dp.decision_type, dp.expected_equipoise
+    GROUP BY dp.decision_type, dp.expected_equipoise, dp.absolute_indication
+    ORDER BY dp.absolute_indication, dp.decision_type, dp.expected_equipoise
   `;
   console.log('detector_hit_rate by decision_type × expected_equipoise (benchmark_probe):');
-  console.log(`  ${'decision_type'.padEnd(28)} ${'expected'.padEnd(22)} n   hit_rate`);
+  console.log('(absolute_indication red-flag DPs segmented — a contested verdict there routes to surgery, product-safe)');
+  console.log(`  abs  ${'decision_type'.padEnd(28)} ${'expected'.padEnd(22)} n   hit_rate`);
   for (const r of seg) {
-    console.log(`  ${r.decision_type.padEnd(28)} ${r.expected_equipoise.padEnd(22)} ${String(r.n_runs).padEnd(3)} ${r.detector_hit_rate}`);
+    console.log(`  ${(r.absolute_indication ? ' ! ' : '   ')} ${r.decision_type.padEnd(28)} ${r.expected_equipoise.padEnd(22)} ${String(r.n_runs).padEnd(3)} ${r.detector_hit_rate}`);
   }
 }
 

@@ -21,6 +21,14 @@
  * extent/bone-quality); the stated goal is held constant so the set doesn't steer toward an option.
  */
 
+// The `priorities` goal is held CONSTANT and neutral across the three archetypes (it does NOT steer
+// toward surgery or non-op): only the FACTS — functional demand and surgical-risk profile — vary, so
+// the panel weighs them clinically. An earlier directional steer on the low archetype ("avoid
+// unnecessary surgical risk / symptom relief and safety") manufactured palliative non-op options that
+// false-positived absolute-indication cases (atlantoaxial myelopathy, unstable pelvic ring); neutralizing
+// it lets demand/risk inform the choice without overriding a mandatory operative indication.
+const DEMAND_RISK_GOAL = 'the most appropriate management given this patient\'s functional demand and surgical-risk profile';
+
 export const DEMAND_RISK_ARCHETYPES = [
   {
     key: 'high_demand_low_risk',
@@ -28,7 +36,7 @@ export const DEMAND_RISK_ARCHETYPES = [
     case: {
       activityLevel: 'high functional demand (competitive sport or heavy manual work)',
       surgicalRisk: 'low (healthy, no comorbidities raising operative risk)',
-      priorities: 'maximize function and return to full activity',
+      priorities: DEMAND_RISK_GOAL,
     },
   },
   {
@@ -37,7 +45,7 @@ export const DEMAND_RISK_ARCHETYPES = [
     case: {
       activityLevel: 'moderate functional demand (recreational activity, typical daily demands)',
       surgicalRisk: 'average',
-      priorities: 'balanced recovery of function at acceptable risk',
+      priorities: DEMAND_RISK_GOAL,
     },
   },
   {
@@ -46,7 +54,7 @@ export const DEMAND_RISK_ARCHETYPES = [
     case: {
       activityLevel: 'low functional demand (sedentary, modest functional goals)',
       surgicalRisk: 'elevated (comorbidities raising operative risk)',
-      priorities: 'symptom relief and safety; avoid unnecessary surgical risk',
+      priorities: DEMAND_RISK_GOAL,
     },
   },
 ];

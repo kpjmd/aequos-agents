@@ -95,3 +95,23 @@ describe('model_versions seed', () => {
     expect(new Set(strings).size).toBe(strings.length);
   });
 });
+
+describe('absolute_indication overlay', () => {
+  const slugs = JSON.parse(
+    readFileSync(join(__dirname, '..', 'db', 'seeds', 'absolute-indications.json'), 'utf8')
+  );
+  const rows = loadDecisionPoints();
+  const bySlug = new Map(rows.map((r) => [r.slug, r]));
+
+  test('every tagged slug exists in the benchmark', () => {
+    for (const s of slugs) expect(bySlug.has(s)).toBe(true);
+  });
+
+  test('tagged slugs are unique', () => {
+    expect(new Set(slugs).size).toBe(slugs.length);
+  });
+
+  test('absolute-indication DPs are settled_operative (red-flag, operative-mandatory)', () => {
+    for (const s of slugs) expect(bySlug.get(s).expected_equipoise).toBe('settled_operative');
+  });
+});
