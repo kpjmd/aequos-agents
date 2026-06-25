@@ -1,5 +1,11 @@
 # absolute_indication — MD review worksheet
 
+> **RESOLVED 2026-06-25 (MD):** definition is **STRICT** (operative-vs-bailout-nonop only).
+> `open-fracture-debridement-timing` stays **untagged** (surgery is required, but the decision is
+> timing of mandatory surgery — out of scope for the strict tag). **No tagging changes** — the 11
+> tags are final for now. Future red-flag-variant DPs (burst *with* deficit, Gartland III pulseless,
+> etc.) would be tagged when added.
+
 Generated 2026-06-24 for review. Scan of all 122 benchmark DPs for the **red-flag /
 absolute-indication** class: *operative answer is overwhelming; the only non-operative path is a
 bailout* (e.g. patient can't survive surgery, rare atypical variant). A "contested" detector verdict
