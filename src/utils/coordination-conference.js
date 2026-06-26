@@ -25,7 +25,7 @@ const CONFIDENCE_FLOOR = 0.6;        // a stance must clear this to count toward
 // equipoise decision, but triage's *ranking* of which decision is "most central" varies run-to-run.
 // Capping at 1 gambled on a single decision and missed real splits on the others.
 const MAX_DECISION_POINTS = 3;       // cost cap: up to 3 contested decisions × specialists, contested cases only
-const POSITION_SPECIALISTS = ['painWhisperer', 'movementDetective', 'strengthSage', 'mindMender'];
+export const POSITION_SPECIALISTS = ['painWhisperer', 'movementDetective', 'strengthSage', 'mindMender'];
 
 export class CoordinationConference {
   constructor() {

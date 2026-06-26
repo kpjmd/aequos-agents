@@ -27,9 +27,14 @@
  *   --label L            restrict to expected_equipoise label(s) (repeatable; e.g. settled_operative)
  *   --all                run every active decision point (full sweep; ignores stratification)
  *   --n RUNS             reproducibility runs per DP (run_index 1..N; default 1)
+ *   --batch              submit panel calls via the Anthropic Message Batches API (50% off all
+ *                        tokens; archetype-flip mode only). Same detector semantics as the
+ *                        synchronous path — only the transport changes. See src/utils/batch-probe.js.
+ *   --resume-batch ID    re-ingest results from an already-submitted batch (same --all/--n/order)
  *   --population         use single population-level run instead of archetype-flip (legacy probe)
  *   --dialogue           (population mode only) run the Step-3 dialogue round
  *   --dry-run            print the sample + archetypes + stance mapping; no agents/DB/spend
+ *                        (with --batch: also prints the request count + 50%-off note)
  */
 import dotenv from 'dotenv';
 
@@ -39,7 +44,7 @@ const POSITION_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 const POPULATION_CASE = { population: true, note: 'equipoise benchmark probe — population-level' };
 
 function parseArgs(argv) {
-  const opts = { decisionTypes: [], slugs: [], labels: [], n: 1, dialogue: false, dryRun: false, all: false, limit: null, population: false, noControls: false };
+  const opts = { decisionTypes: [], slugs: [], labels: [], n: 1, dialogue: false, dryRun: false, all: false, limit: null, population: false, noControls: false, batch: false, resumeBatch: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') opts.dryRun = true;
@@ -47,6 +52,8 @@ function parseArgs(argv) {
     else if (a === '--population') opts.population = true;
     else if (a === '--no-controls') opts.noControls = true;
     else if (a === '--all') opts.all = true;
+    else if (a === '--batch') opts.batch = true;
+    else if (a === '--resume-batch') opts.resumeBatch = argv[++i];
     else if (a === '--limit') opts.limit = parseInt(argv[++i], 10);
     else if (a === '--n') opts.n = Math.max(1, parseInt(argv[++i], 10) || 1);
     else if (a === '--decision-type') opts.decisionTypes.push(argv[++i]);
@@ -128,6 +135,17 @@ async function main() {
     } else {
       console.log('\ndetection: population mode (single panel/DP)');
     }
+
+    if (opts.batch && !opts.population) {
+      const { countBatchRequests } = await import('../src/utils/batch-probe.js');
+      const reqs = countBatchRequests(sample, opts.n);
+      console.log(`\nbatch mode: ${reqs} Anthropic Messages request(s) (archetype-flip, N=${opts.n})`);
+      console.log('  submitted as one Message Batch → flat 50% off all tokens vs the synchronous path');
+      console.log('  (confirm $ with a count_tokens spot-check on one position call)');
+    } else if (opts.batch && opts.population) {
+      console.log('\n! --batch supports archetype-flip mode only; --population is not batched.');
+    }
+
     console.log('\nDRY RUN OK ✅  (re-run without --dry-run to execute the live probe)');
     process.exit(0);
   }
@@ -185,6 +203,63 @@ async function main() {
     ['mindMender', new MindMenderAgent('Mind Mender')],
   ]);
   const conference = new CoordinationConference();
+
+  // ---------- BATCHED PATH: submit all panel calls as one Message Batch (50% off) ----------
+  if (opts.batch) {
+    if (opts.population) {
+      console.error('--batch supports archetype-flip mode only (not --population).');
+      process.exit(1);
+    }
+    const { runBatchProbe } = await import('../src/utils/batch-probe.js');
+
+    // One benchmark query per DP up front (cheap, no LLM), reused across reproducibility runs.
+    const dpInfo = new Map();
+    for (const dp of sample) {
+      const q = await sql`
+        INSERT INTO queries (raw_text, is_benchmark) VALUES (${dp.canonical_question}, true) RETURNING id
+      `;
+      const queryId = q[0].id;
+      await sql`
+        INSERT INTO query_decision_points (query_id, decision_point_id, detected_by)
+        VALUES (${queryId}, ${dp.id}, 'manual')
+        ON CONFLICT (query_id, decision_point_id) DO NOTHING
+      `;
+      dpInfo.set(dp.slug, { queryId, dp });
+    }
+
+    const maxTokens = parseInt(process.env.MAX_TOKENS, 10) || 2500;
+    const results = await runBatchProbe(
+      sample,
+      { n: opts.n, model: POSITION_MODEL, maxTokens, resumeBatchId: opts.resumeBatch },
+      { specialists }
+    );
+
+    let runsB = 0;
+    for (const res of results) {
+      const { queryId, dp } = dpInfo.get(res.slug);
+      await storePanelRun(sql, {
+        queryId,
+        decisionPointId: dp.id,
+        modelVersionId,
+        verdict: res.verdict,
+        optionALabel: dp.option_a_label,
+        optionBLabel: dp.option_b_label,
+        runKind: 'benchmark_probe',
+        runIndex: res.runIndex,
+        splitSummary: res.splitSummary,
+        positions: res.positions,
+      });
+      runsB++;
+      const hit = isHit(dp.expected_equipoise, res.verdict);
+      console.log(`  [${runsB}] ${dp.slug} (${dp.decision_type}/${dp.expected_equipoise}) ` +
+        `→ ${res.verdict} ${hit ? '✓' : '✗'}  ${res.detail}`);
+    }
+
+    console.log(`\n✓ stored ${runsB} benchmark_probe run(s) [batched]\n`);
+    await printReadout(sql);
+    console.log('\nPROBE OK ✅');
+    process.exit(0);
+  }
 
   let runs = 0;
   for (const dp of sample) {

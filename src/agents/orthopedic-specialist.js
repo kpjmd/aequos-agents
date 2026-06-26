@@ -21,14 +21,22 @@ export class OrthopedicSpecialist extends BaseAgent {
    * @param {Object} context - { mode, timeout }
    * @returns {Promise<{decisionPointId,specialist,specialistType,stance,confidence,reasoning,evidenceGrade}>}
    */
-  async statePosition(caseData, decisionPoint, context = {}) {
-    const schema = makePositionSchema(decisionPoint.options);
+  /**
+   * Build the exact statePosition user prompt (population vs patient-specific branch).
+   * Extracted so the batched benchmark path (src/utils/batch-probe.js) can replicate the
+   * live position call byte-for-byte — single source of truth for the prompt.
+   * @param {Object} caseData
+   * @param {{id,question,options}} decisionPoint
+   * @param {Object} context - { population }
+   * @returns {string}
+   */
+  buildPositionPrompt(caseData, decisionPoint, context = {}) {
     const optionList = decisionPoint.options.map((o, i) => `  ${i + 1}. ${o}`).join('\n');
 
     // Population mode (benchmark probe): reason at the population level on a canonical decision,
     // not for a specific patient. Isolates the detector's intrinsic equipoise sensitivity and
     // avoids the vignette-framing confounds that drive convergence (see divergence-spike-findings).
-    const prompt = context.population === true
+    return context.population === true
       ? `As ${this.name} (${this.subspecialty}), state YOUR position on the following clinical decision at the POPULATION level, reasoning ONLY from your area of expertise.
 
 DECISION: ${decisionPoint.question}
@@ -55,6 +63,11 @@ Instructions:
 - Choose exactly one option you support, OR choose "defer".
 - DEFER if this decision is outside your specialty lens, or if the evidence available to you is insufficient to take a responsible position. Deferring is appropriate and expected — do not invent a stance to seem decisive.
 - Ground your reasoning in THIS patient's specifics, from your specialty's perspective.`;
+  }
+
+  async statePosition(caseData, decisionPoint, context = {}) {
+    const schema = makePositionSchema(decisionPoint.options);
+    const prompt = this.buildPositionPrompt(caseData, decisionPoint, context);
 
     try {
       const result = await this.processStructured(prompt, schema, {

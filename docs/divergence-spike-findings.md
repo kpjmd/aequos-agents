@@ -409,3 +409,54 @@ accepted FP — the demand axis over-flags, MD-confirmed). The one absolute-indi
 (`atlantoaxial`) routes to surgery, the correct action. Net: a calibrated instrument — 1.00 sensitivity,
 0.94 specificity on true-equipoise controls — with red-flag cases honestly segmented rather than gamed.
 Still to do: full 122-sweep at N≥3, MD review of the rest for more absolute-indication DPs, then Phase 2b.
+
+## Full 122-sweep, N=1 (batched) — headline numbers + timing-axis gap (2026-06-25)
+
+First full run of the validated archetype-flip detector across ALL 122 benchmark DPs, via a new
+**Batch API path** (50% off all tokens; `npm run benchmark:probe -- --all --n 1 --batch`). Neon dev
+branch `equipoise-sweep-batch`, Sonnet 4.6, one Message Batch of 2,472 requests
+(`msgbatch_01DzemV811UiVSaX2hrXmmQp`). Live DB untouched.
+
+| segment | n | hit_rate |
+|---|---|---|
+| sensitivity (genuine_equipoise) | 94 | **0.894** (84/94) |
+| specificity (settled, non-absolute) | 17 | **0.941** (16/17) |
+| absolute-indication (route-safe) | 11 | **1.000** |
+
+Specificity held EXACTLY at the small-sample value — lone FP `scoliosis-cobb-55` (the MD-accepted one).
+Sensitivity 0.894 vs 1.00 on the 23-DP subset: the full genuine set surfaces **10 false negatives**, in
+three clinically distinct groups:
+
+- **Structural axis gap — `timing_of_surgery` 0/3 (deterministic, NOT noise):**
+  `open-fracture-debridement-timing` (debunked 6-hr rule), `pilon-fracture-orif-early-vs-staged-exfix`
+  (soft-tissue envelope), `radial-nerve-palsy-exploration-vs-observation` (~70% spontaneous recovery).
+  Timing equipoise turns on biology / soft-tissue / nerve-recovery, not functional demand — but
+  `timing_of_surgery` runs ONLY the demand×risk axis, so it can never flip. Exact analog of the
+  `which_operation` multi-axis discovery. **Resolution (MD, 2026-06-25): documented as a known method
+  gap; build a `timing_of_surgery`-specific archetype axis (biological readiness / soft-tissue envelope /
+  spontaneous-recovery window) and validate alongside N=3 next month. No label changes.**
+- **`which_operation` not flipping on the 3 existing axes (2):** `acdf-allograft-vs-autograft`,
+  `lumbar-stenosis-decompression-alone-vs-interspinous-device` — near-settled or an unmodeled axis.
+- **`conservative_vs_operative` on the correct demand axis but converged (5):** `ankle-stable-weber-b`,
+  `frozen-shoulder`, `elbow-epicondylitis`, `cervical-radiculopathy-acdf-vs-pt`, `high-energy-talus-displaced`
+  — mix of near-settled-conservative candidates and likely N=1 stochastic.
+
+The **7 non-timing FNs are DEFERRED to N=3** (MD decision, 2026-06-25): N=1 has run-to-run variance, so
+only cases that reproducibly converge at N=3 are true mislabels; the rest are noise. **No labels changed
+this session** — we don't chase N=1 variance.
+
+**Batch infrastructure (faithful, reusable):** `src/utils/batch-probe.js` mirrors `statePosition` exactly
+(shared `OrthopedicSpecialist.buildPositionPrompt`; `makePositionSchema` → Anthropic tool with forced
+`tool_choice`; Sonnet, temperature 0.3, `MAX_TOKENS`) and reuses the conference's own
+`detectDivergence` / `summarizeDecisionPoint` + `computeArchetypeFlipVerdict` / `combineGroupVerdicts`,
+so per-run verdict / split_summary / positions are identical to the synchronous path **by construction**.
+Faithfulness check (4 DPs both ways — `septic-native-joint`, `degenerative-meniscal-tear`,
+`acl-rupture-early-recon-vs-rehab`, `acl-graft-choice`): identical verdicts, only the known axis-level
+wobble. `--batch` / `--resume-batch <id>` on `benchmark-probe.js`; `batch_id` persisted to `artifacts/`.
+Caching deliberately omitted (specialist system prompt ~300–400 tokens, below Sonnet's 2048 cache floor;
+position calls have no large stable prefix → would cache ~0 tokens). Cost lever for the sweep is batch alone.
+
+**Standing plan (next month):** (1) full sweep at **N=3** — the reproducible headline — which triages the 7
+non-timing FNs (noise vs true mislabel); (2) build + validate the `timing_of_surgery` archetype axis; then
+(3) Phase 2b (synthesizer + Clinician card). The N=1 sweep did its job: caught a structural axis gap and
+sized the FN set cheaply, before the N=3 spend.
