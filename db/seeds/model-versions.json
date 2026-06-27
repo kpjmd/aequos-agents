@@ -1,0 +1,23 @@
+[
+  {
+    "provider": "anthropic",
+    "model_string": "claude-sonnet-4-6",
+    "display_name": "Claude Sonnet 4.6",
+    "released_at": "2025-09-29",
+    "notes": "Position pass / full consultations (CLAUDE_MODEL default). Produces panel positions and deliberation."
+  },
+  {
+    "provider": "anthropic",
+    "model_string": "claude-haiku-4-5-20251001",
+    "display_name": "Claude Haiku 4.5",
+    "released_at": "2025-10-01",
+    "notes": "Fast-mode + research summaries (FAST_MODEL default). Not used for the position pass (see divergence-spike findings: keep positions on Sonnet)."
+  },
+  {
+    "provider": "anthropic",
+    "model_string": "claude-opus-4-8",
+    "display_name": "Claude Opus 4.8",
+    "released_at": "2026-01-01",
+    "notes": "Most capable Opus tier; seeded for convergence-over-time tracking as the panel model is upgraded."
+  }
+]

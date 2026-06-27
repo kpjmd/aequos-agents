@@ -236,3 +236,365 @@ shared-conservatism-bias hypothesis — but the dedicated probe (above, "Conserv
 calibrated vs sham), so the convergence is genuine consensus given the available information, not a
 shared blind spot. The remaining true variable is **DP framing** (neutral vs pre-loaded), not a
 fixed prior.
+
+## Phase 2a benchmark probe — population mode gives 0% equipoise sensitivity (2026-06-24)
+
+First real run of the detector against the curated 122-row benchmark via the new probe harness
+(`scripts/benchmark-probe.js`, `npm run benchmark:probe`; reuses `runDecisionPoints` extracted from
+`coordination-conference.js`). Pilot: 20 stratified DPs (16 `genuine_equipoise` = 8 `which_operation`
++ 8 `conservative_vs_operative`, plus 4 settled controls), **population mode** (canonical question +
+neutral "typical adult", no patient specifics), N=1, dialogue off, Sonnet. Persisted to
+`panel_runs`/`specialist_positions` on a Neon dev branch; read via `v_benchmark_accuracy`.
+
+| expected label | DPs | detector_hit_rate |
+|---|---|---|
+| settled_conservative | 2 | **1.000** |
+| settled_operative | 2 | **1.000** |
+| genuine_equipoise | 16 | **0.000** |
+
+**Specificity perfect, sensitivity zero.** Every settled control converged (correct); every
+genuine-equipoise DP *also* converged — both `which_operation` AND `conservative_vs_operative`,
+mostly 4-0 (e.g. ACL all 4 → rehab, conf 0.74-0.82). All 20 runs → `converged`.
+
+Two conclusions:
+1. **The `which_operation` all-`defer` fear was WRONG.** Abstentions were rare (~2/80 positions). The
+   lenses *do* take technique sides — they just all pick the **same** side (all-converge, not
+   all-defer). The risk for technique choices is shared consensus, not deferral.
+2. **Equipoise-divergence is patient-specific, not population-level.** The spike's ACL split came from
+   a *concrete* 28yo athlete whose specifics pulled Strength/Movement toward surgery. Population mode
+   strips exactly those specifics, so the panel falls back to its shared modal answer. "Population-level
+   equipoise" (reasonable experts disagree across the population) ≠ what the panel computes ("best
+   answer for a typical patient"). The harness/schema/views are all correct — they measured a real 0%;
+   the probe **input** was wrong for the construct.
+
+The detector is NOT broken (specificity proves discrimination). **Next:** measure equipoise the way it
+actually manifests — see the archetype-flip section below.
+
+## Archetype-flip restores sensitivity — the instrument works (2026-06-24)
+
+Operationalized population equipoise as **archetype-flip** (`src/utils/archetype-flip.js`): run each DP
+under 3 age-agnostic patient archetypes that vary the two levers which actually flip orthopedic
+decisions — functional demand × surgical risk: `high_demand_low_risk`, `average`,
+`low_demand_high_risk`. A DP is **contested** if the panel's modal answer FLIPS across archetypes OR
+any single archetype is internally split; **converged** if the modal answer is stable across all three.
+Same 20-DP pilot (Sonnet, N=1, dialogue off), persisted to `panel_runs` (verdict) + `split_summary`
+(per-archetype modal stances) + `specialist_positions` (the `average` archetype as the representative
+snapshot — a pilot simplification; a first-class `archetype` column is deferred until the method is
+locked).
+
+| expected label | DPs | hit_rate (population → archetype) |
+|---|---|---|
+| genuine_equipoise | 16 | **0.000 → 0.875** |
+| settled_conservative | 2 | 1.000 → 1.000 |
+| settled_operative | 2 | 1.000 → 1.000 |
+| **overall** | | **→ 0.900** |
+
+**Sensitivity 0% → 87.5%, specificity held at 100%.** The flips are clinically faithful:
+femoral-neck fracture → THA for high-demand/average, **hemiarthroplasty** for low-demand-high-risk
+(the real THA-vs-hemi decision); ACL → surgery for high-demand, rehab for low-demand (reproduces the
+spike's ACL split systematically). All 4 settled controls stayed stable across archetypes (cauda
+equina → surgery for all; septic joint → drainage for all; degenerative meniscus & subacromial →
+conservative for all).
+
+The **2 which_operation misses** are interpretable, not failures: `pkr-vs-tka` and
+`nail-vs-plate` are driven by **anatomy / fracture pattern**, not demand or risk, so the demand×risk
+archetypes don't activate the deciding axis. → which_operation may need decision-type-specific
+archetype axes (or some technique choices carry genuinely less demand-driven equipoise). conservative_vs_operative,
+where demand×risk IS the deciding axis, scored a clean 8/8.
+
+**Conclusion:** archetype-flip is the right equipoise measure. The detector diverges iff the decision
+is genuinely patient-dependent, reproducibly and with faithful per-side reasoning, while staying quiet
+on settled cases. This is the validated moat metric Phase 2a set out to produce. Open items before the
+full 122-sweep: decision-type-specific archetype axes for which_operation, N>1 reproducibility runs,
+and a first-class `archetype` column if the method is adopted for production.
+
+### which_operation needs BOTH axes — combined demand×risk + pathology (2026-06-24)
+
+The demand×risk pilot scored which_operation 6/8, but a pathology×bone-quality re-run also scored 6/8
+on a DIFFERENT set: pathology FIXED `pkr-vs-tka` (limited→PKR, extensive→TKA) but BROKE
+`acl-graft-choice` (graft choice flips on athletic DEMAND, not pathology). So which_operation
+technique choices don't share one axis. Fix (`archetypeGroupsForDecisionType`): for which_operation
+run **both** axes and label contested if EITHER flips/splits (equipoise = case-dependent along any
+clinically real axis); other decision types keep demand×risk alone.
+
+Full 20-DP pilot with combined which_operation axes:
+
+| label | DPs | hit_rate |
+|---|---|---|
+| genuine_equipoise | 16 | **0.938** (15/16) |
+| settled controls | 4 | **1.000** |
+| **overall** | 20 | **0.950** |
+
+which_operation rose to **7/8** (0.875). The `contestedBy` attribution proves both axes are load-bearing:
+5 cases contested by both, **1 by demand_risk only** (`acl-graft-choice`), **1 by pathology only**
+(`pkr-vs-tka`) — dropping either axis loses a case. The lone remaining miss, `nail-vs-plate`, flips on
+neither demand nor pathology: it's a **fracture-pattern** decision (a third axis we don't yet model;
+candidate for a pattern-specific archetype, or it may be genuinely near-settled — nailing is broadly
+standard). conservative_vs_operative stayed 8/8 on demand×risk alone. specialist_positions stores the
+demand_risk `average` archetype as the representative snapshot; full per-axis/per-archetype detail
+lives in `panel_runs.split_summary` (`groups[]` + `contestedBy`).
+
+### A third axis — fracture_pattern / technical feasibility — closes which_operation to 8/8 (2026-06-24)
+
+Clinical input (kpjohnsonmd): `nail-vs-plate` for a subtrochanteric fracture is settled (nail is gold
+standard) UNTIL a technical-feasibility context forces the alternative — periprosthetic fracture with
+retained hardware blocking the canal, failed prior nailing, or a pattern requiring precise open control
+of fragments. Added `FRACTURE_PATTERN_ARCHETYPES` (standard / intermediate / constrained-context) as a
+third which_operation axis. Re-run of the 8 which_operation DPs:
+
+- `nail-vs-plate` → **contested** via `fracture_pattern=flip` (standard→nail, constrained→plate) — the
+  surgeon's axis, confirmed.
+- The new axis was **stable on the other 7** which_operation cases — specific, not a flip-manufacturing
+  knob (no spurious flips, specificity intact).
+
+**which_operation 7/8 → 8/8; full pilot now genuine_equipoise 16/16 = 1.000, settled controls 4/4 =
+1.000, overall 20/20.** Each of the three axes is uniquely load-bearing for at least one case:
+`acl-graft-choice` (demand only), `pkr-vs-tka` (pathology only), `nail-vs-plate` (fracture_pattern
+only) — none is redundant. **Caveat: this is N=1 on a 20-DP curated pilot.** The 1.000 is a strong
+signal, not final validation — N>1 reproducibility and the full 122-sweep are the real tests (a perfect
+score on N=1 could also mask run-to-run variance, the next thing to measure).
+
+### N=3 reproducibility — verdict is stable; the multi-axis combine absorbs axis-level variance (2026-06-24)
+
+Ran N=3 on a 10-DP representative subset (the 3 single-axis which_operation cases + a both-axis case +
+2 conservative_vs_operative genuine + all 4 settled controls; `--slug` added to the harness for precise
+selection). **Result: 0/10 slugs had an unstable verdict — every slug returned the SAME verdict all 3
+runs (overall v_benchmark_accuracy 1.000).**
+
+The important nuance is at the axis level: individual axes DO vary run-to-run (as the spike predicted —
+positions carry stochastic variance). E.g. `acl-graft-choice` was contested by pathology+demand in runs
+1-2 but demand-only in run 3 (pathology went stable); `pkr-vs-tka`'s fracture_pattern axis fired only
+in run 2. **But the DP verdict held every time, because the OR-combine across axes makes the signal
+redundant** — when one axis wobbles, another carries it. This is the reproducibility argument for the
+multi-axis design: the combined verdict is more stable than any single axis. Settled controls were rock
+stable (converged ×3 each). Still to do: the full 122-sweep at N≥3, and the first-class `archetype`
+column if production adopts this.
+
+## Full-control specificity sweep + MD adjudication + absolute_indication (2026-06-24)
+
+The pilot's 100% specificity was a 4-control artifact. **Tier A** ran all 35 settled controls at N=1
+(`--label` flag): real specificity was **26/35 = 0.743**, weak on settled_**operative** (0.60), with 9
+false positives almost all driven by the demand axis's `low_demand_high_risk` archetype manufacturing a
+non-operative/palliative option on operative cases.
+
+**MD adjudication** (the user is an ortho surgeon — the Phase 3 md_reviews loop, early) split the 9:
+**7 were MISLABELS** → relabeled `genuine_equipoise`, provenance `md_adjudication`, rationales rewritten
+(quad-tendon: complete-vs-partial; garden-I; periprosthetic B1: stem stability; talus & osteomyelitis:
+frail/nonambulatory; knee dislocation; morton neuroma: refractory). **2 were true FPs** kept
+settled_operative (atlantoaxial-myelopathy, pelvic-ring-vertical-shear). After relabel: benchmark is
+94 genuine / 14 settled_conservative / 14 settled_operative.
+
+**Method fix:** the demand archetypes' directional priority steers were neutralized to a constant goal
+(only the demand/risk FACTS vary now — consistent with the pathology/fracture axes). Re-run: **zero
+sensitivity cost (23/23 genuine still contested)**; it converged pelvic-ring but the demand FACTS alone
+still flip atlantoaxial (and surfaced scoliosis). Lesson: residual flips on absolute-indication cases
+are fact-driven, not steer-driven — archetype tuning can't fix them without risking sensitivity.
+
+**absolute_indication tag** (new `decision_points.boolean`, curated in `db/seeds/absolute-indications.json`,
+segmented in `v_benchmark_accuracy`): 11 red-flag DPs (overwhelming-operative with bailout-only
+exceptions — septic joint, cauda equina, compartment syndrome, open fractures, acute nerve compression,
+traumatic arthrotomy, atlantoaxial-myelopathy, etc.). A contested verdict on these routes to urgent
+surgical consultation (product-safe via Phase 2b `route_to_human`), so they are SEGMENTED, not suppressed.
+
+**Final post-adjudication picture (full control set + 23 genuine):**
+
+| segment | n | hit_rate |
+|---|---|---|
+| sensitivity (genuine_equipoise) | 23 | **1.000** |
+| specificity (settled, non-absolute) — the instrument | 17 | **0.941** |
+| absolute-indication (route-safe) | 11 | 0.909 |
+
+The only non-absolute settled FP is `scoliosis-cobb-55` (adolescent/progressive → operative as written;
+accepted FP — the demand axis over-flags, MD-confirmed). The one absolute-indication "miss"
+(`atlantoaxial`) routes to surgery, the correct action. Net: a calibrated instrument — 1.00 sensitivity,
+0.94 specificity on true-equipoise controls — with red-flag cases honestly segmented rather than gamed.
+Still to do: full 122-sweep at N≥3, MD review of the rest for more absolute-indication DPs, then Phase 2b.
+
+## Full 122-sweep, N=1 (batched) — headline numbers + timing-axis gap (2026-06-25)
+
+First full run of the validated archetype-flip detector across ALL 122 benchmark DPs, via a new
+**Batch API path** (50% off all tokens; `npm run benchmark:probe -- --all --n 1 --batch`). Neon dev
+branch `equipoise-sweep-batch`, Sonnet 4.6, one Message Batch of 2,472 requests
+(`msgbatch_01DzemV811UiVSaX2hrXmmQp`). Live DB untouched.
+
+| segment | n | hit_rate |
+|---|---|---|
+| sensitivity (genuine_equipoise) | 94 | **0.894** (84/94) |
+| specificity (settled, non-absolute) | 17 | **0.941** (16/17) |
+| absolute-indication (route-safe) | 11 | **1.000** |
+
+Specificity held EXACTLY at the small-sample value — lone FP `scoliosis-cobb-55` (the MD-accepted one).
+Sensitivity 0.894 vs 1.00 on the 23-DP subset: the full genuine set surfaces **10 false negatives**, in
+three clinically distinct groups:
+
+- **Structural axis gap — `timing_of_surgery` 0/3 (deterministic, NOT noise):**
+  `open-fracture-debridement-timing` (debunked 6-hr rule), `pilon-fracture-orif-early-vs-staged-exfix`
+  (soft-tissue envelope), `radial-nerve-palsy-exploration-vs-observation` (~70% spontaneous recovery).
+  Timing equipoise turns on biology / soft-tissue / nerve-recovery, not functional demand — but
+  `timing_of_surgery` runs ONLY the demand×risk axis, so it can never flip. Exact analog of the
+  `which_operation` multi-axis discovery. **Resolution (MD, 2026-06-25): documented as a known method
+  gap; build a `timing_of_surgery`-specific archetype axis (biological readiness / soft-tissue envelope /
+  spontaneous-recovery window) and validate alongside N=3 next month. No label changes.**
+- **`which_operation` not flipping on the 3 existing axes (2):** `acdf-allograft-vs-autograft`,
+  `lumbar-stenosis-decompression-alone-vs-interspinous-device` — near-settled or an unmodeled axis.
+- **`conservative_vs_operative` on the correct demand axis but converged (5):** `ankle-stable-weber-b`,
+  `frozen-shoulder`, `elbow-epicondylitis`, `cervical-radiculopathy-acdf-vs-pt`, `high-energy-talus-displaced`
+  — mix of near-settled-conservative candidates and likely N=1 stochastic.
+
+The **7 non-timing FNs are DEFERRED to N=3** (MD decision, 2026-06-25): N=1 has run-to-run variance, so
+only cases that reproducibly converge at N=3 are true mislabels; the rest are noise. **No labels changed
+this session** — we don't chase N=1 variance.
+
+**Batch infrastructure (faithful, reusable):** `src/utils/batch-probe.js` mirrors `statePosition` exactly
+(shared `OrthopedicSpecialist.buildPositionPrompt`; `makePositionSchema` → Anthropic tool with forced
+`tool_choice`; Sonnet, temperature 0.3, `MAX_TOKENS`) and reuses the conference's own
+`detectDivergence` / `summarizeDecisionPoint` + `computeArchetypeFlipVerdict` / `combineGroupVerdicts`,
+so per-run verdict / split_summary / positions are identical to the synchronous path **by construction**.
+Faithfulness check (4 DPs both ways — `septic-native-joint`, `degenerative-meniscal-tear`,
+`acl-rupture-early-recon-vs-rehab`, `acl-graft-choice`): identical verdicts, only the known axis-level
+wobble. `--batch` / `--resume-batch <id>` on `benchmark-probe.js`; `batch_id` persisted to `artifacts/`.
+Caching deliberately omitted (specialist system prompt ~300–400 tokens, below Sonnet's 2048 cache floor;
+position calls have no large stable prefix → would cache ~0 tokens). Cost lever for the sweep is batch alone.
+
+**Standing plan (next month):** (1) full sweep at **N=3** — the reproducible headline — which triages the 7
+non-timing FNs (noise vs true mislabel); (2) build + validate the `timing_of_surgery` archetype axis; then
+(3) Phase 2b (synthesizer + Clinician card). The N=1 sweep did its job: caught a structural axis gap and
+sized the FN set cheaply, before the N=3 spend.
+
+## Full 122-sweep, N=3 (batched) — the reproducible headline + FN triage (2026-06-27)
+
+Full archetype-flip sweep across all 122 DPs at **N=3** via the Batch API (`npm run benchmark:probe --
+--all --n 3 --batch`). Neon dev branch `equipoise-sweep-batch`, Sonnet 4.6, one Message Batch of **7,416
+requests** (`msgbatch_013LmCvgHn8V7sadt6pEFSRS`), 366 panel_runs stored. Live DB untouched. N=1 rows
+cleared first for a clean readout. Reported two ways: **per-run-averaged** (apples-to-apples with the N=1
+table) and **per-slug majority-of-3** (the reproducible headline — collapse each slug to its modal verdict).
+
+| segment | n | per-run-avg | per-slug majority | N=1 |
+|---|---|---|---|---|
+| sensitivity (genuine_equipoise) | 94 | 0.918 (259/282) | **0.936 (88/94)** | 0.894 |
+| specificity (settled, non-absolute) | 17 | 0.941 (48/51) | **0.941 (16/17)** | 0.941 |
+| absolute-indication (route-safe) | 11 | 0.939 (31/33) | **1.000 (11/11)** | 1.000 |
+
+**Sensitivity rose 0.894 → 0.936** as N=1-noise FNs recovered; specificity held EXACTLY (lone FP
+`progressive-idiopathic-scoliosis-cobb-55-brace-vs-fusion`, contested 3/3 — deterministic, MD-accepted);
+absolute-indication clean by majority (2 of the 11 had a single contested run — atlantoaxial,
+distal-radius-with-median-nerve-compression — but route-to-surgery is product-safe either way).
+
+**Reproducibility:** 115/122 slugs (94.3%) returned an identical verdict across all 3 runs; **7/122 (5.7%)
+flipped within the runs**, every one resolved by a 2-1 majority (none 1.5-1.5 — N=3 has no ties). The 7
+unstable: 5 genuine_equipoise at 2-contested/1-converged (`high-energy-talus-...-cast-vs-orif`,
+`pilon-fracture-orif-early-vs-staged-exfix`, `acdf-allograft-vs-autograft`,
+`cervical-radiculopathy-posterior-foraminotomy-vs-acdf`, `lumbar-stenosis-...-interspinous-device`) and 2
+absolute settled_operative at 1-contested/2-converged (route-safe). This is the multi-axis OR-combine
+absorbing single-axis wobble — the same mechanism the 10-DP N=3 subset showed, now sized at full scale.
+
+**Triage of the 7 deferred non-timing FNs (the point of the N=3 spend):**
+
+- **3 RECOVERED → N=1 noise, leave `genuine_equipoise`** (now majority-contested at N=3):
+  `acdf-allograft-vs-autograft` (2/3), `lumbar-stenosis-decompression-alone-vs-interspinous-device` (2/3),
+  `high-energy-talus-fracture-displaced-cast-vs-orif` (2/3). N=1 caught these on a single converged draw;
+  they flip contested at majority. No change.
+- **4 REPRODUCIBLY CONVERGED (3/3 converged) → RELABELED `settled_conservative` (MD-adjudicated 2026-06-27):**
+  `ankle-fracture-stable-weberb-op-vs-nonop`, `cervical-radiculopathy-acdf-vs-pt`,
+  `elbow-epicondylitis-lateral-surgery-vs-conservative`, `frozen-shoulder-physio-vs-surgical-release`.
+  All four carry literature rationales that themselves state **long-term outcomes converge** with the
+  operative arm reserved for refractory cases (frozen shoulder cites UK FROST = no PRO difference at 12mo;
+  epicondylitis = little different from natural history). The MD (ortho surgeon) signed off on all four as
+  near-settled-conservative; CSV updated (`label_provenance='md_adjudication'`, rationales reframed), dev
+  branch reseeded (no panel re-run — the 366 stored verdicts re-scored against the new labels).
+
+**Post-adjudication benchmark: 90 genuine / 18 settled_conservative / 14 settled_operative** (11 absolute).
+Re-scored headline on the SAME 366 runs:
+
+| segment | n | per-run-avg | per-slug majority |
+|---|---|---|---|
+| sensitivity (genuine_equipoise) | 90 | 0.959 (259/270) | **0.978 (88/90)** |
+| specificity (settled, non-absolute) | 21 | 0.952 (60/63) | **0.952 (20/21)** |
+| absolute-indication (route-safe) | 11 | 0.939 (31/33) | **1.000 (11/11)** |
+
+**The only 2 remaining genuine FNs are the timing structural-gap cases** (`open-fracture-debridement-timing`,
+`radial-nerve-palsy-...` — both 0/3, deterministic); the only specificity FP remains
+`scoliosis-cobb-55` (MD-accepted). A calibrated instrument: 0.978 sensitivity, 0.952 specificity,
+1.000 absolute-indication, with every miss a known/documented case.
+
+**Timing structural axis gap — persists for the biology/nerve-recovery cases (2 of 3):**
+`open-fracture-debridement-timing` (0/3 contested) and
+`radial-nerve-palsy-humeral-fracture-exploration-vs-observation` (0/3) remain **deterministic** FNs — the
+demand×risk axis cannot flip a decision driven by biology / spontaneous nerve recovery. `pilon-fracture-...`
+recovered to 2/3 contested (the demand axis occasionally catches the soft-tissue/demand correlation). This
+re-confirms the need for a `timing_of_surgery`-specific archetype axis (biological readiness / soft-tissue
+envelope / spontaneous-recovery window) — the exact analog of the which_operation multi-axis discovery.
+
+**Net:** N=3 is the validated headline. Pre-adjudication: sensitivity 0.936, specificity 0.941,
+absolute 1.000, 94% verdict reproducibility. The 7 deferred FNs split 3-noise / 4-near-settled exactly as
+the N=1-vs-N=3 design intended; the 4 near-settled were MD-relabeled `settled_conservative`, giving the
+**post-adjudication instrument: 0.978 / 0.952 / 1.000** with the only 2 misses the documented timing-axis
+gap. Next: build + validate the `timing_of_surgery` axis (resolves the last 2 FNs); then Phase 2b
+(synthesizer + Clinician card). Live DB still carries the pre-relabel labels — it picks up the 4 changes on
+the next normal deploy/reseed (`npm run seed:equipoise` is an idempotent upsert on slug).
+
+## `timing_of_surgery` archetype axis — the `biological_window` lever (2026-06-27)
+
+Built and validated the `timing_of_surgery`-specific archetype axis that resolves the two deterministic
+structural-gap FNs above. Exact analog of the `which_operation` multi-axis design: `timing_of_surgery`
+now runs BOTH `demand_risk` AND a new **`biological_window`** axis (OR-combined; contested if either
+flips — `archetypeGroupsForDecisionType` in `src/utils/archetype-flip.js`). Timing equipoise turns on
+local injury biology, not functional demand, so the demand axis alone could never flip
+`open-fracture-debridement-timing` (0/3) or `radial-nerve-palsy-…` (0/3). Validated on the dev branch
+`equipoise-sweep-batch` at N=3 (the 6 timing DPs, batched; the other 116 N=3 rows unchanged for a clean
+full re-score). Live DB untouched.
+
+**The axis ships with TWO relevance-gated levers** (the design took 5 iterations to land — the record
+is preserved in the `BIOLOGICAL_WINDOW_ARCHETYPES` header comment because the failure modes are the
+reusable lesson):
+
+- `woundContamination` — gated to *"if there is an open wound …"* → flips
+  `open-fracture-debridement-timing` (the debunked 6-hr rule turns on contamination/soft-tissue); vacuous
+  on closed fractures.
+- `nerveRecovery` — gated to *"if a nerve is injured …"*, framed neurapraxia-vs-laceration → flips
+  `radial-nerve-palsy-…` (~90% of closed palsies recover spontaneously); vacuous when no nerve is injured.
+
+A **soft-tissue-envelope lever was tried and DROPPED**. Unconditional → it spuriously flipped
+`hip-fracture-surgery-timing-fit` 3/3 (the panel delays a "compromised-envelope" hip fracture — the same
+failure mode as the old demand-axis bailout on absolute cases: varying a SETTLED case's standard
+candidate). Conditioning it ("if there is a soft-tissue injury…") then region-gating it to
+thin/subcutaneous envelopes (distal tibia/ankle/foot, explicitly excluding the hip) did NOT fix it: the
+panel still delayed the hip fracture on the overall high-risk-biology gestalt (a robust **3/4-lens** flip,
+not a thin artifact). Since `hip-fx-timing` is genuinely settled for the standard closed case, the axis
+must not manufacture that tissue variant — so the soft-tissue lever was dropped (MD decision). Two
+secondary guards from the same iteration are kept: the archetype **labels are neutral and explicitly
+conditional** ("where applicable") so they carry no unconditional "high-risk biology" gestalt; and the
+axis carries **`minModalSupport: 2`** (a relevance-gated axis produces many deferrals, so a lone
+non-deferring lens must not establish a flip — `computeArchetypeFlipVerdict(…, {minModalSupport})`).
+
+**Timing N=3 result (per-slug majority):**
+
+| timing DP | label | demand-only baseline | with `biological_window` |
+|---|---|---|---|
+| open-fracture-debridement-timing | genuine | 0/3 **FN** | **3/3 ✓** (contamination) |
+| radial-nerve-palsy-…-exploration-vs-observation | genuine | 0/3 **FN** | **3/3 ✓** (nerve-recovery) |
+| pilon-fracture-orif-early-vs-staged-exfix | genuine | 2/3 hit | **1/3 ✗** (demand_risk only) |
+| hip-fracture-surgery-timing-fit | settled_op | converged ✓ | **converged ✓** |
+| cauda-equina-syndrome / acute-compartment-syndrome | settled_op (abs) | converged ✓ | **converged ✓** |
+
+Both deterministic structural-gap FNs are resolved and timing specificity is intact (hip-fx + the two
+absolute emergencies all converge). The accepted cost: `pilon` — never one of the two target FNs, always
+a marginal demand-correlated case — lost the soft-tissue support and is now a ~1–2/3 coin-flip on
+`demand_risk` (immediate ORIF vs staged ex-fix is genuine equipoise but the panel only weakly diverges on
+it via demand; no lever catches it without re-leaking to hip-fx). MD accepted `pilon` as the lone
+remaining timing FN.
+
+**Full re-scored headline (per-slug majority of 3, all 122; the 116 non-timing rows are the unchanged
+N=3 sweep):**
+
+| segment | n | per-slug majority | vs prior |
+|---|---|---|---|
+| sensitivity (genuine_equipoise) | 90 | **0.989 (89/90)** | 0.978 → **0.989** |
+| specificity (settled, non-absolute) | 21 | **0.952 (20/21)** | unchanged |
+| absolute-indication (route-safe) | 11 | **1.000 (11/11)** | unchanged |
+
+The two prior timing FNs (open-fx, radial-nerve) are gone; the lone genuine FN is now `pilon` (1/3) and
+the lone specificity FP remains `progressive-idiopathic-scoliosis-cobb-55-…` (MD-accepted). Net: the last
+open method gap is closed. Tests 442/442, lint clean. **No benchmark label changes** (method-only). Next:
+Phase 2b (synthesizer + Clinician card). Live DB still carries the 4 pre-relabel `settled_conservative`
+labels from the N=3 adjudication — picked up on the next normal `npm run seed:equipoise` reseed/deploy.

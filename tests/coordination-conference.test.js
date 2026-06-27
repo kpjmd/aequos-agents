@@ -14,7 +14,8 @@ jest.unstable_mockModule('../src/config/agent-config.js', () => ({
 const { CoordinationConference } = await import('../src/utils/coordination-conference.js');
 const { default: AgentCoordinator } = await import('../src/utils/agent-coordinator.js');
 const { makePositionSchema, makeReconsiderSchema, DecisionPointsSchema } = await import('../src/utils/dialogue-schemas.js');
-const { storeCoordinationDivergences, getCoordinationDivergences } = await import('../src/utils/divergence-storage.js');
+const { buildSynthesizerOutput, storeSynthesizerOutput } = await import('../src/utils/synthesizer.js');
+const { createQuery, resolveModelVersionId, getSentinelDecisionPointId } = await import('../src/utils/equipoise-ingest.js');
 const { resolvePersona, PERSONA_BY_KEY } = await import('../src/utils/specialist-identity.js');
 
 const CANONICAL_NAMES = new Set(Object.values(PERSONA_BY_KEY).map(p => p.specialist));
@@ -219,22 +220,95 @@ describe('dialogue-schemas', () => {
   });
 });
 
-// ---- persistence no-op without DB -----------------------------------------
-describe('divergence-storage (no DATABASE_URL)', () => {
-  test('store is a safe no-op returning 0', async () => {
-    const n = await storeCoordinationDivergences('c1', {
-      gateOpen: true,
-      divergences: [{ decisionPoint: { id: 'd', question: 'q', options: ['a', 'b'] }, sides: [], dialogue: [], postDialogue: { persisted: true } }],
-    });
-    expect(n).toBe(0);
+// ---- synthesizer: routing/collapse truth table + card --------------------
+describe('buildSynthesizerOutput', () => {
+  const contestedPerDP = {
+    decisionPoint: { id: 'd1', question: 'Early reconstruction vs structured rehab?', options: ['Early reconstruction', 'Structured rehab'] },
+    verdict: 'contested',
+    positions: [],
+    splitSummary: {
+      verdict: 'contested',
+      stanceCounts: { 'Early reconstruction': 2, 'Structured rehab': 2 },
+      sides: [
+        { stance: 'Early reconstruction', specialists: [{ specialist: 'Strength Sage', confidence: 0.8, evidenceGrade: 'B', reasoning: 'active giving-way, secondary meniscal risk' }] },
+        { stance: 'Structured rehab', specialists: [{ specialist: 'Movement Detective', confidence: 0.75, evidenceGrade: 'B', reasoning: 'KANON: rehab is the diagnostic test' }] },
+      ],
+      postDialogue: { resolved: false, persisted: true, changedCount: 1, deltas: [{ specialist: 'Pain Whisperer', from: 'Structured rehab', to: 'Early reconstruction', reason: 'giving-way' }] },
+    },
+  };
+  const convergedPerDP = {
+    decisionPoint: { id: 'd2', question: 'Drain or observe?', options: ['Drainage', 'Observe'] },
+    verdict: 'converged',
+    positions: [],
+    splitSummary: { verdict: 'converged', stanceCounts: { Drainage: 4 }, sides: null, postDialogue: null },
+  };
+
+  test('contested, no red flag → surface the equipoise card (no route, no collapse)', () => {
+    const o = buildSynthesizerOutput(contestedPerDP, { requiresImmediateMD: false, treatmentPlan: { phase1: 'prehab' } });
+    expect(o.status).toBe('contested');
+    expect(o.route_to_human).toBe(false);
+    expect(o.route_reason).toBe('none');
+    expect(o.collapsed).toBe(false);
+    expect(o.collapse_reason).toBeNull();
+    expect(o.support_score).toBe(0.5); // 2-2 split
+    expect(o.card_json.theSplit).toHaveLength(2);
+    expect(o.card_json.whatWouldTipIt.source).toBe('panel_reasoning');
+    expect(o.card_json.whatWouldTipIt.toward[0].factors).toContain('active giving-way, secondary meniscal risk');
+    expect(o.card_json.deliberationDelta.persisted).toBe(true);
+    expect(o.card_json.carePlanHome).toEqual({ phase1: 'prehab' });
   });
 
-  test('store returns 0 when gate closed', async () => {
-    expect(await storeCoordinationDivergences('c2', { gateOpen: false, divergences: [] })).toBe(0);
+  test('contested + requiresImmediateMD → route to urgent surgical consult', () => {
+    const o = buildSynthesizerOutput(contestedPerDP, { requiresImmediateMD: true, urgencyLevel: 'immediate' });
+    expect(o.route_to_human).toBe(true);
+    expect(o.route_reason).toBe('risk_category');
+    expect(o.status).toBe('contested'); // status mirrors verdict; v1 never collapses
+    expect(o.collapsed).toBe(false);
+    expect(o.card_json.route.label).toBe('Urgent surgical consult');
   });
 
-  test('get returns empty array without DB', async () => {
-    expect(await getCoordinationDivergences('c1')).toEqual([]);
+  test('converged, no red flag → consensus card', () => {
+    const o = buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: false });
+    expect(o.status).toBe('consensus');
+    expect(o.route_to_human).toBe(false);
+    expect(o.support_score).toBe(1);
+    expect(o.card_json.whatWouldTipIt).toBeNull(); // only on contested
+  });
+
+  test('converged + requiresImmediateMD → still routes (any verdict)', () => {
+    const o = buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: true });
+    expect(o.route_to_human).toBe(true);
+    expect(o.route_reason).toBe('risk_category');
+    expect(o.status).toBe('consensus');
+  });
+
+  test('archetype-sweep splitSummary → axis-derived "what would tip it"', () => {
+    const benchPerDP = {
+      decisionPoint: { id: 'd3', question: 'ACL?', options: ['Surgery', 'Rehab'] },
+      verdict: 'contested',
+      positions: [],
+      splitSummary: {
+        verdict: 'contested', stanceCounts: { Surgery: 2, Rehab: 2 },
+        contestedBy: ['demand_risk'],
+        groups: [{ name: 'demand_risk', flipDetected: true, modalByArchetype: { high_demand_low_risk: 'Surgery', low_demand_high_risk: 'Rehab' } }],
+        sides: [{ stance: 'Surgery', specialists: [] }, { stance: 'Rehab', specialists: [] }],
+      },
+    };
+    const o = buildSynthesizerOutput(benchPerDP, {});
+    expect(o.card_json.whatWouldTipIt.source).toBe('archetype_axis');
+    expect(o.card_json.whatWouldTipIt.axes[0].axis).toBe('demand_risk');
+  });
+});
+
+// ---- equipoise persistence helpers: safe no-op without DB -----------------
+describe('equipoise persistence (no DATABASE_URL)', () => {
+  test('storeSynthesizerOutput is a safe no-op returning null', async () => {
+    expect(await storeSynthesizerOutput(null, 1, { status: 'consensus' })).toBeNull();
+  });
+  test('createQuery / resolveModelVersionId / getSentinelDecisionPointId no-op without sql', async () => {
+    expect(await createQuery(null, { questionText: 'q', decisionPointId: 1 })).toBeNull();
+    expect(await resolveModelVersionId(null, 'claude-sonnet-4-6')).toBeNull();
+    expect(await getSentinelDecisionPointId(null)).toBeNull();
   });
 });
 
