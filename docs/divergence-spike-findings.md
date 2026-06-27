@@ -460,3 +460,75 @@ position calls have no large stable prefix → would cache ~0 tokens). Cost leve
 non-timing FNs (noise vs true mislabel); (2) build + validate the `timing_of_surgery` archetype axis; then
 (3) Phase 2b (synthesizer + Clinician card). The N=1 sweep did its job: caught a structural axis gap and
 sized the FN set cheaply, before the N=3 spend.
+
+## Full 122-sweep, N=3 (batched) — the reproducible headline + FN triage (2026-06-27)
+
+Full archetype-flip sweep across all 122 DPs at **N=3** via the Batch API (`npm run benchmark:probe --
+--all --n 3 --batch`). Neon dev branch `equipoise-sweep-batch`, Sonnet 4.6, one Message Batch of **7,416
+requests** (`msgbatch_013LmCvgHn8V7sadt6pEFSRS`), 366 panel_runs stored. Live DB untouched. N=1 rows
+cleared first for a clean readout. Reported two ways: **per-run-averaged** (apples-to-apples with the N=1
+table) and **per-slug majority-of-3** (the reproducible headline — collapse each slug to its modal verdict).
+
+| segment | n | per-run-avg | per-slug majority | N=1 |
+|---|---|---|---|---|
+| sensitivity (genuine_equipoise) | 94 | 0.918 (259/282) | **0.936 (88/94)** | 0.894 |
+| specificity (settled, non-absolute) | 17 | 0.941 (48/51) | **0.941 (16/17)** | 0.941 |
+| absolute-indication (route-safe) | 11 | 0.939 (31/33) | **1.000 (11/11)** | 1.000 |
+
+**Sensitivity rose 0.894 → 0.936** as N=1-noise FNs recovered; specificity held EXACTLY (lone FP
+`progressive-idiopathic-scoliosis-cobb-55-brace-vs-fusion`, contested 3/3 — deterministic, MD-accepted);
+absolute-indication clean by majority (2 of the 11 had a single contested run — atlantoaxial,
+distal-radius-with-median-nerve-compression — but route-to-surgery is product-safe either way).
+
+**Reproducibility:** 115/122 slugs (94.3%) returned an identical verdict across all 3 runs; **7/122 (5.7%)
+flipped within the runs**, every one resolved by a 2-1 majority (none 1.5-1.5 — N=3 has no ties). The 7
+unstable: 5 genuine_equipoise at 2-contested/1-converged (`high-energy-talus-...-cast-vs-orif`,
+`pilon-fracture-orif-early-vs-staged-exfix`, `acdf-allograft-vs-autograft`,
+`cervical-radiculopathy-posterior-foraminotomy-vs-acdf`, `lumbar-stenosis-...-interspinous-device`) and 2
+absolute settled_operative at 1-contested/2-converged (route-safe). This is the multi-axis OR-combine
+absorbing single-axis wobble — the same mechanism the 10-DP N=3 subset showed, now sized at full scale.
+
+**Triage of the 7 deferred non-timing FNs (the point of the N=3 spend):**
+
+- **3 RECOVERED → N=1 noise, leave `genuine_equipoise`** (now majority-contested at N=3):
+  `acdf-allograft-vs-autograft` (2/3), `lumbar-stenosis-decompression-alone-vs-interspinous-device` (2/3),
+  `high-energy-talus-fracture-displaced-cast-vs-orif` (2/3). N=1 caught these on a single converged draw;
+  they flip contested at majority. No change.
+- **4 REPRODUCIBLY CONVERGED (3/3 converged) → RELABELED `settled_conservative` (MD-adjudicated 2026-06-27):**
+  `ankle-fracture-stable-weberb-op-vs-nonop`, `cervical-radiculopathy-acdf-vs-pt`,
+  `elbow-epicondylitis-lateral-surgery-vs-conservative`, `frozen-shoulder-physio-vs-surgical-release`.
+  All four carry literature rationales that themselves state **long-term outcomes converge** with the
+  operative arm reserved for refractory cases (frozen shoulder cites UK FROST = no PRO difference at 12mo;
+  epicondylitis = little different from natural history). The MD (ortho surgeon) signed off on all four as
+  near-settled-conservative; CSV updated (`label_provenance='md_adjudication'`, rationales reframed), dev
+  branch reseeded (no panel re-run — the 366 stored verdicts re-scored against the new labels).
+
+**Post-adjudication benchmark: 90 genuine / 18 settled_conservative / 14 settled_operative** (11 absolute).
+Re-scored headline on the SAME 366 runs:
+
+| segment | n | per-run-avg | per-slug majority |
+|---|---|---|---|
+| sensitivity (genuine_equipoise) | 90 | 0.959 (259/270) | **0.978 (88/90)** |
+| specificity (settled, non-absolute) | 21 | 0.952 (60/63) | **0.952 (20/21)** |
+| absolute-indication (route-safe) | 11 | 0.939 (31/33) | **1.000 (11/11)** |
+
+**The only 2 remaining genuine FNs are the timing structural-gap cases** (`open-fracture-debridement-timing`,
+`radial-nerve-palsy-...` — both 0/3, deterministic); the only specificity FP remains
+`scoliosis-cobb-55` (MD-accepted). A calibrated instrument: 0.978 sensitivity, 0.952 specificity,
+1.000 absolute-indication, with every miss a known/documented case.
+
+**Timing structural axis gap — persists for the biology/nerve-recovery cases (2 of 3):**
+`open-fracture-debridement-timing` (0/3 contested) and
+`radial-nerve-palsy-humeral-fracture-exploration-vs-observation` (0/3) remain **deterministic** FNs — the
+demand×risk axis cannot flip a decision driven by biology / spontaneous nerve recovery. `pilon-fracture-...`
+recovered to 2/3 contested (the demand axis occasionally catches the soft-tissue/demand correlation). This
+re-confirms the need for a `timing_of_surgery`-specific archetype axis (biological readiness / soft-tissue
+envelope / spontaneous-recovery window) — the exact analog of the which_operation multi-axis discovery.
+
+**Net:** N=3 is the validated headline. Pre-adjudication: sensitivity 0.936, specificity 0.941,
+absolute 1.000, 94% verdict reproducibility. The 7 deferred FNs split 3-noise / 4-near-settled exactly as
+the N=1-vs-N=3 design intended; the 4 near-settled were MD-relabeled `settled_conservative`, giving the
+**post-adjudication instrument: 0.978 / 0.952 / 1.000** with the only 2 misses the documented timing-axis
+gap. Next: build + validate the `timing_of_surgery` axis (resolves the last 2 FNs); then Phase 2b
+(synthesizer + Clinician card). Live DB still carries the pre-relabel labels — it picks up the 4 changes on
+the next normal deploy/reseed (`npm run seed:equipoise` is an idempotent upsert on slug).
