@@ -2,7 +2,15 @@ import logger from './logger.js';
 import { agentConfig } from '../config/agent-config.js';
 import promptManager from './prompt-manager.js';
 import { CoordinationConference } from './coordination-conference.js';
-import { storeCoordinationDivergences } from './divergence-storage.js';
+import sql from './db.js';
+import { storePanelRun } from './panel-run-storage.js';
+import { resolveModelVersionId, createQuery, getSentinelDecisionPointId } from './equipoise-ingest.js';
+import { buildSynthesizerOutput, storeSynthesizerOutput } from './synthesizer.js';
+
+// Positions run on Sonnet (mode 'normal'), matching the benchmark probe — the model_versions row
+// seeded by seed-equipoise.js. Keep this string identical to scripts/benchmark-probe.js POSITION_MODEL.
+const POSITION_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+
 export class AgentCoordinator {
   constructor(tokenManager = null) {
     this.specialists = new Map();
@@ -130,10 +138,16 @@ export class AgentCoordinator {
       // Synthesize recommendations with coordination metadata
       const synthesizedRecommendations = await this.synthesizeRecommendations(responses, caseData, coordinationMetadata, mode);
 
-      // Persist genuine divergences (best-effort, non-blocking; no-op without DATABASE_URL)
-      if (coordinationMetadata?.gateOpen) {
-        storeCoordinationDivergences(consultationId, coordinationMetadata).catch(error => {
-          logger.error(`Divergence persistence failed: ${error.message}`);
+      // Build the equipoise card(s) (pure/synchronous) for every decision point the panel evaluated —
+      // converged AND contested — attach to the response, then persist the panel layer in the
+      // background (best-effort, non-blocking; no-op without DATABASE_URL). Replaces the legacy
+      // coordination_divergences write: the owned panel_runs/specialist_positions/synthesizer_outputs
+      // layer is a strict superset.
+      const equipoiseCards = this.buildEquipoiseCards(coordinationMetadata, synthesizedRecommendations);
+      if (equipoiseCards.length > 0) {
+        synthesizedRecommendations.equipoiseCards = equipoiseCards.map(c => c.output.card_json);
+        this.persistEquipoisePanels(consultationId, equipoiseCards).catch(error => {
+          logger.error(`Equipoise panel persistence failed: ${error.message}`);
         });
       }
 
@@ -173,6 +187,76 @@ export class AgentCoordinator {
       logger.error(`Error in multi-specialist consultation: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Build the equipoise card + routing decision for every decision point the panel evaluated.
+   * Pure/synchronous (no DB) so the card_json can be returned on the consult response immediately.
+   * The red-flag routing signal is consult-level (clinicalFlags.requiresImmediateMD), shared by all
+   * cards in the consult. Returns [] in fast mode / clear-cut cases (perDecisionPoint is empty).
+   * @returns {Array<{perDP, output}>}
+   */
+  buildEquipoiseCards(coordinationMetadata, synthesizedRecommendations) {
+    const perDPs = coordinationMetadata?.perDecisionPoint || [];
+    if (perDPs.length === 0) return [];
+    const clinicalFlags = synthesizedRecommendations?.clinicalFlags || {};
+    const ctx = {
+      requiresImmediateMD: clinicalFlags.requiresImmediateMD,
+      urgencyLevel: clinicalFlags.urgencyLevel,
+      treatmentPlan: synthesizedRecommendations?.treatmentPlan,
+    };
+    return perDPs.map(perDP => ({ perDP, output: buildSynthesizerOutput(perDP, ctx) }));
+  }
+
+  /**
+   * Persist real consult panels into the owned equipoise layer (best-effort, non-blocking; no-op
+   * without DATABASE_URL). Each decision point → one panel_runs row (run_kind='production', anchored
+   * to the sentinel decision_point) + its specialist_positions + one synthesizer_outputs card.
+   * PHI rule: only the triage-framed clinical question is stored (queries.raw_text), never raw
+   * patient text — consistent with the retired divergence table's PHI-out stance.
+   * @param {string} consultationId
+   * @param {Array<{perDP, output}>} cards
+   */
+  async persistEquipoisePanels(consultationId, cards) {
+    if (!sql) return;
+    const modelVersionId = await resolveModelVersionId(sql, POSITION_MODEL);
+    const decisionPointId = await getSentinelDecisionPointId(sql);
+    if (modelVersionId == null || decisionPointId == null) {
+      logger.warn('Equipoise persistence skipped: missing model_versions or sentinel decision_point (run seed:equipoise?)');
+      return;
+    }
+
+    let stored = 0;
+    for (const { perDP, output } of cards) {
+      const dp = perDP.decisionPoint;
+      const [optionALabel = null, optionBLabel = null] = dp?.options || [];
+      const queryId = await createQuery(sql, {
+        questionText: dp?.question ?? '(unspecified decision)',
+        decisionPointId,
+        isBenchmark: false,
+        detectedBy: 'classifier',
+      });
+      if (queryId == null) continue;
+
+      const panelRunId = await storePanelRun(sql, {
+        queryId,
+        decisionPointId,
+        modelVersionId,
+        verdict: perDP.verdict,
+        optionALabel,
+        optionBLabel,
+        runKind: 'production',
+        sessionId: consultationId,
+        splitSummary: perDP.splitSummary,
+        positions: perDP.positions,
+      });
+      if (panelRunId == null) continue;
+
+      await storeSynthesizerOutput(sql, panelRunId, output);
+      stored++;
+    }
+
+    if (stored > 0) logger.info(`Persisted ${stored} production panel run(s) for ${consultationId}`);
   }
 
   validateSpecialistAvailability(requiredSpecialists) {

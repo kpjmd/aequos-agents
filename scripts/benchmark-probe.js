@@ -165,6 +165,7 @@ async function main() {
 
   const { runEquipoiseMigrations } = await import('../src/utils/equipoise-schema.js');
   const { storePanelRun } = await import('../src/utils/panel-run-storage.js');
+  const { resolveModelVersionId, createQuery } = await import('../src/utils/equipoise-ingest.js');
   const { CoordinationConference } = await import('../src/utils/coordination-conference.js');
   const { TriageAgent } = await import('../src/agents/triage-agent.js');
   const { PainWhispererAgent } = await import('../src/agents/pain-whisperer-agent.js');
@@ -175,12 +176,11 @@ async function main() {
   await runEquipoiseMigrations(sql);
 
   // Resolve the position model (positions stay on Sonnet per divergence-spike-findings).
-  const mv = await sql`SELECT id FROM model_versions WHERE model_string = ${POSITION_MODEL} LIMIT 1`;
-  if (mv.length === 0) {
+  const modelVersionId = await resolveModelVersionId(sql, POSITION_MODEL);
+  if (modelVersionId == null) {
     console.error(`model_versions has no row for "${POSITION_MODEL}" — run \`npm run seed:equipoise\` first.`);
     process.exit(1);
   }
-  const modelVersionId = mv[0].id;
 
   // Load + sample the benchmark from the DB (need decision_points.id for the FK).
   const all = await sql`
@@ -217,15 +217,10 @@ async function main() {
     // One benchmark query per DP up front (cheap, no LLM), reused across reproducibility runs.
     const dpInfo = new Map();
     for (const dp of sample) {
-      const q = await sql`
-        INSERT INTO queries (raw_text, is_benchmark) VALUES (${dp.canonical_question}, true) RETURNING id
-      `;
-      const queryId = q[0].id;
-      await sql`
-        INSERT INTO query_decision_points (query_id, decision_point_id, detected_by)
-        VALUES (${queryId}, ${dp.id}, 'manual')
-        ON CONFLICT (query_id, decision_point_id) DO NOTHING
-      `;
+      const queryId = await createQuery(sql, {
+        questionText: dp.canonical_question, decisionPointId: dp.id,
+        isBenchmark: true, detectedBy: 'manual',
+      });
       dpInfo.set(dp.slug, { queryId, dp });
     }
 
@@ -266,15 +261,10 @@ async function main() {
   let runs = 0;
   for (const dp of sample) {
     // One benchmark query per DP (reused across reproducibility runs).
-    const q = await sql`
-      INSERT INTO queries (raw_text, is_benchmark) VALUES (${dp.canonical_question}, true) RETURNING id
-    `;
-    const queryId = q[0].id;
-    await sql`
-      INSERT INTO query_decision_points (query_id, decision_point_id, detected_by)
-      VALUES (${queryId}, ${dp.id}, 'manual')
-      ON CONFLICT (query_id, decision_point_id) DO NOTHING
-    `;
+    const queryId = await createQuery(sql, {
+      questionText: dp.canonical_question, decisionPointId: dp.id,
+      isBenchmark: true, detectedBy: 'manual',
+    });
 
     const decisionPoint = {
       id: dp.slug,
