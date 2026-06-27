@@ -156,11 +156,35 @@ describe('computeArchetypeFlipVerdict', () => {
     expect(archetypesForDecisionType('which_operation').set).toHaveLength(3);
   });
 
-  test('archetypeGroupsForDecisionType: which_operation runs all three axes, others run demand_risk only', () => {
+  test('archetypeGroupsForDecisionType: which_operation runs three axes, timing runs two, others demand_risk only', () => {
     const wo = archetypeGroupsForDecisionType('which_operation');
     expect(wo.map(g => g.name).sort()).toEqual(['demand_risk', 'fracture_pattern', 'pathology']);
+    const tos = archetypeGroupsForDecisionType('timing_of_surgery');
+    expect(tos.map(g => g.name).sort()).toEqual(['biological_window', 'demand_risk']);
+    // biological_window is relevance-gated → carries a ≥2 lens min-support to discard lone-lens flips
+    expect(tos.find(g => g.name === 'biological_window').minModalSupport).toBe(2);
+    expect(tos.find(g => g.name === 'demand_risk').minModalSupport).toBeUndefined();
     const cvo = archetypeGroupsForDecisionType('conservative_vs_operative');
     expect(cvo.map(g => g.name)).toEqual(['demand_risk']);
+  });
+
+  test('minModalSupport discards a lone-lens modal so it cannot manufacture a flip', () => {
+    // A single dissenting lens (1 of 4, the rest defer) on one archetype vs a 4-lens modal on the
+    // others — the hip-fracture-timing false-positive shape. Default counts it (flip); ≥2 discards it.
+    const archetypes = [
+      { key: 'narrow_window', verdict: 'converged', stanceCounts: { 'Deliberate delay': 1 } },
+      { key: 'intermediate_window', verdict: 'converged', stanceCounts: { 'Early surgery': 4 } },
+      { key: 'wide_window', verdict: 'converged', stanceCounts: { 'Early surgery': 4 } },
+    ];
+    expect(computeArchetypeFlipVerdict(archetypes).verdict).toBe('contested');
+    const guarded = computeArchetypeFlipVerdict(archetypes, { minModalSupport: 2 });
+    expect(guarded.verdict).toBe('converged');
+    expect(guarded.modalByArchetype.narrow_window).toBe('abstain');
+    // A genuine flip backed by ≥2 lenses each survives the same guard.
+    expect(computeArchetypeFlipVerdict([
+      { key: 'narrow_window', verdict: 'converged', stanceCounts: { Explore: 4 } },
+      { key: 'wide_window', verdict: 'converged', stanceCounts: { Observe: 3 } },
+    ], { minModalSupport: 2 }).verdict).toBe('contested');
   });
 
   test('combineGroupVerdicts: contested if ANY axis is contested', () => {

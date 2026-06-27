@@ -532,3 +532,69 @@ the N=1-vs-N=3 design intended; the 4 near-settled were MD-relabeled `settled_co
 gap. Next: build + validate the `timing_of_surgery` axis (resolves the last 2 FNs); then Phase 2b
 (synthesizer + Clinician card). Live DB still carries the pre-relabel labels — it picks up the 4 changes on
 the next normal deploy/reseed (`npm run seed:equipoise` is an idempotent upsert on slug).
+
+## `timing_of_surgery` archetype axis — the `biological_window` lever (2026-06-27)
+
+Built and validated the `timing_of_surgery`-specific archetype axis that resolves the two deterministic
+structural-gap FNs above. Exact analog of the `which_operation` multi-axis design: `timing_of_surgery`
+now runs BOTH `demand_risk` AND a new **`biological_window`** axis (OR-combined; contested if either
+flips — `archetypeGroupsForDecisionType` in `src/utils/archetype-flip.js`). Timing equipoise turns on
+local injury biology, not functional demand, so the demand axis alone could never flip
+`open-fracture-debridement-timing` (0/3) or `radial-nerve-palsy-…` (0/3). Validated on the dev branch
+`equipoise-sweep-batch` at N=3 (the 6 timing DPs, batched; the other 116 N=3 rows unchanged for a clean
+full re-score). Live DB untouched.
+
+**The axis ships with TWO relevance-gated levers** (the design took 5 iterations to land — the record
+is preserved in the `BIOLOGICAL_WINDOW_ARCHETYPES` header comment because the failure modes are the
+reusable lesson):
+
+- `woundContamination` — gated to *"if there is an open wound …"* → flips
+  `open-fracture-debridement-timing` (the debunked 6-hr rule turns on contamination/soft-tissue); vacuous
+  on closed fractures.
+- `nerveRecovery` — gated to *"if a nerve is injured …"*, framed neurapraxia-vs-laceration → flips
+  `radial-nerve-palsy-…` (~90% of closed palsies recover spontaneously); vacuous when no nerve is injured.
+
+A **soft-tissue-envelope lever was tried and DROPPED**. Unconditional → it spuriously flipped
+`hip-fracture-surgery-timing-fit` 3/3 (the panel delays a "compromised-envelope" hip fracture — the same
+failure mode as the old demand-axis bailout on absolute cases: varying a SETTLED case's standard
+candidate). Conditioning it ("if there is a soft-tissue injury…") then region-gating it to
+thin/subcutaneous envelopes (distal tibia/ankle/foot, explicitly excluding the hip) did NOT fix it: the
+panel still delayed the hip fracture on the overall high-risk-biology gestalt (a robust **3/4-lens** flip,
+not a thin artifact). Since `hip-fx-timing` is genuinely settled for the standard closed case, the axis
+must not manufacture that tissue variant — so the soft-tissue lever was dropped (MD decision). Two
+secondary guards from the same iteration are kept: the archetype **labels are neutral and explicitly
+conditional** ("where applicable") so they carry no unconditional "high-risk biology" gestalt; and the
+axis carries **`minModalSupport: 2`** (a relevance-gated axis produces many deferrals, so a lone
+non-deferring lens must not establish a flip — `computeArchetypeFlipVerdict(…, {minModalSupport})`).
+
+**Timing N=3 result (per-slug majority):**
+
+| timing DP | label | demand-only baseline | with `biological_window` |
+|---|---|---|---|
+| open-fracture-debridement-timing | genuine | 0/3 **FN** | **3/3 ✓** (contamination) |
+| radial-nerve-palsy-…-exploration-vs-observation | genuine | 0/3 **FN** | **3/3 ✓** (nerve-recovery) |
+| pilon-fracture-orif-early-vs-staged-exfix | genuine | 2/3 hit | **1/3 ✗** (demand_risk only) |
+| hip-fracture-surgery-timing-fit | settled_op | converged ✓ | **converged ✓** |
+| cauda-equina-syndrome / acute-compartment-syndrome | settled_op (abs) | converged ✓ | **converged ✓** |
+
+Both deterministic structural-gap FNs are resolved and timing specificity is intact (hip-fx + the two
+absolute emergencies all converge). The accepted cost: `pilon` — never one of the two target FNs, always
+a marginal demand-correlated case — lost the soft-tissue support and is now a ~1–2/3 coin-flip on
+`demand_risk` (immediate ORIF vs staged ex-fix is genuine equipoise but the panel only weakly diverges on
+it via demand; no lever catches it without re-leaking to hip-fx). MD accepted `pilon` as the lone
+remaining timing FN.
+
+**Full re-scored headline (per-slug majority of 3, all 122; the 116 non-timing rows are the unchanged
+N=3 sweep):**
+
+| segment | n | per-slug majority | vs prior |
+|---|---|---|---|
+| sensitivity (genuine_equipoise) | 90 | **0.989 (89/90)** | 0.978 → **0.989** |
+| specificity (settled, non-absolute) | 21 | **0.952 (20/21)** | unchanged |
+| absolute-indication (route-safe) | 11 | **1.000 (11/11)** | unchanged |
+
+The two prior timing FNs (open-fx, radial-nerve) are gone; the lone genuine FN is now `pilon` (1/3) and
+the lone specificity FP remains `progressive-idiopathic-scoliosis-cobb-55-…` (MD-accepted). Net: the last
+open method gap is closed. Tests 442/442, lint clean. **No benchmark label changes** (method-only). Next:
+Phase 2b (synthesizer + Clinician card). Live DB still carries the 4 pre-relabel `settled_conservative`
+labels from the N=3 adjudication — picked up on the next normal `npm run seed:equipoise` reseed/deploy.

@@ -273,7 +273,7 @@ export async function runBatchProbe(sample, opts, ctx) {
             positions: summary.positions,
           };
         });
-        return { name: group.name, flip: computeArchetypeFlipVerdict(archetypeResults), archetypeResults };
+        return { name: group.name, flip: computeArchetypeFlipVerdict(archetypeResults, { minModalSupport: group.minModalSupport }), archetypeResults };
       });
 
       const combined = combineGroupVerdicts(groupResults);

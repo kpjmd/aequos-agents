@@ -95,8 +95,8 @@ async function main() {
   const { stratifiedSample } = await import('../src/utils/benchmark-sampler.js');
   const { toStanceEnum } = await import('../src/utils/equipoise-mappers.js');
   const { DEMAND_RISK_ARCHETYPES, PATHOLOGY_ARCHETYPES, FRACTURE_PATTERN_ARCHETYPES,
-    archetypeGroupsForDecisionType, computeArchetypeFlipVerdict, combineGroupVerdicts } =
-    await import('../src/utils/archetype-flip.js');
+    BIOLOGICAL_WINDOW_ARCHETYPES, archetypeGroupsForDecisionType, computeArchetypeFlipVerdict,
+    combineGroupVerdicts } = await import('../src/utils/archetype-flip.js');
 
   // ---------- DRY RUN: sample from the CSV, print plan + mapping, no DB/LLM ----------
   if (opts.dryRun) {
@@ -125,13 +125,15 @@ async function main() {
     if (sample.length > 8) console.log(`  … and ${sample.length - 8} more`);
 
     if (!opts.population) {
-      console.log('\ndetection: archetype-flip, decision-type-specific axes (3 archetypes/DP):');
-      console.log('  demand_risk (conservative_vs_operative, timing_of_surgery, which_intervention):');
+      console.log('\ndetection: archetype-flip, decision-type-specific axes (3 archetypes/axis):');
+      console.log('  demand_risk (conservative_vs_operative, which_intervention; + timing_of_surgery):');
       for (const arch of DEMAND_RISK_ARCHETYPES) console.log(`    ${arch.key.padEnd(24)} ${arch.label}`);
       console.log('  pathology (which_operation):');
       for (const arch of PATHOLOGY_ARCHETYPES) console.log(`    ${arch.key.padEnd(24)} ${arch.label}`);
       console.log('  fracture_pattern (which_operation):');
       for (const arch of FRACTURE_PATTERN_ARCHETYPES) console.log(`    ${arch.key.padEnd(24)} ${arch.label}`);
+      console.log('  biological_window (timing_of_surgery):');
+      for (const arch of BIOLOGICAL_WINDOW_ARCHETYPES) console.log(`    ${arch.key.padEnd(24)} ${arch.label}`);
     } else {
       console.log('\ndetection: population mode (single panel/DP)');
     }
@@ -312,7 +314,7 @@ async function main() {
               positions: s.positions,
             });
           }
-          groupResults.push({ name: group.name, flip: computeArchetypeFlipVerdict(archetypeResults), archetypeResults });
+          groupResults.push({ name: group.name, flip: computeArchetypeFlipVerdict(archetypeResults, { minModalSupport: group.minModalSupport }), archetypeResults });
         }
         const combined = combineGroupVerdicts(groupResults);
         verdict = combined.verdict;

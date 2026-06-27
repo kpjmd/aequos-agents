@@ -131,6 +131,73 @@ export const FRACTURE_PATTERN_ARCHETYPES = [
   },
 ];
 
+// For timing_of_surgery: timing equipoise turns on LOCAL INJURY BIOLOGY, not functional demand —
+// whether the wound/soft-tissue/nerve biology mandates operating now or tolerates a window of waiting,
+// observation, or staged care. The demand×risk axis alone can never flip these (open-fracture-
+// debridement-timing and radial-nerve-palsy were deterministic 0/3 false negatives; see
+// divergence-spike-findings, "Full 122-sweep, N=3"). This is the exact analog of the which_operation
+// multi-axis discovery. A single BUNDLED axis: contamination, soft-tissue envelope, and spontaneous
+// nerve-recovery co-vary with injury severity, so one archetype can describe the whole local-biology
+// state. Clinical input + sign-off: kpjohnsonmd, ortho surgeon.
+//
+// RELEVANCE-GATED to TWO clean levers (after iteration — see below). Each fact is CONDITIONAL, so an
+// injury without that feature has nothing to apply and the archetype stays converged, while genuinely
+// open-wound / nerve-injury decisions flip:
+//   - woundContamination — gated to "if there is an open wound" (drives open-fracture-debridement-timing;
+//     vacuous on closed fractures).
+//   - nerveRecovery — gated to "if a nerve is injured", framed neurapraxia-vs-laceration (drives
+//     radial-nerve-palsy; vacuous when no nerve is injured).
+// Labels are kept neutral and explicitly conditional ("where applicable") so the archetype carries no
+// unconditional "this injury is high-risk" gestalt.
+//
+// WHY a soft-tissue-envelope lever is NOT here (the iteration record): v1 used an unconditional
+// "compromised soft-tissue envelope" and spuriously flipped hip-fracture-surgery-timing-fit 3/3 (the
+// same failure mode as the old demand-axis bailout on absolute cases — varying a SETTLED case's
+// standard candidate). Conditioning it ("if there is a soft-tissue injury…", then region-gating to
+// "a thin/subcutaneous envelope: distal tibia, ankle, foot…") did NOT fix it: the panel still delayed
+// the hip fracture on the overall high-risk-biology gestalt (a robust 3/4-lens flip, not a thin
+// artifact a support threshold removes — a compromised peri-hip envelope genuinely delays surgery).
+// Since hip-fx-timing is genuinely settled for the standard closed case, the axis must not manufacture
+// that tissue variant — so the soft-tissue lever was DROPPED (MD decision, kpjohnsonmd). Pilon
+// (the staged-vs-immediate soft-tissue case) is instead caught by the demand_risk axis in the
+// OR-combine (~2/3 at N=3 — pilon is demand-correlated). The generic injury-energy lever (which also
+// leaked to closed fractures) was likewise dropped. The axis carries minModalSupport:2 (see
+// archetypeGroupsForDecisionType) so a lone non-deferring lens can't manufacture a flip where the
+// conditional levers don't apply. The goal is held CONSTANT and neutral so the set does not steer
+// toward operating-now or waiting (the demand-axis neutralization lesson — facts vary, direction does not).
+const BIOLOGICAL_WINDOW_GOAL =
+  "the most appropriate timing or sequencing of surgery given this injury's local tissue biology and healing/recovery profile";
+
+export const BIOLOGICAL_WINDOW_ARCHETYPES = [
+  {
+    key: 'narrow_window',
+    label: 'contaminated open wound / low nerve-recovery mechanism (where applicable)',
+    case: {
+      woundContamination: 'if there is an open wound, it is heavily contaminated',
+      nerveRecovery: 'if a nerve is injured, the mechanism suggests low spontaneous-recovery potential (a laceration or entrapment rather than a neurapraxia)',
+      priorities: BIOLOGICAL_WINDOW_GOAL,
+    },
+  },
+  {
+    key: 'intermediate_window',
+    label: 'intermediate wound contamination / nerve-recovery (where applicable)',
+    case: {
+      woundContamination: 'if there is an open wound, it has moderate contamination',
+      nerveRecovery: 'if a nerve is injured, its spontaneous-recovery potential is uncertain',
+      priorities: BIOLOGICAL_WINDOW_GOAL,
+    },
+  },
+  {
+    key: 'wide_window',
+    label: 'clean open wound / high nerve-recovery mechanism (where applicable)',
+    case: {
+      woundContamination: 'if there is an open wound, it is clean',
+      nerveRecovery: 'if a nerve is injured, the mechanism suggests high spontaneous-recovery potential (a neurapraxia in continuity)',
+      priorities: BIOLOGICAL_WINDOW_GOAL,
+    },
+  },
+];
+
 // Back-compat default (the validated demand×risk set).
 export const ARCHETYPES = DEMAND_RISK_ARCHETYPES;
 
@@ -147,10 +214,17 @@ export function archetypesForDecisionType(decisionType) {
 }
 
 /**
- * Archetype groups (axes) to evaluate for a decision type. which_operation technique choices do not
- * share one axis — pkr-vs-tka flips on pathology, acl-graft-choice flips on demand — so they are run
- * across BOTH axes and labelled contested if EITHER flips (equipoise = case-dependent along any
- * clinically real axis). Other decision types flip on demand×risk alone (validated 8/8).
+ * Archetype groups (axes) to evaluate for a decision type. Some decision types do not share one
+ * axis, so they are run across MULTIPLE axes and labelled contested if EITHER/ANY flips (equipoise =
+ * case-dependent along any clinically real axis):
+ *   - which_operation technique choices: pkr-vs-tka flips on pathology, acl-graft-choice on demand,
+ *     nail-vs-plate on fracture_pattern → run all three.
+ *   - timing_of_surgery: timing equipoise turns on local injury BIOLOGY (contamination/soft-tissue
+ *     envelope/spontaneous-recovery), not functional demand — the demand×risk axis can never flip
+ *     open-fx-debridement-timing or radial-nerve-palsy (deterministic FNs) → run demand_risk AND
+ *     biological_window. demand_risk is retained because it already recovers pilon (soft-tissue/demand
+ *     correlation) and held the timing settled controls at N=3.
+ * Other decision types flip on demand×risk alone (validated 8/8).
  * @param {string} decisionType
  * @returns {Array<{name:string, set:Array}>}
  */
@@ -160,6 +234,20 @@ export function archetypeGroupsForDecisionType(decisionType) {
       { name: 'pathology', set: PATHOLOGY_ARCHETYPES },
       { name: 'demand_risk', set: DEMAND_RISK_ARCHETYPES },
       { name: 'fracture_pattern', set: FRACTURE_PATTERN_ARCHETYPES },
+    ];
+  }
+  if (decisionType === 'timing_of_surgery') {
+    return [
+      { name: 'demand_risk', set: DEMAND_RISK_ARCHETYPES },
+      // minModalSupport: 2 — the biological_window levers are relevance-gated ("if there is an open
+      // wound …"), so on a DP where they don't apply most lenses DEFER and a lone non-deferring lens
+      // can otherwise manufacture a thin cross-archetype flip (this spuriously flipped
+      // hip-fracture-surgery-timing-fit on a single "deliberate delay" vote, 3 deferring). Requiring
+      // ≥2 lenses to hold the differing stance discards that gating artifact while keeping every
+      // genuine timing flip (open-fx/pilon/radial-nerve all carry 3-4/4 lens support). Scoped to this
+      // axis only — the unconditional demand/pathology/fracture axes engage all lenses, so lone-lens
+      // modals don't arise there and their validated behavior is untouched.
+      { name: 'biological_window', set: BIOLOGICAL_WINDOW_ARCHETYPES, minModalSupport: 2 },
     ];
   }
   return [{ name: 'demand_risk', set: DEMAND_RISK_ARCHETYPES }];
@@ -181,12 +269,17 @@ export function combineGroupVerdicts(groupResults) {
  * @param {Array<{key:string, verdict:'converged'|'contested', stanceCounts:Object<string,number>}>} archetypeResults
  *   one entry per archetype — `verdict` and `stanceCounts` come straight from the conference's
  *   summarizeDecisionPoint() splitSummary (substantive, above-floor stances only).
+ * @param {{minModalSupport?:number}} [options] - minModalSupport (default 1): an archetype's modal
+ *   stance is only counted toward a cross-archetype flip if at least this many lenses hold it;
+ *   below it the archetype is treated as 'abstain'. Used by relevance-gated axes (biological_window)
+ *   to discard lone-lens modals that arise when most lenses defer because the levers don't apply.
  * @returns {{verdict, flipDetected, internalContested, modalByArchetype, distinctOptionModals}}
  *   verdict is 'contested' if the modal answer flips across archetypes OR any archetype is internally
  *   split; else 'converged'. A 'split' archetype contributes internalContested; an archetype with no
- *   substantive stance is 'abstain' and ignored for flip detection.
+ *   qualifying substantive stance is 'abstain' and ignored for flip detection.
  */
-export function computeArchetypeFlipVerdict(archetypeResults) {
+export function computeArchetypeFlipVerdict(archetypeResults, options = {}) {
+  const { minModalSupport = 1 } = options;
   const modalByArchetype = {};
   let internalContested = false;
 
@@ -197,9 +290,8 @@ export function computeArchetypeFlipVerdict(archetypeResults) {
       continue;
     }
     const entries = Object.entries(a.stanceCounts || {});
-    modalByArchetype[a.key] = entries.length
-      ? entries.sort((x, y) => y[1] - x[1])[0][0]
-      : 'abstain';
+    const top = entries.length ? entries.sort((x, y) => y[1] - x[1])[0] : null;
+    modalByArchetype[a.key] = top && top[1] >= minModalSupport ? top[0] : 'abstain';
   }
 
   const optionModals = Object.values(modalByArchetype).filter(
