@@ -4,8 +4,9 @@ import promptManager from './prompt-manager.js';
 import { CoordinationConference } from './coordination-conference.js';
 import sql from './db.js';
 import { storePanelRun } from './panel-run-storage.js';
-import { resolveModelVersionId, createQuery, getSentinelDecisionPointId } from './equipoise-ingest.js';
+import { resolveModelVersionId, createQuery, getSentinelDecisionPointId, resolveDecisionPointIdBySlug } from './equipoise-ingest.js';
 import { buildSynthesizerOutput, storeSynthesizerOutput } from './synthesizer.js';
+import { classifyDecisionPoint, loadCatalog } from './dp-classifier.js';
 
 // Positions run on Sonnet (mode 'normal'), matching the benchmark probe — the model_versions row
 // seeded by seed-equipoise.js. Keep this string identical to scripts/benchmark-probe.js POSITION_MODEL.
@@ -210,31 +211,59 @@ export class AgentCoordinator {
 
   /**
    * Persist real consult panels into the owned equipoise layer (best-effort, non-blocking; no-op
-   * without DATABASE_URL). Each decision point → one panel_runs row (run_kind='production', anchored
-   * to the sentinel decision_point) + its specialist_positions + one synthesizer_outputs card.
-   * PHI rule: only the triage-framed clinical question is stored (queries.raw_text), never raw
-   * patient text — consistent with the retired divergence table's PHI-out stance.
+   * without DATABASE_URL). Each decision point → one panel_runs row (run_kind='production') + its
+   * specialist_positions + one synthesizer_outputs card.
+   *
+   * Phase 2c: the slug-classifier maps each ad-hoc consult decision point to its nearest CURATED
+   * benchmark slug. An EXACT match anchors the panel_run to that real slug (per-slug production
+   * convergence in v_convergence_by_model); anything else falls back to the sentinel
+   * 'production-unclassified'. A 'related' near-miss (same condition/region, different fork) is
+   * recorded on queries.patient_context for the reversibility audit trail. Production rows are never
+   * scored by v_benchmark_accuracy (run_kind='benchmark_probe' only), so the moat headline is untouched.
+   *
+   * PHI rule: only the triage-framed clinical question is stored (queries.raw_text), and
+   * patient_context carries only a curated slug + enum (never identifiers) — consistent with the
+   * retired divergence table's PHI-out stance.
    * @param {string} consultationId
    * @param {Array<{perDP, output}>} cards
    */
   async persistEquipoisePanels(consultationId, cards) {
     if (!sql) return;
     const modelVersionId = await resolveModelVersionId(sql, POSITION_MODEL);
-    const decisionPointId = await getSentinelDecisionPointId(sql);
-    if (modelVersionId == null || decisionPointId == null) {
+    const sentinelId = await getSentinelDecisionPointId(sql);
+    if (modelVersionId == null || sentinelId == null) {
       logger.warn('Equipoise persistence skipped: missing model_versions or sentinel decision_point (run seed:equipoise?)');
       return;
     }
+    const catalog = await loadCatalog(sql);
 
     let stored = 0;
+    let classified = 0;
     for (const { perDP, output } of cards) {
       const dp = perDP.decisionPoint;
       const [optionALabel = null, optionBLabel = null] = dp?.options || [];
+
+      // Classify the ad-hoc consult DP → curated slug (exact) or sentinel (related/none/unavailable).
+      // Best-effort: classifyDecisionPoint never throws; an empty catalog yields 'none'.
+      const match = catalog.length > 0
+        ? await classifyDecisionPoint(dp, catalog)
+        : { slug: null, matchQuality: 'none', nearMissSlug: null };
+      let decisionPointId = sentinelId;
+      if (match.slug) {
+        const matchedId = await resolveDecisionPointIdBySlug(sql, match.slug);
+        if (matchedId != null) { decisionPointId = matchedId; classified++; }
+      }
+      // 'related' near-miss → audit trail on the (sentinel-anchored) query row.
+      const patientContext = match.matchQuality === 'related' && match.nearMissSlug
+        ? { nearMissSlug: match.nearMissSlug, matchQuality: 'related' }
+        : null;
+
       const queryId = await createQuery(sql, {
         questionText: dp?.question ?? '(unspecified decision)',
         decisionPointId,
         isBenchmark: false,
         detectedBy: 'classifier',
+        patientContext,
       });
       if (queryId == null) continue;
 
@@ -256,7 +285,9 @@ export class AgentCoordinator {
       stored++;
     }
 
-    if (stored > 0) logger.info(`Persisted ${stored} production panel run(s) for ${consultationId}`);
+    if (stored > 0) {
+      logger.info(`Persisted ${stored} production panel run(s) for ${consultationId} (${classified} slug-classified, ${stored - classified} sentinel)`);
+    }
   }
 
   validateSpecialistAvailability(requiredSpecialists) {
