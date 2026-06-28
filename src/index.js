@@ -423,6 +423,9 @@ class OrthoIQAgentSystem {
         const researchAgent = new ResearchAgent('Research Pioneer', this.accountManager);
         await this.waitForAgentInitialization(researchAgent);
         this.researchAgent = researchAgent;
+        // Phase 2.5: give the coordinator the shared research agent so the background equipoise
+        // persistence path can populate evidence_citations (claim-grounded evidence ledger).
+        this.coordinator.researchAgent = researchAgent;
         logger.info(`✓ ${researchAgent.name} - medical literature research`);
       } else {
         logger.info('ℹ️  Research agent disabled (ENABLE_RESEARCH_AGENT=false)');

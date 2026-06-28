@@ -255,6 +255,42 @@ export async function runEquipoiseMigrations(sql) {
     JOIN decision_points dp ON dp.id = pr.decision_point_id
     WHERE r.review_status <> 'pending'
     GROUP BY dp.slug`;
+
+  // ---- v_evidence_population_coverage: Phase 2.5 evidence population-coverage analytics ----
+  // Read-only OBSERVATION of the annotation layer (NEVER feedback into the panel/routing — consistent
+  // with the pure-annotation boundary). Aggregates the population_match that evidence-research.js
+  // writes on every evidence_citations row, at slug × model grain over production panels. Surfaces
+  // where the literature lags the real patient population: per-decision mismatch_rate, and the
+  // panel-grain count of panels where NO citation cleared the strict acceptance bar (an equipoise
+  // split with zero population-relevant evidence behind either side — the actionable MD-dashboard row,
+  // and a prompt for the md_reviews human loop).
+  await sql`CREATE OR REPLACE VIEW v_evidence_population_coverage AS
+    WITH panel_evidence AS (
+      SELECT pr.id AS panel_run_id,
+             COUNT(*) FILTER (WHERE ec.accepted) AS n_accepted
+      FROM panel_runs pr
+      JOIN evidence_citations ec ON ec.panel_run_id = pr.id
+      WHERE pr.run_kind = 'production'
+      GROUP BY pr.id
+    )
+    SELECT
+      dp.slug,
+      dp.title,
+      mv.model_string,
+      COUNT(*)                                                       AS n_citations,
+      COUNT(*) FILTER (WHERE ec.population_match = 'match')          AS n_match,
+      COUNT(*) FILTER (WHERE ec.population_match = 'partial')        AS n_partial,
+      COUNT(*) FILTER (WHERE ec.population_match = 'mismatch')       AS n_mismatch,
+      COUNT(*) FILTER (WHERE ec.population_match = 'unknown')        AS n_unknown,
+      AVG((ec.population_match = 'mismatch')::int)::numeric(4,3)     AS mismatch_rate,
+      COUNT(DISTINCT pr.id)                                          AS n_panels,
+      COUNT(DISTINCT pr.id) FILTER (WHERE pe.n_accepted = 0)         AS n_panels_no_accepted_evidence
+    FROM evidence_citations ec
+    JOIN panel_runs      pr ON pr.id = ec.panel_run_id AND pr.run_kind = 'production'
+    JOIN decision_points dp ON dp.id = pr.decision_point_id
+    JOIN model_versions  mv ON mv.id = pr.model_version_id
+    JOIN panel_evidence  pe ON pe.panel_run_id = pr.id
+    GROUP BY dp.slug, dp.title, mv.model_string`;
 }
 
 export default runEquipoiseMigrations;
