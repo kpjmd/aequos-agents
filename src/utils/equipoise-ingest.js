@@ -51,6 +51,30 @@ export async function getSentinelDecisionPointId(sql) {
   }
 }
 
+const _slugIdCache = new Map(); // curated slug → decision_points.id (stable across a process lifetime)
+
+/**
+ * Resolve a curated decision_point id by slug (Phase 2c: the slug-classifier's matched slug becomes
+ * the production panel_run's FK). Cached — the curated catalog changes only on reseed/deploy-restart.
+ * Returns null when absent (caller falls back to the sentinel).
+ * @param {import('@neondatabase/serverless').NeonQueryFunction<any,any>} sql
+ * @param {string} slug
+ * @returns {Promise<number|null>}
+ */
+export async function resolveDecisionPointIdBySlug(sql, slug) {
+  if (!sql || !slug) return null;
+  if (_slugIdCache.has(slug)) return _slugIdCache.get(slug);
+  try {
+    const rows = await sql`SELECT id FROM decision_points WHERE slug = ${slug} LIMIT 1`;
+    const id = rows.length ? rows[0].id : null;
+    if (id != null) _slugIdCache.set(slug, id);
+    return id;
+  } catch (error) {
+    logger.error('equipoise-ingest: decision_point slug lookup failed', { slug, error: error.message });
+    return null;
+  }
+}
+
 /**
  * Insert a queries row and link it to a decision_point (query_decision_points). Returns the query id
  * (or null on failure). PHI rule: questionText is the triage-framed clinical decision question, NOT

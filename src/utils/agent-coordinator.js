@@ -4,8 +4,10 @@ import promptManager from './prompt-manager.js';
 import { CoordinationConference } from './coordination-conference.js';
 import sql from './db.js';
 import { storePanelRun } from './panel-run-storage.js';
-import { resolveModelVersionId, createQuery, getSentinelDecisionPointId } from './equipoise-ingest.js';
+import { resolveModelVersionId, createQuery, getSentinelDecisionPointId, resolveDecisionPointIdBySlug } from './equipoise-ingest.js';
 import { buildSynthesizerOutput, storeSynthesizerOutput } from './synthesizer.js';
+import { classifyDecisionPoint, loadCatalog } from './dp-classifier.js';
+import { buildEvidenceForPanel, storeEvidenceCitations, toLedgerEntries } from './evidence-research.js';
 
 // Positions run on Sonnet (mode 'normal'), matching the benchmark probe — the model_versions row
 // seeded by seed-equipoise.js. Keep this string identical to scripts/benchmark-probe.js POSITION_MODEL.
@@ -21,6 +23,9 @@ export class AgentCoordinator {
     this.tokenManager = tokenManager;
     this.consultationPayments = new Map();
     this.consultationPaymentsInFlight = new Set();
+    // Phase 2.5: shared ResearchAgent, injected by index.js after it is constructed. When null
+    // (research disabled / dev / tests) the evidence stage is skipped — best-effort, like DB writes.
+    this.researchAgent = null;
   }
 
   registerSpecialist(type, agent) {
@@ -146,7 +151,7 @@ export class AgentCoordinator {
       const equipoiseCards = this.buildEquipoiseCards(coordinationMetadata, synthesizedRecommendations);
       if (equipoiseCards.length > 0) {
         synthesizedRecommendations.equipoiseCards = equipoiseCards.map(c => c.output.card_json);
-        this.persistEquipoisePanels(consultationId, equipoiseCards).catch(error => {
+        this.persistEquipoisePanels(consultationId, equipoiseCards, caseData).catch(error => {
           logger.error(`Equipoise panel persistence failed: ${error.message}`);
         });
       }
@@ -210,31 +215,63 @@ export class AgentCoordinator {
 
   /**
    * Persist real consult panels into the owned equipoise layer (best-effort, non-blocking; no-op
-   * without DATABASE_URL). Each decision point → one panel_runs row (run_kind='production', anchored
-   * to the sentinel decision_point) + its specialist_positions + one synthesizer_outputs card.
-   * PHI rule: only the triage-framed clinical question is stored (queries.raw_text), never raw
-   * patient text — consistent with the retired divergence table's PHI-out stance.
+   * without DATABASE_URL). Each decision point → one panel_runs row (run_kind='production') + its
+   * specialist_positions + one synthesizer_outputs card.
+   *
+   * Phase 2c: the slug-classifier maps each ad-hoc consult decision point to its nearest CURATED
+   * benchmark slug. An EXACT match anchors the panel_run to that real slug (per-slug production
+   * convergence in v_convergence_by_model); anything else falls back to the sentinel
+   * 'production-unclassified'. A 'related' near-miss (same condition/region, different fork) is
+   * recorded on queries.patient_context for the reversibility audit trail. Production rows are never
+   * scored by v_benchmark_accuracy (run_kind='benchmark_probe' only), so the moat headline is untouched.
+   *
+   * PHI rule: only the triage-framed clinical question is stored (queries.raw_text), and
+   * patient_context carries only a curated slug + enum (never identifiers) — consistent with the
+   * retired divergence table's PHI-out stance.
    * @param {string} consultationId
    * @param {Array<{perDP, output}>} cards
    */
-  async persistEquipoisePanels(consultationId, cards) {
+  async persistEquipoisePanels(consultationId, cards, caseData = {}) {
     if (!sql) return;
     const modelVersionId = await resolveModelVersionId(sql, POSITION_MODEL);
-    const decisionPointId = await getSentinelDecisionPointId(sql);
-    if (modelVersionId == null || decisionPointId == null) {
+    const sentinelId = await getSentinelDecisionPointId(sql);
+    if (modelVersionId == null || sentinelId == null) {
       logger.warn('Equipoise persistence skipped: missing model_versions or sentinel decision_point (run seed:equipoise?)');
       return;
     }
+    const catalog = await loadCatalog(sql);
+    // De-identified patient context for population_match (PHI-out: brackets/labels only, never
+    // identifiers — consistent with the queries.patient_context stance). Shared by all cards.
+    const evidenceContext = this.deriveEvidencePatientContext(caseData);
 
     let stored = 0;
+    let classified = 0;
+    let evidenced = 0;
     for (const { perDP, output } of cards) {
       const dp = perDP.decisionPoint;
       const [optionALabel = null, optionBLabel = null] = dp?.options || [];
+
+      // Classify the ad-hoc consult DP → curated slug (exact) or sentinel (related/none/unavailable).
+      // Best-effort: classifyDecisionPoint never throws; an empty catalog yields 'none'.
+      const match = catalog.length > 0
+        ? await classifyDecisionPoint(dp, catalog)
+        : { slug: null, matchQuality: 'none', nearMissSlug: null };
+      let decisionPointId = sentinelId;
+      if (match.slug) {
+        const matchedId = await resolveDecisionPointIdBySlug(sql, match.slug);
+        if (matchedId != null) { decisionPointId = matchedId; classified++; }
+      }
+      // 'related' near-miss → audit trail on the (sentinel-anchored) query row.
+      const patientContext = match.matchQuality === 'related' && match.nearMissSlug
+        ? { nearMissSlug: match.nearMissSlug, matchQuality: 'related' }
+        : null;
+
       const queryId = await createQuery(sql, {
         questionText: dp?.question ?? '(unspecified decision)',
         decisionPointId,
         isBenchmark: false,
         detectedBy: 'classifier',
+        patientContext,
       });
       if (queryId == null) continue;
 
@@ -252,11 +289,63 @@ export class AgentCoordinator {
       });
       if (panelRunId == null) continue;
 
+      // Phase 2.5 — claim-grounded evidence ledger (PURE ANNOTATION). Runs strictly DOWNSTREAM of
+      // the locked verdict + positions (already persisted above), only for curated-slug-anchored
+      // panels (skip the sentinel) and only when a research agent is present. It writes
+      // evidence_citations + the card's evidenceLedger; it NEVER alters verdict/positions/status/
+      // routing. The output.card_json is reassigned to a NEW object so the already-returned consult
+      // response (which holds the original empty-ledger card) keeps zero added latency.
+      if (this.researchAgent && decisionPointId !== sentinelId) {
+        try {
+          // decision_type of the matched curated slug drives population strictness (which_operation
+          // is judged leniently; operate-vs-nonop / timing strictly). match.slug is set here by
+          // construction (decisionPointId !== sentinelId only on an exact match).
+          const decisionType = catalog.find(r => r.slug === match.slug)?.decision_type || null;
+          const rows = await buildEvidenceForPanel(this.researchAgent, {
+            perDP,
+            patientContext: evidenceContext,
+            caseData,
+            decisionType,
+          });
+          if (rows.length > 0) {
+            output.card_json = { ...(output.card_json || {}), evidenceLedger: toLedgerEntries(rows) };
+            await storeEvidenceCitations(sql, panelRunId, rows);
+            evidenced++;
+          }
+        } catch (error) {
+          logger.error(`Evidence research failed for ${consultationId} (panel_run ${panelRunId}): ${error.message}`);
+        }
+      }
+
       await storeSynthesizerOutput(sql, panelRunId, output);
       stored++;
     }
 
-    if (stored > 0) logger.info(`Persisted ${stored} production panel run(s) for ${consultationId}`);
+    if (stored > 0) {
+      logger.info(`Persisted ${stored} production panel run(s) for ${consultationId} (${classified} slug-classified, ${stored - classified} sentinel, ${evidenced} with evidence ledger)`);
+    }
+  }
+
+  /**
+   * De-identified patient context for evidence population_match — age bracket + activity/demand +
+   * body region only (PHI-out, never identifiers). Best-effort: every field defaults to 'unknown'.
+   * @param {Object} caseData
+   * @returns {{ageBracket:string, demandLevel:string, bodyRegion:string}}
+   */
+  deriveEvidencePatientContext(caseData = {}) {
+    const triage = caseData.triageContext || {};
+    const age = Number(caseData.age);
+    let ageBracket = 'unknown';
+    if (!Number.isNaN(age)) {
+      if (age < 18) ageBracket = 'pediatric';
+      else if (age < 35) ageBracket = 'young adult';
+      else if (age < 55) ageBracket = 'middle-aged';
+      else ageBracket = 'older adult';
+    }
+    const demandLevel =
+      caseData.activityLevel || caseData.athleteProfile?.level || triage.activityLevel || 'unknown';
+    const bodyRegion = caseData.bodyPart || caseData.location || triage.bodyPart || 'unknown';
+    return { ageBracket, demandLevel, bodyRegion };
   }
 
   validateSpecialistAvailability(requiredSpecialists) {
