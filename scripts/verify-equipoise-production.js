@@ -26,7 +26,7 @@ const { default: sql } = await import('../src/utils/db.js');
 const { runEquipoiseMigrations } = await import('../src/utils/equipoise-schema.js');
 const { resolveModelVersionId, createQuery, getSentinelDecisionPointId } = await import('../src/utils/equipoise-ingest.js');
 const { storePanelRun } = await import('../src/utils/panel-run-storage.js');
-const { buildSynthesizerOutput, storeSynthesizerOutput } = await import('../src/utils/synthesizer.js');
+const { buildSynthesizerOutput, storeSynthesizerOutput, getEquipoiseCardsByConsultation } = await import('../src/utils/synthesizer.js');
 const { buildEvidenceForPanel, storeEvidenceCitations, toLedgerEntries, isAccepted } = await import('../src/utils/evidence-research.js');
 
 const POSITION_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
@@ -161,6 +161,20 @@ ok(afterSo.status === beforeSo.status && afterSo.route_to_human === beforeSo.rou
 const cov = await sql`SELECT n_citations, n_match, n_partial, n_mismatch, n_unknown FROM v_evidence_population_coverage WHERE slug = 'production-unclassified'`;
 ok(cov.length > 0, 'v_evidence_population_coverage returns rows');
 ok(cov.every(r => Number(r.n_match) + Number(r.n_partial) + Number(r.n_mismatch) + Number(r.n_unknown) === Number(r.n_citations)), 'coverage counts sum to n_citations');
+
+// ---- Read path: GET /consultation/:id/equipoise-cards helper (getEquipoiseCardsByConsultation) ----
+console.log('\n[read] equipoise-cards read endpoint helper');
+// Mirror the coordinator: the persisted card carries the populated ledger (the consult RESPONSE
+// returns an empty ledger; this DB row is what the read endpoint serves).
+await sql`UPDATE synthesizer_outputs
+  SET card_json = jsonb_set(card_json, '{evidenceLedger}', ${JSON.stringify(toLedgerEntries(evRows))}::jsonb)
+  WHERE panel_run_id = ${evPanelRunId}`;
+const readCards = await getEquipoiseCardsByConsultation(sql, SESSION);
+ok(readCards.length === 2, `read helper returns both consult cards by session_id (${readCards.length})`);
+const contestedRead = readCards.find(c => c.verdict === 'contested');
+ok(Array.isArray(contestedRead?.evidenceLedger) && contestedRead.evidenceLedger.length === accepted.length,
+   'read helper surfaces the populated evidence ledger on the contested card');
+ok((await getEquipoiseCardsByConsultation(sql, 'no-such-consult')).length === 0, 'unknown consultationId → [] (no leakage)');
 
 // v_benchmark_accuracy must NOT include production rows (sentinel is 'evolving' + filter is benchmark_probe).
 const inView = await sql`SELECT 1 FROM v_benchmark_accuracy WHERE slug = 'production-unclassified' LIMIT 1`;

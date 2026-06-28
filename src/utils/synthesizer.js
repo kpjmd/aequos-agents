@@ -161,4 +161,33 @@ export async function storeSynthesizerOutput(sql, panelRunId, output) {
   }
 }
 
+/**
+ * Read the persisted equipoise cards for one consult — the production card_json rows (evidence
+ * ledger INCLUDED), keyed via panel_runs.session_id = consultationId. The consult RESPONSE returns
+ * the same cards with an empty evidenceLedger (zero added latency); the ledger is filled by the
+ * background research stage and lands here once persistEquipoisePanels finishes (~5–10s later), so
+ * the frontend polls this after the consult completes.
+ *
+ * Best-effort: returns [] when sql is null (dev/tests) or on error; never throws.
+ * @param {import('@neondatabase/serverless').NeonQueryFunction<any,any>} sql
+ * @param {string} consultationId
+ * @returns {Promise<Array<Object>>} array of card_json objects (ledger populated), in panel order
+ */
+export async function getEquipoiseCardsByConsultation(sql, consultationId) {
+  if (!sql || !consultationId) return [];
+  try {
+    const rows = await sql`
+      SELECT so.card_json
+      FROM synthesizer_outputs so
+      JOIN panel_runs pr ON pr.id = so.panel_run_id
+      WHERE pr.session_id = ${consultationId} AND pr.run_kind = 'production'
+      ORDER BY so.id
+    `;
+    return rows.map(r => r.card_json).filter(Boolean);
+  } catch (error) {
+    logger.error('synthesizer: failed to read equipoise cards by consultation', { consultationId, error: error.message });
+    return [];
+  }
+}
+
 export default buildSynthesizerOutput;

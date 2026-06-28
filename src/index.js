@@ -20,6 +20,8 @@ import promptManager from './utils/prompt-manager.js';
 import { validateScope } from './utils/scope-validator.js';
 import { agentConfig } from './config/agent-config.js';
 import { storeResearchPending, storeResearchResult, storeResearchError, getResearchResult } from './utils/research-storage.js';
+import sql from './utils/db.js';
+import { getEquipoiseCardsByConsultation } from './utils/synthesizer.js';
 import { requireApiKey, requireAdmin } from './middleware/auth.js';
 import { requireIdentity } from './middleware/identity.js';
 import { strictLimiter, mediumLimiter, looseLimiter } from './middleware/rate-limit.js';
@@ -1002,6 +1004,28 @@ class OrthoIQAgentSystem {
         responseTime: entry.completedAt - (entry.startTime || entry.completedAt),
         timestamp: new Date().toISOString()
       });
+    });
+
+    // Equipoise cards (with the populated evidence ledger) for a completed consult.
+    // The consult RESPONSE returns equipoiseCards with evidenceLedger: [] (zero added latency); the
+    // background research stage fills the ledger and persists it ~5–10s later. The frontend renders
+    // the card skeletons immediately from the response, then polls this endpoint and swaps in the
+    // populated cards. Poll until `count` matches the response's equipoiseCards length (or time out);
+    // `ready` is true once at least one production card has been persisted for this consult.
+    this.app.get('/consultation/:consultationId/equipoise-cards', requireApiKey, mediumLimiter, async (req, res, next) => {
+      try {
+        const { consultationId } = req.params;
+        const cards = await getEquipoiseCardsByConsultation(sql, consultationId);
+        return res.json({
+          consultationId,
+          ready: cards.length > 0,
+          count: cards.length,
+          cards,
+        });
+      } catch (error) {
+        logger.error(`Equipoise cards API error: ${error.message}`);
+        return next(error);
+      }
     });
 
     // Recovery tracking endpoints
