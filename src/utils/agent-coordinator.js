@@ -153,20 +153,32 @@ export class AgentCoordinator {
       }
 
       // Reconcile the panel with the consult: the equipoise panel elicits positions from all
-      // POSITION_SPECIALISTS, independent of the triage-routed subset. Every specialist a SHOWN card
-      // attributes a stance to (theSplit + panel) is a real participant — surfaced to the frontend and
-      // paid a participation token — so a card never cites a specialist the consult treats as absent.
-      const panelContributors = [...new Set(shownCards.flatMap(c => {
+      // POSITION_SPECIALISTS, independent of the triage-routed subset. Every lens a SHOWN card
+      // surfaces (panel + theSplit) — substantive OR a deliberate deferral — is a real participant,
+      // so a card never references a specialist the consult treats as absent. Participants drive
+      // "N agents coordinated" and must match the distinct names rendered across the cards' panels.
+      const panelParticipants = [...new Set(shownCards.flatMap(c => {
         const cj = c.output.card_json || {};
         const fromPanel = (cj.panel || []).map(m => m.specialistType);
         const fromSplit = (cj.theSplit || []).flatMap(side => (side.specialists || []).map(sp => sp.specialistType));
         return [...fromPanel, ...fromSplit].filter(Boolean);
       }))];
-      const allParticipants = [...new Set([...availableSpecialists, ...panelContributors])];
+      const allParticipants = [...new Set([...availableSpecialists, ...panelParticipants])];
 
-      // Consultation payments (async, non-blocking) — now over the reconciled participant set.
+      // Token recipients = SUBSTANTIVE contributors only (routed specialists + non-abstain panel
+      // positions). A deliberate deferral is shown in the panel and counted as a participant, but not
+      // rewarded — we don't pay a lens for concluding the decision is outside its scope.
+      const tokenContributors = [...new Set(shownCards.flatMap(c => {
+        const cj = c.output.card_json || {};
+        const fromPanel = (cj.panel || []).filter(m => m.stance !== 'abstain').map(m => m.specialistType);
+        const fromSplit = (cj.theSplit || []).flatMap(side => (side.specialists || []).map(sp => sp.specialistType));
+        return [...fromPanel, ...fromSplit].filter(Boolean);
+      }))];
+      const tokenRecipients = [...new Set([...availableSpecialists, ...tokenContributors])];
+
+      // Consultation payments (async, non-blocking) — over the substantive recipient set.
       if (this.tokenManager) {
-        this.processConsultationPayments(consultationId, allParticipants, caseData).catch(error => {
+        this.processConsultationPayments(consultationId, tokenRecipients, caseData).catch(error => {
           logger.error(`Consultation payment processing failed: ${error.message}`);
         });
       }

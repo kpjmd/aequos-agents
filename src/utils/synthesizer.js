@@ -115,11 +115,15 @@ function buildSplit(splitSummary) {
 }
 
 /**
- * THE PANEL — every specialist who took a substantive (on-menu, above-floor) position behind this
- * card, with their binary-mapped stance + reasoning. Unlike theSplit (divergence sides, contested
- * only), this is present for consensus cards too, so the frontend's panel view always matches the
- * specialists the card attributes stances to — closing the gap where theSplit cited specialists the
- * consult never surfaced as participants.
+ * THE PANEL — every lens that ENGAGED with this decision, with its binary-mapped stance + reasoning.
+ * Unlike theSplit (divergence sides, contested only), this is present for consensus cards too, so the
+ * frontend's "full panel discussion" always matches the specialists the card surfaces — closing the
+ * gap where theSplit cited specialists the consult never listed as participants.
+ *
+ * Included: a substantive on-menu position (option_a/option_b clearing the confidence floor) OR a
+ * deliberate deferral (stance 'abstain' — e.g. "outside my lens"), so the panel shows "Mind Mender
+ * deferred" rather than silently dropping it. Excluded: errored/empty positions (confidence <= 0,
+ * e.g. a statePosition timeout) and weak below-floor on-menu leans (not a firm position).
  */
 function buildPanel(perDP, optionA, optionB) {
   const positions = perDP?.positions || [];
@@ -135,7 +139,11 @@ function buildPanel(perDP, optionA, optionB) {
         reasoning: p.reasoning ?? null,
       };
     })
-    .filter(m => m.stance !== 'abstain' && (m.confidence ?? 0) >= CONFIDENCE_FLOOR);
+    .filter(m => {
+      if ((m.confidence ?? 0) <= 0) return false;        // drop errored / empty positions
+      if (m.stance === 'abstain') return true;            // show deliberate deferrals
+      return m.confidence >= CONFIDENCE_FLOOR;            // substantive on-menu must clear the floor
+    });
   return panel.length > 0 ? panel : null;
 }
 

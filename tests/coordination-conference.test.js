@@ -371,6 +371,25 @@ describe('buildSynthesizerOutput', () => {
   test('card_json.panel is null when no positions are provided', () => {
     expect(buildSynthesizerOutput(convergedPerDP, {}).card_json.panel).toBeNull();
   });
+
+  test('card_json.panel includes deliberate deferrals (abstain) but drops errored positions', () => {
+    const perDP = {
+      decisionPoint: { id: 'd7', question: 'Graft source?', options: ['Quad', 'Hamstring'] },
+      verdict: 'converged',
+      positions: [
+        { specialistType: 'strengthSage', initialStance: 'Quad', finalStance: 'Quad', confidence: 0.8, reasoning: 'extensor strength', evidenceGrade: 'B' },
+        { specialistType: 'mindMender', initialStance: 'defer', finalStance: 'defer', confidence: 0.72, reasoning: 'graft choice outside my lens', evidenceGrade: 'none' },
+        { specialistType: 'painWhisperer', initialStance: 'defer', finalStance: 'defer', confidence: 0, reasoning: 'Position unavailable (timeout)', evidenceGrade: 'none' },
+      ],
+      splitSummary: { verdict: 'converged', stanceCounts: { Quad: 1 }, sides: null, postDialogue: null },
+    };
+    const o = buildSynthesizerOutput(perDP, {});
+    expect(o.collapsed).toBe(false);
+    expect(o.card_json.panel).toEqual([
+      { name: 'Strength Sage', specialistType: 'strengthSage', stance: 'option_a', confidence: 0.8, evidenceGrade: 'B', reasoning: 'extensor strength' },
+      { name: 'Mind Mender', specialistType: 'mindMender', stance: 'abstain', confidence: 0.72, evidenceGrade: 'none', reasoning: 'graft choice outside my lens' },
+    ]); // painWhisperer (confidence 0, errored deferral) is dropped
+  });
 });
 
 // ---- equipoise persistence helpers: safe no-op without DB -----------------
