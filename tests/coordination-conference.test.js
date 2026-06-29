@@ -298,6 +298,98 @@ describe('buildSynthesizerOutput', () => {
     expect(o.card_json.whatWouldTipIt.source).toBe('archetype_axis');
     expect(o.card_json.whatWouldTipIt.axes[0].axis).toBe('demand_risk');
   });
+
+  // ---- Issue C: suppress non-binary / unmapped cards (persisted for audit, withheld from view) ----
+  test('off-menu converged stance (3rd option) → collapsed with non_binary_unmapped', () => {
+    // Triage framed a graded return-to-sport timeline; the panel converged on a 3rd option the binary
+    // option_a/option_b layer cannot represent (toStanceEnum would coerce it to abstain).
+    const offMenuPerDP = {
+      decisionPoint: { id: 'd4', question: 'Return-to-sport timeline?', options: ['3 months', '6 months'] },
+      verdict: 'converged',
+      positions: [],
+      splitSummary: {
+        verdict: 'converged',
+        stanceCounts: { 'Individualized timeline based on graft maturation': 4 },
+        sides: null, postDialogue: null,
+      },
+    };
+    const o = buildSynthesizerOutput(offMenuPerDP, {});
+    expect(o.collapsed).toBe(true);
+    expect(o.collapse_reason).toBe('non_binary_unmapped');
+  });
+
+  test('no substantive stance (all defer/below-floor) → collapsed with non_binary_unmapped', () => {
+    const allDeferPerDP = {
+      decisionPoint: { id: 'd5', question: 'Operate or observe?', options: ['Operate', 'Observe'] },
+      verdict: 'converged',
+      positions: [],
+      splitSummary: { verdict: 'converged', stanceCounts: {}, sides: null, postDialogue: null },
+    };
+    const o = buildSynthesizerOutput(allDeferPerDP, {});
+    expect(o.collapsed).toBe(true);
+    expect(o.collapse_reason).toBe('non_binary_unmapped');
+  });
+
+  test('clean binary card (all stances on-menu) is never suppressed', () => {
+    expect(buildSynthesizerOutput(contestedPerDP, {}).collapsed).toBe(false);
+    expect(buildSynthesizerOutput(convergedPerDP, {}).collapsed).toBe(false);
+  });
+
+  // ---- Issue B: the full equipoise panel + specialistType on theSplit ----
+  test('card_json.panel surfaces substantive on-menu contributors with specialistType', () => {
+    const perDP = {
+      decisionPoint: { id: 'd6', question: 'Early reconstruction vs structured rehab?', options: ['Early reconstruction', 'Structured rehab'] },
+      verdict: 'contested',
+      positions: [
+        { specialistType: 'strengthSage', initialStance: 'Early reconstruction', finalStance: 'Early reconstruction', confidence: 0.8, reasoning: 'active giving-way', evidenceGrade: 'B' },
+        { specialistType: 'movementDetective', initialStance: 'Structured rehab', finalStance: 'Structured rehab', confidence: 0.75, reasoning: 'rehab is the diagnostic test', evidenceGrade: 'B' },
+        { specialistType: 'mindMender', initialStance: 'defer', finalStance: 'defer', confidence: 0, reasoning: 'outside lens', evidenceGrade: 'none' },
+        { specialistType: 'painWhisperer', initialStance: 'Early reconstruction', finalStance: 'Early reconstruction', confidence: 0.5, reasoning: 'below floor', evidenceGrade: 'C' },
+      ],
+      splitSummary: {
+        verdict: 'contested',
+        stanceCounts: { 'Early reconstruction': 1, 'Structured rehab': 1 },
+        sides: [
+          { stance: 'Early reconstruction', specialists: [{ specialistType: 'strengthSage', specialist: 'Strength Sage', confidence: 0.8, evidenceGrade: 'B', reasoning: 'active giving-way' }] },
+          { stance: 'Structured rehab', specialists: [{ specialistType: 'movementDetective', specialist: 'Movement Detective', confidence: 0.75, evidenceGrade: 'B', reasoning: 'rehab is the diagnostic test' }] },
+        ],
+        postDialogue: null,
+      },
+    };
+    const o = buildSynthesizerOutput(perDP, {});
+    expect(o.collapsed).toBe(false);
+    // mindMender (defer→abstain) and painWhisperer (below 0.6 floor) are excluded.
+    expect(o.card_json.panel).toEqual([
+      { name: 'Strength Sage', specialistType: 'strengthSage', stance: 'option_a', confidence: 0.8, evidenceGrade: 'B', reasoning: 'active giving-way' },
+      { name: 'Movement Detective', specialistType: 'movementDetective', stance: 'option_b', confidence: 0.75, evidenceGrade: 'B', reasoning: 'rehab is the diagnostic test' },
+    ]);
+    // theSplit now carries specialistType so the consult can reconcile participants.
+    expect(o.card_json.theSplit[0].specialists[0].specialistType).toBe('strengthSage');
+    expect(o.card_json.theSplit[1].specialists[0].specialistType).toBe('movementDetective');
+  });
+
+  test('card_json.panel is null when no positions are provided', () => {
+    expect(buildSynthesizerOutput(convergedPerDP, {}).card_json.panel).toBeNull();
+  });
+
+  test('card_json.panel includes deliberate deferrals (abstain) but drops errored positions', () => {
+    const perDP = {
+      decisionPoint: { id: 'd7', question: 'Graft source?', options: ['Quad', 'Hamstring'] },
+      verdict: 'converged',
+      positions: [
+        { specialistType: 'strengthSage', initialStance: 'Quad', finalStance: 'Quad', confidence: 0.8, reasoning: 'extensor strength', evidenceGrade: 'B' },
+        { specialistType: 'mindMender', initialStance: 'defer', finalStance: 'defer', confidence: 0.72, reasoning: 'graft choice outside my lens', evidenceGrade: 'none' },
+        { specialistType: 'painWhisperer', initialStance: 'defer', finalStance: 'defer', confidence: 0, reasoning: 'Position unavailable (timeout)', evidenceGrade: 'none' },
+      ],
+      splitSummary: { verdict: 'converged', stanceCounts: { Quad: 1 }, sides: null, postDialogue: null },
+    };
+    const o = buildSynthesizerOutput(perDP, {});
+    expect(o.collapsed).toBe(false);
+    expect(o.card_json.panel).toEqual([
+      { name: 'Strength Sage', specialistType: 'strengthSage', stance: 'option_a', confidence: 0.8, evidenceGrade: 'B', reasoning: 'extensor strength' },
+      { name: 'Mind Mender', specialistType: 'mindMender', stance: 'abstain', confidence: 0.72, evidenceGrade: 'none', reasoning: 'graft choice outside my lens' },
+    ]); // painWhisperer (confidence 0, errored deferral) is dropped
+  });
 });
 
 // ---- equipoise persistence helpers: safe no-op without DB -----------------

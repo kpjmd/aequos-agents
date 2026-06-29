@@ -95,16 +95,9 @@ export class AgentCoordinator {
 
       this.activeConsultations.set(consultationId, consultation);
 
-      // Process consultation payments (async, non-blocking)
-      if (this.tokenManager) {
-        this.processConsultationPayments(
-          consultationId,
-          availableSpecialists,
-          caseData
-        ).catch(error => {
-          logger.error(`Consultation payment processing failed: ${error.message}`);
-        });
-      }
+      // Consultation payments are deferred until after the panel runs (see below): the equipoise
+      // panel surfaces position-stating specialists beyond the routed subset, and they earn a
+      // participation token too — so we pay the reconciled participant set, not just the routed one.
 
       // Collect responses with appropriate mode settings - optimized for reliability
       const collectionOptions = {
@@ -149,10 +142,44 @@ export class AgentCoordinator {
       // coordination_divergences write: the owned panel_runs/specialist_positions/synthesizer_outputs
       // layer is a strict superset.
       const equipoiseCards = this.buildEquipoiseCards(coordinationMetadata, synthesizedRecommendations);
+      // Suppressed (non-binary/unmapped) cards are withheld from the clinician view but still persisted
+      // for the audit trail, so the response carries only shown cards while persistence gets them all.
+      const shownCards = equipoiseCards.filter(c => !c.output.collapsed);
       if (equipoiseCards.length > 0) {
-        synthesizedRecommendations.equipoiseCards = equipoiseCards.map(c => c.output.card_json);
+        synthesizedRecommendations.equipoiseCards = shownCards.map(c => c.output.card_json);
         this.persistEquipoisePanels(consultationId, equipoiseCards, caseData).catch(error => {
           logger.error(`Equipoise panel persistence failed: ${error.message}`);
+        });
+      }
+
+      // Reconcile the panel with the consult: the equipoise panel elicits positions from all
+      // POSITION_SPECIALISTS, independent of the triage-routed subset. Every lens a SHOWN card
+      // surfaces (panel + theSplit) — substantive OR a deliberate deferral — is a real participant,
+      // so a card never references a specialist the consult treats as absent. Participants drive
+      // "N agents coordinated" and must match the distinct names rendered across the cards' panels.
+      const panelParticipants = [...new Set(shownCards.flatMap(c => {
+        const cj = c.output.card_json || {};
+        const fromPanel = (cj.panel || []).map(m => m.specialistType);
+        const fromSplit = (cj.theSplit || []).flatMap(side => (side.specialists || []).map(sp => sp.specialistType));
+        return [...fromPanel, ...fromSplit].filter(Boolean);
+      }))];
+      const allParticipants = [...new Set([...availableSpecialists, ...panelParticipants])];
+
+      // Token recipients = SUBSTANTIVE contributors only (routed specialists + non-abstain panel
+      // positions). A deliberate deferral is shown in the panel and counted as a participant, but not
+      // rewarded — we don't pay a lens for concluding the decision is outside its scope.
+      const tokenContributors = [...new Set(shownCards.flatMap(c => {
+        const cj = c.output.card_json || {};
+        const fromPanel = (cj.panel || []).filter(m => m.stance !== 'abstain').map(m => m.specialistType);
+        const fromSplit = (cj.theSplit || []).flatMap(side => (side.specialists || []).map(sp => sp.specialistType));
+        return [...fromPanel, ...fromSplit].filter(Boolean);
+      }))];
+      const tokenRecipients = [...new Set([...availableSpecialists, ...tokenContributors])];
+
+      // Consultation payments (async, non-blocking) — over the substantive recipient set.
+      if (this.tokenManager) {
+        this.processConsultationPayments(consultationId, tokenRecipients, caseData).catch(error => {
+          logger.error(`Consultation payment processing failed: ${error.message}`);
         });
       }
 
@@ -182,7 +209,7 @@ export class AgentCoordinator {
         consultationId,
         caseData,
         synthesizedRecommendations,
-        participatingSpecialists: availableSpecialists,
+        participatingSpecialists: allParticipants,
         responses: Array.from(responses.values()),
         coordinationSummary: this.generateCoordinationSummary(consultation),
         mode,
@@ -246,7 +273,8 @@ export class AgentCoordinator {
 
     let stored = 0;
     let classified = 0;
-    let evidenced = 0;
+    let evidenced = 0;       // panels whose ACCEPTED ledger (card-visible) is non-empty
+    let withCitations = 0;   // panels that retrieved + classified any citations (accepted or not)
     for (const { perDP, output } of cards) {
       const dp = perDP.decisionPoint;
       const [optionALabel = null, optionBLabel = null] = dp?.options || [];
@@ -289,18 +317,22 @@ export class AgentCoordinator {
       });
       if (panelRunId == null) continue;
 
-      // Phase 2.5 — claim-grounded evidence ledger (PURE ANNOTATION). Runs strictly DOWNSTREAM of
-      // the locked verdict + positions (already persisted above), only for curated-slug-anchored
-      // panels (skip the sentinel) and only when a research agent is present. It writes
-      // evidence_citations + the card's evidenceLedger; it NEVER alters verdict/positions/status/
-      // routing. The output.card_json is reassigned to a NEW object so the already-returned consult
-      // response (which holds the original empty-ledger card) keeps zero added latency.
-      if (this.researchAgent && decisionPointId !== sentinelId) {
+      // Phase 2.5 — claim-grounded evidence ledger (PURE ANNOTATION). Runs strictly DOWNSTREAM of the
+      // locked verdict + positions (already persisted above) for any SHOWN card — regardless of whether
+      // the DP matched a curated slug — so a contested fork that's simply newer than the catalog (e.g.
+      // quad-vs-hamstring) still carries evidence. Suppressed/collapsed cards are audit-only and skipped.
+      // For an unclassified sentinel card decisionType is null → STRICT population mode (the conservative
+      // setting), so the deterministic acceptance bar in isAccepted() still gates applicability. It
+      // writes evidence_citations + the card's evidenceLedger; it NEVER alters verdict/positions/status/
+      // routing. output.card_json is reassigned to a NEW object so the already-returned consult response
+      // (holding the original empty-ledger card) keeps zero added latency.
+      if (this.researchAgent && !output.collapsed) {
         try {
-          // decision_type of the matched curated slug drives population strictness (which_operation
-          // is judged leniently; operate-vs-nonop / timing strictly). match.slug is set here by
-          // construction (decisionPointId !== sentinelId only on an exact match).
-          const decisionType = catalog.find(r => r.slug === match.slug)?.decision_type || null;
+          // A curated-slug match supplies decision_type (which_operation → lenient population; others
+          // strict); an unclassified sentinel card has no slug → null → strict.
+          const decisionType = match.slug
+            ? (catalog.find(r => r.slug === match.slug)?.decision_type || null)
+            : null;
           const rows = await buildEvidenceForPanel(this.researchAgent, {
             perDP,
             patientContext: evidenceContext,
@@ -308,9 +340,18 @@ export class AgentCoordinator {
             decisionType,
           });
           if (rows.length > 0) {
-            output.card_json = { ...(output.card_json || {}), evidenceLedger: toLedgerEntries(rows) };
+            withCitations++;
+            const ledger = toLedgerEntries(rows);
+            output.card_json = { ...(output.card_json || {}), evidenceLedger: ledger };
             await storeEvidenceCitations(sql, panelRunId, rows);
-            evidenced++;
+            if (ledger.length > 0) evidenced++;
+            // Diagnostics: a shown (esp. contested) card can carry an EMPTY ledger when the strict
+            // acceptance bar (grade∈{high,moderate} ∧ population∈{match,partial} ∧ strong study type)
+            // rejects every retrieved citation. Surface accepted count + rejection tallies per
+            // dimension so an empty ledger is always explainable rather than silent.
+            logger.info(
+              `Evidence for ${consultationId} (panel_run ${panelRunId}): ${ledger.length}/${rows.length} accepted; ${this.summarizeEvidenceRejections(rows)}`
+            );
           }
         } catch (error) {
           logger.error(`Evidence research failed for ${consultationId} (panel_run ${panelRunId}): ${error.message}`);
@@ -322,8 +363,33 @@ export class AgentCoordinator {
     }
 
     if (stored > 0) {
-      logger.info(`Persisted ${stored} production panel run(s) for ${consultationId} (${classified} slug-classified, ${stored - classified} sentinel, ${evidenced} with evidence ledger)`);
+      logger.info(
+        `Persisted ${stored} production panel run(s) for ${consultationId} ` +
+        `(${classified} slug-classified, ${stored - classified} sentinel, ` +
+        `${evidenced} with accepted evidence ledger, ${withCitations} with citations retrieved)`
+      );
     }
+  }
+
+  /**
+   * Compact rejection breakdown for the evidence diagnostics log: of the retrieved citation rows,
+   * how many were rejected by the strict acceptance bar and along which dimensions (grade /
+   * population_match / study_type). Helps explain an empty ledger on a shown card.
+   * @param {Array<{accepted:boolean,evidenceGrade:string,populationMatch:string,studyType:string}>} rows
+   * @returns {string}
+   */
+  summarizeEvidenceRejections(rows) {
+    const rejected = (rows || []).filter(r => !r.accepted);
+    if (rejected.length === 0) return 'no rejections';
+    const tally = (key) => {
+      const counts = {};
+      for (const r of rejected) {
+        const k = r[key] ?? 'null';
+        counts[k] = (counts[k] || 0) + 1;
+      }
+      return Object.entries(counts).map(([k, v]) => `${k}:${v}`).join(',');
+    };
+    return `${rejected.length} rejected — grade[${tally('evidenceGrade')}] population[${tally('populationMatch')}] studyType[${tally('studyType')}]`;
   }
 
   /**
