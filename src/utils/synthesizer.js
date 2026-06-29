@@ -1,4 +1,7 @@
 import logger from './logger.js';
+import { toStanceEnum } from './equipoise-mappers.js';
+import { resolvePersona } from './specialist-identity.js';
+import { CONFIDENCE_FLOOR } from './coordination-conference.js';
 
 /**
  * Synthesizer — turns one detector result (a coordination-conference `perDecisionPoint` entry)
@@ -40,12 +43,26 @@ export function buildSynthesizerOutput(perDP, ctx = {}) {
 
   const [optionA = null, optionB = null] = decisionPoint?.options || [];
 
+  // The equipoise instrument is BINARY (option_a/option_b). Triage may frame a 3–4 option decision
+  // (DecisionPointsSchema allows up to 4), and statePosition lets a specialist pick a 3rd/4th option
+  // the binary layer cannot represent — toStanceEnum then coerces it to abstain, collapsing the card
+  // into a degenerate consensus (null split, empty ledger). Detect that here from the floored,
+  // defer-excluded substantive stance set (stanceCounts keys == distinctStances) and mark the card
+  // collapsed: it is persisted for the audit trail (split_summary keeps the raw stances) but
+  // suppressed from the clinician view. Suppress when nothing substantive maps (all defer/below-floor)
+  // OR any substantive stance is off the binary menu.
+  const substantiveStances = Object.keys(splitSummary?.stanceCounts || {});
+  const offMenu = substantiveStances.filter(s => s !== optionA && s !== optionB);
+  const suppress = substantiveStances.length === 0 || offMenu.length > 0;
+  const collapse_reason = suppress ? 'non_binary_unmapped' : null;
+
   const card_json = {
     decision: { question: decisionPoint?.question ?? null, optionA, optionB },
     verdict,
     status,
     contestedBy: splitSummary?.contestedBy ?? null,
     theSplit: buildSplit(splitSummary),
+    panel: buildPanel(perDP, optionA, optionB), // the full equipoise panel behind the card
     deliberationDelta: buildDeliberationDelta(splitSummary),
     whatWouldTipIt: verdict === 'contested' ? buildWhatWouldTipIt(splitSummary) : null,
     carePlanHome: ctx.treatmentPlan ?? null,
@@ -58,12 +75,13 @@ export function buildSynthesizerOutput(perDP, ctx = {}) {
     },
   };
 
-  // v1 never collapses (route_to_human is the independent escalation flag), so collapse_reason is
-  // null and the collapse_needs_reason CHECK is trivially satisfied.
+  // Non-suppressed cards never collapse (route_to_human is the independent escalation flag), so
+  // collapse_reason stays null. A suppressed (non-binary/unmapped) card collapses WITH a reason, so
+  // the collapse_needs_reason CHECK holds and the read endpoint can filter it out of the card view.
   return {
     status,
-    collapsed: false,
-    collapse_reason: null,
+    collapsed: suppress,
+    collapse_reason,
     route_to_human,
     route_reason,
     support_score,
@@ -88,11 +106,37 @@ function buildSplit(splitSummary) {
     stance: side.stance,
     specialists: (side.specialists || []).map(sp => ({
       name: sp.specialist ?? sp.specialistType ?? 'specialist',
+      specialistType: sp.specialistType ?? null, // machine key for joins / participant reconciliation
       confidence: sp.confidence ?? null,
       evidenceGrade: sp.evidenceGrade ?? null,
       reasoning: sp.reasoning ?? null,
     })),
   }));
+}
+
+/**
+ * THE PANEL — every specialist who took a substantive (on-menu, above-floor) position behind this
+ * card, with their binary-mapped stance + reasoning. Unlike theSplit (divergence sides, contested
+ * only), this is present for consensus cards too, so the frontend's panel view always matches the
+ * specialists the card attributes stances to — closing the gap where theSplit cited specialists the
+ * consult never surfaced as participants.
+ */
+function buildPanel(perDP, optionA, optionB) {
+  const positions = perDP?.positions || [];
+  const panel = positions
+    .map(p => {
+      const persona = resolvePersona(p.specialistType);
+      return {
+        name: persona.specialist,
+        specialistType: persona.specialistType,
+        stance: toStanceEnum(p.finalStance, optionA, optionB),
+        confidence: p.confidence ?? null,
+        evidenceGrade: p.evidenceGrade ?? null,
+        reasoning: p.reasoning ?? null,
+      };
+    })
+    .filter(m => m.stance !== 'abstain' && (m.confidence ?? 0) >= CONFIDENCE_FLOOR);
+  return panel.length > 0 ? panel : null;
 }
 
 /** DELIBERATION DELTA — who moved in the dialogue round, and whether the split persisted. */
@@ -163,7 +207,9 @@ export async function storeSynthesizerOutput(sql, panelRunId, output) {
 
 /**
  * Read the persisted equipoise cards for one consult — the production card_json rows (evidence
- * ledger INCLUDED), keyed via panel_runs.session_id = consultationId. The consult RESPONSE returns
+ * ledger INCLUDED), keyed via panel_runs.session_id = consultationId. Collapsed/suppressed cards
+ * (non-binary decisions that don't map to the binary menu) are persisted for audit but EXCLUDED here
+ * so the clinician view only ever sees well-formed binary cards. The consult RESPONSE returns
  * the same cards with an empty evidenceLedger (zero added latency); the ledger is filled by the
  * background research stage and lands here once persistEquipoisePanels finishes (~5–10s later), so
  * the frontend polls this after the consult completes.
@@ -181,6 +227,7 @@ export async function getEquipoiseCardsByConsultation(sql, consultationId) {
       FROM synthesizer_outputs so
       JOIN panel_runs pr ON pr.id = so.panel_run_id
       WHERE pr.session_id = ${consultationId} AND pr.run_kind = 'production'
+        AND so.collapsed = false
       ORDER BY so.id
     `;
     return rows.map(r => r.card_json).filter(Boolean);

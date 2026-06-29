@@ -19,7 +19,7 @@ import { resolvePersona } from './specialist-identity.js';
  *   - Deferral and below-floor positions never count as divergence.
  */
 
-const CONFIDENCE_FLOOR = 0.6;        // a stance must clear this to count toward divergence
+export const CONFIDENCE_FLOOR = 0.6; // a stance must clear this to count toward divergence
 // Evaluate ALL of triage's contested decision points (schema caps triage at 3), not just the
 // top one. Diagnostic finding: positions are stable & genuinely lens-divergent on a well-framed
 // equipoise decision, but triage's *ranking* of which decision is "most central" varies run-to-run.
