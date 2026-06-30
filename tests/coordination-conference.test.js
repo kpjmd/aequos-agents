@@ -11,7 +11,7 @@ jest.unstable_mockModule('../src/config/agent-config.js', () => ({
   },
 }));
 
-const { CoordinationConference } = await import('../src/utils/coordination-conference.js');
+const { CoordinationConference, equipoisePopulationMode } = await import('../src/utils/coordination-conference.js');
 const { default: AgentCoordinator } = await import('../src/utils/agent-coordinator.js');
 const { makePositionSchema, makeReconsiderSchema, DecisionPointsSchema } = await import('../src/utils/dialogue-schemas.js');
 const { buildSynthesizerOutput, storeSynthesizerOutput } = await import('../src/utils/synthesizer.js');
@@ -165,6 +165,36 @@ describe('CoordinationConference.conductConferenceRound (gate)', () => {
     expect(specialists.get('painWhisperer').reconsiderPosition).toHaveBeenCalled();
     expect(cm.divergences[0].postDialogue).toBeDefined();
   });
+
+  // ---- Issue #2: hybrid — equipoise positions elicited at the POPULATION level by default ----
+  test('elicits positions in population mode by default (the hybrid lever)', async () => {
+    const conf = new CoordinationConference();
+    const specialists = panel([DP], () => 'surgery');
+    await conf.conductConferenceRound(new Map(), specialists, {}, { mode: 'normal' });
+    const call = specialists.get('painWhisperer').statePosition.mock.calls[0];
+    expect(call[2]).toMatchObject({ population: true }); // 3rd arg = context
+  });
+
+  test('explicit options.population=false overrides the default (patient-specific)', async () => {
+    const conf = new CoordinationConference();
+    const specialists = panel([DP], () => 'surgery');
+    await conf.conductConferenceRound(new Map(), specialists, {}, { mode: 'normal', population: false });
+    expect(specialists.get('painWhisperer').statePosition.mock.calls[0][2]).toMatchObject({ population: false });
+  });
+});
+
+describe('equipoisePopulationMode', () => {
+  test('explicit override wins; otherwise defaults on unless EQUIPOISE_POPULATION_MODE=false', () => {
+    expect(equipoisePopulationMode(true)).toBe(true);
+    expect(equipoisePopulationMode(false)).toBe(false);
+    const prev = process.env.EQUIPOISE_POPULATION_MODE;
+    delete process.env.EQUIPOISE_POPULATION_MODE;
+    expect(equipoisePopulationMode()).toBe(true);     // default on
+    process.env.EQUIPOISE_POPULATION_MODE = 'false';
+    expect(equipoisePopulationMode()).toBe(false);    // opt-out
+    if (prev === undefined) delete process.env.EQUIPOISE_POPULATION_MODE;
+    else process.env.EQUIPOISE_POPULATION_MODE = prev;
+  });
 });
 
 // ---- formatDivergencesForSynthesis ----------------------------------------
@@ -217,6 +247,16 @@ describe('dialogue-schemas', () => {
     expect(DecisionPointsSchema.safeParse({
       decisionPoints: [{ id: 'd', question: 'q', options: ['a', 'b'], rationale: 'why' }],
     }).success).toBe(true);
+  });
+
+  // ---- Issue #4: binary instrument enforced at the schema (decompose 3-4 options upstream) ----
+  test('DecisionPointsSchema rejects non-binary (3+) options so a primary DP can never be silently suppressed', () => {
+    expect(DecisionPointsSchema.safeParse({
+      decisionPoints: [{ id: 'd', question: 'q', options: ['rehab', 'early recon', 'delayed recon'], rationale: 'why' }],
+    }).success).toBe(false);
+    expect(DecisionPointsSchema.safeParse({
+      decisionPoints: [{ id: 'd', question: 'q', options: ['only one'], rationale: 'why' }],
+    }).success).toBe(false);
   });
 });
 
@@ -280,6 +320,27 @@ describe('buildSynthesizerOutput', () => {
     expect(o.route_to_human).toBe(true);
     expect(o.route_reason).toBe('risk_category');
     expect(o.status).toBe('consensus');
+  });
+
+  // ---- Issue #3: route urgency reconciliation (no contradictory "immediate" on routine cards) ----
+  test('no red flag → route.urgencyLevel is null (makes no urgency claim, cannot contradict keyPoints)', () => {
+    // Even if a consult-level urgency leaks into ctx, a non-escalated card must not stamp it.
+    const o = buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: false, urgencyLevel: 'immediate' });
+    expect(o.card_json.route.urgencyLevel).toBeNull();
+    expect(o.card_json.route.label).toBeNull();
+  });
+
+  test('red flag → route.urgencyLevel normalized into the triage vocabulary (immediate → urgent)', () => {
+    const o = buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: true, urgencyLevel: 'immediate' });
+    expect(o.card_json.route.urgencyLevel).toBe('urgent');      // not the foreign "immediate"
+    expect(o.card_json.route.label).toBe('Urgent surgical consult');
+  });
+
+  test('red flag with 24-48hrs → semi-urgent; missing level defaults to urgent', () => {
+    expect(buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: true, urgencyLevel: '24-48hrs' })
+      .card_json.route.urgencyLevel).toBe('semi-urgent');
+    expect(buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: true })
+      .card_json.route.urgencyLevel).toBe('urgent');
   });
 
   test('archetype-sweep splitSummary → axis-derived "what would tip it"', () => {

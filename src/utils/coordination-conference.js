@@ -27,6 +27,19 @@ export const CONFIDENCE_FLOOR = 0.6; // a stance must clear this to count toward
 const MAX_DECISION_POINTS = 3;       // cost cap: up to 3 contested decisions × specialists, contested cases only
 export const POSITION_SPECIALISTS = ['painWhisperer', 'movementDetective', 'strengthSage', 'mindMender'];
 
+/**
+ * Whether the live equipoise instrument elicits positions at the POPULATION level (the validated
+ * regime) rather than for the specific patient. Default on; set EQUIPOISE_POPULATION_MODE='false' to
+ * revert to patient-specific elicitation. An explicit override (benchmark/tests) always wins. Shared
+ * by the conference (position elicitation) and the evidence stage (population_match strictness) so the
+ * card and its ledger reason about the same population.
+ * @param {boolean} [override]
+ * @returns {boolean}
+ */
+export function equipoisePopulationMode(override) {
+  return override ?? (process.env.EQUIPOISE_POPULATION_MODE !== 'false');
+}
+
 export class CoordinationConference {
   constructor() {
     this.dialogueHistory = [];
@@ -36,7 +49,9 @@ export class CoordinationConference {
    * @param {Map} initialResponses - initial specialist responses (kept for context/compat)
    * @param {Map} specialists - registered specialist agents (keyed by type)
    * @param {Object} caseData
-   * @param {Object} options - { mode }
+   * @param {Object} options - { mode, population }
+   *   - population: elicit equipoise positions at the population level (default: env
+   *     EQUIPOISE_POPULATION_MODE, on unless set to 'false'). The care plan stays patient-specific.
    * @returns {Object} coordination metadata (see emptyMetadata for shape)
    */
   async conductConferenceRound(initialResponses, specialists, caseData, options = {}) {
@@ -65,7 +80,16 @@ export class CoordinationConference {
 
       // 2-4. Run the shared panel pass (positions -> structural detection -> dialogue) over
       //      triage's contested decision points. Same core the benchmark probe drives.
-      const result = await this.runDecisionPoints(decisionPoints, caseData, specialists, { mode });
+      //
+      // HYBRID: the equipoise instrument elicits positions at the POPULATION level (the regime the
+      // instrument was validated in — Phase 2a). Patient-specific single-vignette framing is known to
+      // confound the panel into convergence (see buildPositionPrompt comment), so a genuinely contested
+      // decision would otherwise read as 'converged' with a null split. The patient-specific CARE PLAN is
+      // unaffected: synthesizeRecommendations builds treatmentPlan from the specialists' patient-specific
+      // assessments, not from these positions. Gated by env so it stays reversible/spot-checkable; an
+      // explicit options.population (benchmark/tests) always wins.
+      const population = equipoisePopulationMode(options.population);
+      const result = await this.runDecisionPoints(decisionPoints, caseData, specialists, { mode, population });
 
       logger.info(
         `Conference: ${decisionPoints.length} decision point(s), ${result.positions.length} positions, ` +

@@ -3,6 +3,16 @@ import { toStanceEnum } from './equipoise-mappers.js';
 import { resolvePersona } from './specialist-identity.js';
 import { CONFIDENCE_FLOOR } from './coordination-conference.js';
 
+// The card's keyPoints speak the TRIAGE urgency vocabulary (emergency|urgent|semi-urgent|routine);
+// clinicalFlags (detectClinicalFlags) speaks a separate one (immediate|24-48hrs|routine). Map the
+// latter onto the former so the route can never display an urgency in a different vocabulary than the
+// consult's keyPoints. Unknown/already-triage values pass through unchanged.
+const CLINICAL_TO_TRIAGE_URGENCY = { immediate: 'urgent', '24-48hrs': 'semi-urgent', routine: 'routine' };
+function toTriageUrgency(level) {
+  if (level == null) return null;
+  return CLINICAL_TO_TRIAGE_URGENCY[level] ?? level;
+}
+
 /**
  * Synthesizer — turns one detector result (a coordination-conference `perDecisionPoint` entry)
  * into the clinician equipoise card + the routing/collapse decision persisted in
@@ -43,14 +53,14 @@ export function buildSynthesizerOutput(perDP, ctx = {}) {
 
   const [optionA = null, optionB = null] = decisionPoint?.options || [];
 
-  // The equipoise instrument is BINARY (option_a/option_b). Triage may frame a 3–4 option decision
-  // (DecisionPointsSchema allows up to 4), and statePosition lets a specialist pick a 3rd/4th option
-  // the binary layer cannot represent — toStanceEnum then coerces it to abstain, collapsing the card
-  // into a degenerate consensus (null split, empty ledger). Detect that here from the floored,
-  // defer-excluded substantive stance set (stanceCounts keys == distinctStances) and mark the card
-  // collapsed: it is persisted for the audit trail (split_summary keeps the raw stances) but
-  // suppressed from the clinician view. Suppress when nothing substantive maps (all defer/below-floor)
-  // OR any substantive stance is off the binary menu.
+  // The equipoise instrument is BINARY (option_a/option_b). Triage now frames decisions as exactly 2
+  // options (DecisionPointsSchema enforces .length(2)) and decomposes multi-option decisions into
+  // separate binary forks, so an off-menu 3rd/4th-option stance should no longer occur. This guard
+  // remains as defense-in-depth: if a stance still lands off the binary menu (or nothing substantive
+  // maps because every lens defers / falls below the floor), the card collapses into a degenerate
+  // consensus (null split, empty ledger). Mark it collapsed — persisted for the audit trail
+  // (split_summary keeps the raw stances) but suppressed from the clinician view. The coordinator logs
+  // every suppressed card so this is never silent (esp. a suppressed primary DP).
   const substantiveStances = Object.keys(splitSummary?.stanceCounts || {});
   const offMenu = substantiveStances.filter(s => s !== optionA && s !== optionB);
   const suppress = substantiveStances.length === 0 || offMenu.length > 0;
@@ -70,7 +80,11 @@ export function buildSynthesizerOutput(perDP, ctx = {}) {
     route: {
       toHuman: route_to_human,
       reason: route_reason,
-      urgencyLevel: ctx.urgencyLevel ?? null,
+      // The route makes an urgency CLAIM only when it is actually escalating to a human (red flag);
+      // otherwise null, so a routine card never carries a contradictory "immediate" stamp. When it does
+      // escalate, the level is normalized into the triage vocabulary the keyPoints use, so the two can
+      // never read in conflicting vocabularies. Case acuity itself lives in the consult's keyPoints.
+      urgencyLevel: route_to_human ? (toTriageUrgency(ctx.urgencyLevel) ?? 'urgent') : null,
       label: route_to_human ? 'Urgent surgical consult' : null,
     },
   };
