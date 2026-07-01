@@ -175,6 +175,18 @@ describe('buildEvidenceForPanel — classification, mapping, grounding, balance'
     expect(JSON.stringify(strictLLM.seen.messages)).toContain('STRICT');
   });
 
+  test('population-mode card → LENIENT regardless of decision_type (so a population card is not starved of a ledger)', async () => {
+    const citations = [{ pmid: '888', title: 'op-vs-nonop RCT', studyType: 'Randomized Controlled Trial', abstract: 'a' }];
+    const canned = { classifications: [{ ref: 1, supportsStance: 'option_a', studyType: 'rct', evidenceGrade: 'high', populationMatch: 'partial', rationale: 'r' }] };
+
+    // A normally-STRICT decision type, but the panel ran at population level → lenient matching.
+    const popLLM = recordingLLM(canned);
+    await buildEvidenceForPanel(fakeResearchAgent(citations), {
+      perDP: CONTESTED_PERDP, decisionType: 'conservative_vs_operative', population: true, llm: popLLM,
+    });
+    expect(JSON.stringify(popLLM.seen.messages)).toContain('LENIENT');
+  });
+
   test('LLM throwing → rows still persist with defaults (best-effort, never throws)', async () => {
     const throwing = { withStructuredOutput() { return { invoke: async () => { throw new Error('boom'); } }; } };
     const citations = [{ pmid: '444', title: 'X', studyType: 'Meta-Analysis', abstract: 'd' }];

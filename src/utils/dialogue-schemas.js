@@ -21,9 +21,9 @@ export const DecisionPointsSchema = z.object({
         question: z.string().describe('the clinical decision phrased as a question the panel must answer'),
         options: z
           .array(z.string())
-          .min(2)
-          .max(4)
-          .describe('the 2-4 mutually exclusive choices for this decision'),
+          .length(2)
+          .describe('EXACTLY 2 mutually exclusive choices — the equipoise instrument is binary. ' +
+            'Decompose any 3-4 option decision into separate binary decision points (primary fork + downstream follow-on).'),
         rationale: z
           .string()
           .describe('why this decision is genuinely contested / clinical equipoise FOR THIS CASE'),

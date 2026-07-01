@@ -55,7 +55,13 @@ const STUDY_TYPE_ENUM = ['rct', 'systematic_review', 'meta_analysis', 'cohort', 
 // where demand level is decision-critical. Locked with the surgeon 2026-06-28.
 const LENIENT_POPULATION_TYPES = new Set(['which_operation']);
 
-function populationModeFor(decisionType) {
+// When the panel elicited its positions at the POPULATION level (hybrid equipoise instrument), the
+// card reasons about a typical adult for whom the decision arises — demand level is intentionally
+// unspecified, not missing data. Judging that card's evidence under STRICT mode rejects every citation
+// whose demand is unstated (population_match → 'unknown'), leaving an empty ledger on a well-formed
+// card. So a population-level card always uses LENIENT population matching, regardless of decision_type.
+function populationModeFor(decisionType, population = false) {
+  if (population) return 'lenient';
   return LENIENT_POPULATION_TYPES.has(decisionType) ? 'lenient' : 'strict';
 }
 
@@ -188,8 +194,8 @@ function buildClinicalQuery(dp, caseData = {}, patientContext = {}) {
   };
 }
 
-function renderUserMessage(dp, optionALabel, optionBLabel, claims, patientContext, citations, decisionType) {
-  const mode = populationModeFor(decisionType);
+function renderUserMessage(dp, optionALabel, optionBLabel, claims, patientContext, citations, decisionType, population) {
+  const mode = populationModeFor(decisionType, population);
   const modeLine =
     mode === 'lenient'
       ? `POPULATION STRICTNESS MODE: LENIENT (decision fork: ${decisionType || 'unknown'} — does NOT hinge on demand; do NOT mark "unknown" just because activity/demand is unstated).`
@@ -244,7 +250,7 @@ function renderUserMessage(dp, optionALabel, optionBLabel, claims, patientContex
  * so nothing is accepted) — rows still persist for the audit trail.
  * @returns {Promise<Array<citationRow>>}
  */
-async function classifyCitations(citations, { dp, optionALabel, optionBLabel, claims, patientContext, decisionType, llm }) {
+async function classifyCitations(citations, { dp, optionALabel, optionBLabel, claims, patientContext, decisionType, population, llm }) {
   let byRef = new Map();
   try {
     const model = llm || getClassifierLLM();
@@ -254,7 +260,7 @@ async function classifyCitations(citations, { dp, optionALabel, optionBLabel, cl
         role: 'system',
         content: [{ type: 'text', text: SYSTEM_INSTRUCTIONS, cache_control: { type: 'ephemeral' } }],
       },
-      { role: 'user', content: renderUserMessage(dp, optionALabel, optionBLabel, claims, patientContext, citations, decisionType) },
+      { role: 'user', content: renderUserMessage(dp, optionALabel, optionBLabel, claims, patientContext, citations, decisionType, population) },
     ]);
     const timeout = new Promise((_, reject) =>
       setTimeout(() => reject(new Error(`evidence-classifier timeout after ${CLASSIFIER_TIMEOUT_MS}ms`)), CLASSIFIER_TIMEOUT_MS)
@@ -315,10 +321,11 @@ async function classifyCitations(citations, { dp, optionALabel, optionBLabel, cl
  * @param {Object} [params.patientContext] - de-identified {ageBracket, demandLevel, bodyRegion}
  * @param {Object} [params.caseData] - consult case data (for query building only; not stored)
  * @param {string} [params.decisionType] - curated slug's decision_type (drives population strictness)
+ * @param {boolean} [params.population] - panel elicited at population level → lenient population_match
  * @param {Object} [params.llm] - injectable classifier LLM (tests stub it)
  * @returns {Promise<Array<citationRow>>}
  */
-export async function buildEvidenceForPanel(researchAgent, { perDP, patientContext = {}, caseData = {}, decisionType = null, llm = null } = {}) {
+export async function buildEvidenceForPanel(researchAgent, { perDP, patientContext = {}, caseData = {}, decisionType = null, population = false, llm = null } = {}) {
   if (!researchAgent || typeof researchAgent.curateRelevantStudies !== 'function') return [];
   const dp = perDP?.decisionPoint;
   if (!dp?.question) return [];
@@ -330,7 +337,7 @@ export async function buildEvidenceForPanel(researchAgent, { perDP, patientConte
     if (citations.length === 0) return [];
 
     const { optionALabel, optionBLabel, claims } = deriveClaims(perDP);
-    return await classifyCitations(citations, { dp, optionALabel, optionBLabel, claims, patientContext, decisionType, llm });
+    return await classifyCitations(citations, { dp, optionALabel, optionBLabel, claims, patientContext, decisionType, population, llm });
   } catch (error) {
     logger.error('evidence-research: buildEvidenceForPanel failed', { error: error.message });
     return [];

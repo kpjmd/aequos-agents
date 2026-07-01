@@ -30,7 +30,8 @@ ${JSON.stringify(caseData)}
 Rules:
 - Only include a decision point if there is REAL equipoise for THIS specific patient. Surgery-vs-conservative, timing-of-intervention, return-to-activity timing, and medication choices with genuine trade-offs are common examples.
 - Do NOT manufacture disagreement. If the evidence-based answer is clear and not genuinely contested (e.g. a routine acute sprain with no red flags, or a question where guidelines give one clear answer), return an EMPTY list. A decision is NOT equipoise just because more than one option is nameable.
-- Each decision point must have 2-4 mutually exclusive options.
+- Each decision point must have EXACTLY 2 mutually exclusive options — the equipoise instrument is binary.
+- If a decision naturally has more than two reasonable options, DECOMPOSE it into binary forks rather than listing 3-4 options. Make the PRIMARY decision the binary fork the patient actually faces (e.g. "Reconstruction vs structured rehabilitation"), and split any CONDITIONAL follow-on into a SEPARATE downstream decision point (e.g. "If reconstruction: early vs delayed"). The first-ranked decision point MUST be that primary fork central to the patient's question — NEVER a downstream sub-decision.
 - Frame the options NEUTRALLY and SYMMETRICALLY. State each as a fair, standalone choice a reasonable specialist might genuinely advocate. Do NOT pre-load one option with reassuring hedges (e.g. avoid "rehabilitation, with surgery reserved only for failure" — instead "structured rehabilitation / delayed reconstruction"). Asymmetric framing biases every specialist toward the option that sounds safest and hides real disagreement.
 - Return at most 3, ordered by how central they are to this patient's care.`;
 
@@ -377,16 +378,22 @@ ${JSON.stringify(caseData)}
           .map(line => line.replace(/^-\s*/, '').trim());
       }
 
-      // Extract urgency level
-      const urgencyMatch = response.match(/(emergency|urgent|semi-urgent|routine)/i);
+      // Extract urgency level. Prefer the explicit "URGENCY[ …]: <value>" label the triage template
+      // emits; only fall back to a bare word-boundary mention if there's no labeled line. Anchoring
+      // avoids matching an urgency word buried in narrative prose (e.g. "this is NOT an emergency").
+      const labeledUrgency = response.match(/urgency[^:\n]*[-:]\s*(emergency|urgent|semi-urgent|routine)/i);
+      const urgencyMatch = labeledUrgency || response.match(/\b(emergency|urgent|semi-urgent|routine)\b/i);
       if (urgencyMatch) {
         structured.urgencyLevel = urgencyMatch[1].toLowerCase();
       }
 
-      // Extract clinical importance
-      if (response.toLowerCase().includes('critical') || response.toLowerCase().includes('emergency')) {
+      // Clinical importance FOLLOWS the extracted urgency — an emergency is critical, urgent is high.
+      // Previously a bare "critical"/"emergency" substring anywhere set 'critical', which false-matched
+      // narrative text ("critical to restore stability", "not an emergency") and spuriously escalated
+      // elective decisions into a critical assessment → requiresImmediateMD → "Urgent surgical consult".
+      if (structured.urgencyLevel === 'emergency') {
         structured.clinicalImportance = 'critical';
-      } else if (response.toLowerCase().includes('high priority') || response.toLowerCase().includes('urgent')) {
+      } else if (structured.urgencyLevel === 'urgent') {
         structured.clinicalImportance = 'high';
       }
 

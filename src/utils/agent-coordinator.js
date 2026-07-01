@@ -1,7 +1,7 @@
 import logger from './logger.js';
 import { agentConfig } from '../config/agent-config.js';
 import promptManager from './prompt-manager.js';
-import { CoordinationConference } from './coordination-conference.js';
+import { CoordinationConference, equipoisePopulationMode } from './coordination-conference.js';
 import sql from './db.js';
 import { storePanelRun } from './panel-run-storage.js';
 import { resolveModelVersionId, createQuery, getSentinelDecisionPointId, resolveDecisionPointIdBySlug } from './equipoise-ingest.js';
@@ -145,6 +145,20 @@ export class AgentCoordinator {
       // Suppressed (non-binary/unmapped) cards are withheld from the clinician view but still persisted
       // for the audit trail, so the response carries only shown cards while persistence gets them all.
       const shownCards = equipoiseCards.filter(c => !c.output.collapsed);
+      // GUARD: never let a decision point vanish silently. With triage now binarizing decisions, a
+      // suppressed card should be rare (all-defer / below-floor). Log each one — and loudly flag the
+      // FIRST-ranked (primary) DP if it was suppressed, since that is the question the user actually asked.
+      const suppressedCards = equipoiseCards.filter(c => c.output.collapsed);
+      if (suppressedCards.length > 0) {
+        for (let i = 0; i < equipoiseCards.length; i++) {
+          const c = equipoiseCards[i];
+          if (!c.output.collapsed) continue;
+          const q = c.perDP?.decisionPoint?.question ?? '(unspecified)';
+          const msg = `Equipoise card suppressed [${consultationId}]: "${q}" (reason: ${c.output.collapse_reason})`;
+          if (i === 0) logger.warn(`PRIMARY ${msg} — primary decision hidden from clinician view`);
+          else logger.info(msg);
+        }
+      }
       if (equipoiseCards.length > 0) {
         synthesizedRecommendations.equipoiseCards = shownCards.map(c => c.output.card_json);
         this.persistEquipoisePanels(consultationId, equipoiseCards, caseData).catch(error => {
@@ -270,6 +284,10 @@ export class AgentCoordinator {
     // De-identified patient context for population_match (PHI-out: brackets/labels only, never
     // identifiers — consistent with the queries.patient_context stance). Shared by all cards.
     const evidenceContext = this.deriveEvidencePatientContext(caseData);
+    // The cards were elicited at the population level when the hybrid instrument is on; judge their
+    // evidence at the same level (lenient population_match) so a population card isn't starved of a
+    // ledger by demand-level strictness. Mirrors the conference's elicitation mode.
+    const populationCards = equipoisePopulationMode();
 
     let stored = 0;
     let classified = 0;
@@ -338,11 +356,20 @@ export class AgentCoordinator {
             patientContext: evidenceContext,
             caseData,
             decisionType,
+            population: populationCards,
           });
           if (rows.length > 0) {
             withCitations++;
             const ledger = toLedgerEntries(rows);
-            output.card_json = { ...(output.card_json || {}), evidenceLedger: ledger };
+            // Surface accepted/total (and per-dimension rejection tallies when the ledger is empty)
+            // ONTO the card, so a shown card with an empty ledger is self-explaining rather than a
+            // silent blank. Additive field; never alters verdict/positions/status/routing.
+            const evidenceSummary = {
+              accepted: ledger.length,
+              retrieved: rows.length,
+              ...(ledger.length === 0 && { rejections: this.summarizeEvidenceRejections(rows) }),
+            };
+            output.card_json = { ...(output.card_json || {}), evidenceLedger: ledger, evidenceSummary };
             await storeEvidenceCitations(sql, panelRunId, rows);
             if (ledger.length > 0) evidenced++;
             // Diagnostics: a shown (esp. contested) card can carry an EMPTY ledger when the strict
@@ -1309,15 +1336,21 @@ ${JSON.stringify(caseData)}
               confidence: finding.confidence
             });
 
+            // A high-relevance finding is IMPORTANCE, not time-criticality — route it to a human
+            // (the deliberate safety net + MD-review feed) WITHOUT forcing 'immediate' urgency. Elective
+            // decisions (e.g. a competitive-athlete ACL tear) trip clinicalRelevance='high' trivially, so
+            // coupling urgency here mislabels routine cards as "Urgent surgical consult". Genuine
+            // emergencies escalate urgency via the 'critical' assessment path below (triage maps
+            // urgencyLevel='emergency' → clinicalImportance='critical').
             if (finding.clinicalRelevance === 'high') {
               requiresImmediateMD = true;
-              urgencyLevel = 'immediate';
             }
           }
         }
       }
 
-      // Check clinical importance
+      // Check clinical importance — a 'critical' assessment is genuine time-criticality (emergencies
+      // reach here), so it escalates BOTH the routing flag and the urgency level.
       if (response.response && response.response.assessment) {
         const importance = response.response.assessment.clinicalImportance;
         if (importance === 'critical') {
