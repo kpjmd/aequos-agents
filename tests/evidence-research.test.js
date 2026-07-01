@@ -151,7 +151,7 @@ describe('buildEvidenceForPanel — classification, mapping, grounding, balance'
     expect(a.pmid).toBe('111');
   });
 
-  test('degraded path (LLM returns nothing): hint-derived study_type, population unknown → not accepted, abstain claim=question', async () => {
+  test('degraded path (LLM returns nothing): hint-derived study_type, population unknown → not accepted, abstain claim=neutral phrase', async () => {
     const citations = [{ pmid: '333', title: 'A review', studyType: 'Review', abstract: 'c' }];
     const rows = await buildEvidenceForPanel(fakeResearchAgent(citations), { perDP: CONTESTED_PERDP, llm: stubLLM({ classifications: [] }) });
     expect(rows).toHaveLength(1);
@@ -159,7 +159,25 @@ describe('buildEvidenceForPanel — classification, mapping, grounding, balance'
     expect(rows[0].populationMatch).toBe('unknown');
     expect(rows[0].accepted).toBe(false);
     expect(rows[0].supportsStance).toBe('abstain');
-    expect(rows[0].claimText).toBe(CONTESTED_PERDP.decisionPoint.question);
+    // No rationale on the degraded path → static neutral claim, NOT the decision question.
+    expect(rows[0].claimText).toBe('Provides background context; does not directly favor either option.');
+    expect(rows[0].claimText).not.toBe(CONTESTED_PERDP.decisionPoint.question);
+  });
+
+  test('normal-path abstain ("neither"): claim grounded in the paper finding, never the decision question', async () => {
+    const citations = [{ pmid: '555', title: 'Post-op rehab protocol', studyType: 'Randomized Controlled Trial', abstract: 'h' }];
+    const canned = {
+      classifications: [
+        { ref: 1, supportsStance: 'neither', studyType: 'rct', evidenceGrade: 'high', populationMatch: 'match', rationale: 'accelerated rehab did not change graft-vs-defer outcomes' },
+      ],
+    };
+    const rows = await buildEvidenceForPanel(fakeResearchAgent(citations), { perDP: CONTESTED_PERDP, llm: stubLLM(canned) });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].supportsStance).toBe('abstain'); // "neither" coerced to abstain
+    // claim_text grounds in the paper finding (the rationale) with a neutral lead-in — not the question.
+    expect(rows[0].claimText).toContain('accelerated rehab did not change graft-vs-defer outcomes');
+    expect(rows[0].claimText).toContain('does not favor either option');
+    expect(rows[0].claimText).not.toBe(CONTESTED_PERDP.decisionPoint.question);
   });
 
   test('population strictness mode is wired by decision_type (lenient for which_operation)', async () => {
