@@ -14,6 +14,29 @@ function toTriageUrgency(level) {
 }
 
 /**
+ * Build the route object. route_to_human is the consult-level red-flag/routing signal (a critical
+ * finding must reach a surgeon) and is INDEPENDENT of urgency. The urgency + LABEL, however, reflect
+ * genuine time-criticality: only an emergency-/urgent-tier level earns "Urgent surgical consult";
+ * an importance-driven routing (the common case — e.g. an elective ACL decision flagged high-relevance)
+ * reads "Specialist review recommended" at a routine/semi-urgent level, so the card never overstates
+ * urgency. A non-routed card makes no urgency claim at all (null), so it cannot contradict the
+ * consult's keyPoints. urgencyLevel is normalized into the triage vocabulary the keyPoints use.
+ */
+function buildRoute(routeToHuman, routeReason, ctxUrgencyLevel) {
+  if (!routeToHuman) {
+    return { toHuman: false, reason: routeReason, urgencyLevel: null, label: null };
+  }
+  const urgencyLevel = toTriageUrgency(ctxUrgencyLevel) ?? 'routine';
+  const genuinelyUrgent = urgencyLevel === 'emergency' || urgencyLevel === 'urgent';
+  return {
+    toHuman: true,
+    reason: routeReason,
+    urgencyLevel,
+    label: genuinelyUrgent ? 'Urgent surgical consult' : 'Specialist review recommended',
+  };
+}
+
+/**
  * Synthesizer — turns one detector result (a coordination-conference `perDecisionPoint` entry)
  * into the clinician equipoise card + the routing/collapse decision persisted in
  * synthesizer_outputs. This is the product face of the moat.
@@ -77,16 +100,7 @@ export function buildSynthesizerOutput(perDP, ctx = {}) {
     whatWouldTipIt: verdict === 'contested' ? buildWhatWouldTipIt(splitSummary) : null,
     carePlanHome: ctx.treatmentPlan ?? null,
     evidenceLedger: [], // Phase 2.5 — Research Agent → evidence_citations
-    route: {
-      toHuman: route_to_human,
-      reason: route_reason,
-      // The route makes an urgency CLAIM only when it is actually escalating to a human (red flag);
-      // otherwise null, so a routine card never carries a contradictory "immediate" stamp. When it does
-      // escalate, the level is normalized into the triage vocabulary the keyPoints use, so the two can
-      // never read in conflicting vocabularies. Case acuity itself lives in the consult's keyPoints.
-      urgencyLevel: route_to_human ? (toTriageUrgency(ctx.urgencyLevel) ?? 'urgent') : null,
-      label: route_to_human ? 'Urgent surgical consult' : null,
-    },
+    route: buildRoute(route_to_human, route_reason, ctx.urgencyLevel),
   };
 
   // Non-suppressed cards never collapse (route_to_human is the independent escalation flag), so

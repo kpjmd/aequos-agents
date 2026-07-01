@@ -336,11 +336,28 @@ describe('buildSynthesizerOutput', () => {
     expect(o.card_json.route.label).toBe('Urgent surgical consult');
   });
 
-  test('red flag with 24-48hrs → semi-urgent; missing level defaults to urgent', () => {
+  test('red flag with 24-48hrs → semi-urgent; missing level defaults to routine (importance routing)', () => {
     expect(buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: true, urgencyLevel: '24-48hrs' })
       .card_json.route.urgencyLevel).toBe('semi-urgent');
     expect(buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: true })
-      .card_json.route.urgencyLevel).toBe('urgent');
+      .card_json.route.urgencyLevel).toBe('routine');
+  });
+
+  // ---- Over-flag calibration: label reflects genuine urgency, not mere importance routing ----
+  test('importance routing (non-emergency urgency) → "Specialist review recommended", not "Urgent"', () => {
+    // requiresImmediateMD via a high-relevance finding, but urgency is routine → not an emergency.
+    const routine = buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: true, urgencyLevel: 'routine' });
+    expect(routine.card_json.route.toHuman).toBe(true);        // still routes to a human (safety net)
+    expect(routine.card_json.route.urgencyLevel).toBe('routine');
+    expect(routine.card_json.route.label).toBe('Specialist review recommended');
+
+    // Semi-urgent (24-48hrs) is still not "Urgent surgical consult".
+    expect(buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: true, urgencyLevel: '24-48hrs' })
+      .card_json.route.label).toBe('Specialist review recommended');
+
+    // Only a genuine emergency-/urgent-tier level earns the urgent label.
+    expect(buildSynthesizerOutput(convergedPerDP, { requiresImmediateMD: true, urgencyLevel: 'immediate' })
+      .card_json.route.label).toBe('Urgent surgical consult');
   });
 
   test('archetype-sweep splitSummary → axis-derived "what would tip it"', () => {

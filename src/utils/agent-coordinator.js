@@ -1336,15 +1336,21 @@ ${JSON.stringify(caseData)}
               confidence: finding.confidence
             });
 
+            // A high-relevance finding is IMPORTANCE, not time-criticality — route it to a human
+            // (the deliberate safety net + MD-review feed) WITHOUT forcing 'immediate' urgency. Elective
+            // decisions (e.g. a competitive-athlete ACL tear) trip clinicalRelevance='high' trivially, so
+            // coupling urgency here mislabels routine cards as "Urgent surgical consult". Genuine
+            // emergencies escalate urgency via the 'critical' assessment path below (triage maps
+            // urgencyLevel='emergency' → clinicalImportance='critical').
             if (finding.clinicalRelevance === 'high') {
               requiresImmediateMD = true;
-              urgencyLevel = 'immediate';
             }
           }
         }
       }
 
-      // Check clinical importance
+      // Check clinical importance — a 'critical' assessment is genuine time-criticality (emergencies
+      // reach here), so it escalates BOTH the routing flag and the urgency level.
       if (response.response && response.response.assessment) {
         const importance = response.response.assessment.clinicalImportance;
         if (importance === 'critical') {

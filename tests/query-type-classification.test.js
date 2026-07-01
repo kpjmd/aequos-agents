@@ -271,6 +271,31 @@ describe('Query Type Classification', () => {
       expect(result.querySubtype).toBeNull();
     });
 
+    // Over-flag regression: clinicalImportance follows the labeled urgency, not a bare substring.
+    test('narrative "critical"/"not an emergency" with routine urgency does NOT escalate importance', () => {
+      const response = `
+        1. PRIMARY FINDINGS:
+        - Complete ACL tear; it is critical to restore stability and this is NOT an emergency.
+
+        2. URGENCY CLASSIFICATION: Routine
+      `;
+      const result = triageAgent.parseTriageResponse(response);
+      expect(result.urgencyLevel).toBe('routine');
+      expect(result.clinicalImportance).toBe('medium'); // default — not 'critical'
+    });
+
+    test('labeled emergency urgency → critical importance (genuine escalation preserved)', () => {
+      const response = `
+        1. PRIMARY FINDINGS:
+        - Suspected compartment syndrome.
+
+        2. URGENCY CLASSIFICATION: Emergency
+      `;
+      const result = triageAgent.parseTriageResponse(response);
+      expect(result.urgencyLevel).toBe('emergency');
+      expect(result.clinicalImportance).toBe('critical');
+    });
+
     test('parses markdown-bold formatted QUERY_TYPE: **QUERY_TYPE:** INFORMATIONAL', () => {
       const response = `
         1. PRIMARY FINDINGS:

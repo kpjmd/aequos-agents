@@ -378,16 +378,22 @@ ${JSON.stringify(caseData)}
           .map(line => line.replace(/^-\s*/, '').trim());
       }
 
-      // Extract urgency level
-      const urgencyMatch = response.match(/(emergency|urgent|semi-urgent|routine)/i);
+      // Extract urgency level. Prefer the explicit "URGENCY[ …]: <value>" label the triage template
+      // emits; only fall back to a bare word-boundary mention if there's no labeled line. Anchoring
+      // avoids matching an urgency word buried in narrative prose (e.g. "this is NOT an emergency").
+      const labeledUrgency = response.match(/urgency[^:\n]*[-:]\s*(emergency|urgent|semi-urgent|routine)/i);
+      const urgencyMatch = labeledUrgency || response.match(/\b(emergency|urgent|semi-urgent|routine)\b/i);
       if (urgencyMatch) {
         structured.urgencyLevel = urgencyMatch[1].toLowerCase();
       }
 
-      // Extract clinical importance
-      if (response.toLowerCase().includes('critical') || response.toLowerCase().includes('emergency')) {
+      // Clinical importance FOLLOWS the extracted urgency — an emergency is critical, urgent is high.
+      // Previously a bare "critical"/"emergency" substring anywhere set 'critical', which false-matched
+      // narrative text ("critical to restore stability", "not an emergency") and spuriously escalated
+      // elective decisions into a critical assessment → requiresImmediateMD → "Urgent surgical consult".
+      if (structured.urgencyLevel === 'emergency') {
         structured.clinicalImportance = 'critical';
-      } else if (response.toLowerCase().includes('high priority') || response.toLowerCase().includes('urgent')) {
+      } else if (structured.urgencyLevel === 'urgent') {
         structured.clinicalImportance = 'high';
       }
 
