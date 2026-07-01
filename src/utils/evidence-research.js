@@ -146,6 +146,15 @@ function snippet(texts, max = 180) {
   return joined.length > max ? `${joined.slice(0, max - 1)}…` : joined;
 }
 
+const NEUTRAL_ABSTAIN_CLAIM = 'Provides background context; does not directly favor either option.';
+
+/** Claim text for an abstain/"neither" citation: ground it in the paper's own finding (the classifier
+ *  rationale), with a neutral lead-in; fall back to a static phrase on the degraded path (no rationale). */
+function abstainClaim(rationale) {
+  const r = typeof rationale === 'string' ? rationale.trim() : '';
+  return r ? `Provides background context; does not favor either option — ${r}` : NEUTRAL_ABSTAIN_CLAIM;
+}
+
 /**
  * Derive the panel's per-stance CLAIMS — the grounding for claim_text (panel → evidence, one way).
  * Contested: each side's stance (an option label) + its specialists' reasoning. Converged: the modal
@@ -295,7 +304,10 @@ async function classifyCitations(citations, { dp, optionALabel, optionBLabel, cl
       : 'unknown';
     const clsStance = norm(cls.supportsStance);
     const supportsStance = clsStance === 'option_a' || clsStance === 'option_b' ? clsStance : 'abstain';
-    const claimText = supportsStance !== 'abstain' && claims[supportsStance] ? claims[supportsStance].claimText : dp.question;
+    const claimText =
+      supportsStance !== 'abstain' && claims[supportsStance]
+        ? claims[supportsStance].claimText
+        : abstainClaim(cls.rationale);
     const accepted = isAccepted({ evidenceGrade, populationMatch, studyType });
     return {
       pmid: citation.pmid ?? null,
