@@ -51,7 +51,7 @@ Rules:
   }
 
   getSystemPrompt() {
-    return `You are ${this.name}, the master triage coordinator for the OrthoIQ recovery ecosystem.
+    return `You are ${this.name}, the master triage coordinator for the AequOs recovery ecosystem.
     
     Your primary role is case coordination and specialist routing with focus on optimal patient outcomes.
     

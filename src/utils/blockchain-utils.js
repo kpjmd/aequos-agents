@@ -8,12 +8,12 @@ import { agentConfig } from '../config/agent-config.js';
 // Load compiled contract artifacts
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const contractPath = join(__dirname, '../../artifacts/contracts/OrthoIQAgentToken.sol/OrthoIQAgentToken.json');
+const contractPath = join(__dirname, '../../artifacts/contracts/AequOsAgentToken.sol/AequOsAgentToken.json');
 
 let compiledToken = null;
 try {
   compiledToken = JSON.parse(readFileSync(contractPath, 'utf8'));
-  logger.info('Loaded compiled OrthoIQAgentToken contract');
+  logger.info('Loaded compiled AequOsAgentToken contract');
 } catch (error) {
   logger.warn(`Compiled contract artifact not found at ${contractPath} — blockchain token minting disabled. Run "npm run compile:contract" to enable.`);
 }
@@ -265,7 +265,7 @@ export class BlockchainUtils {
           this.contracts.set(deployedAddress, {
             contract,
             abi: compiledToken.abi,
-            name: "OrthoIQ Agent Token"
+            name: "AequOs Agent Token"
           });
         } catch (error) {
           logger.error(`Failed to register deployed contract: ${error.message}`);
@@ -274,7 +274,7 @@ export class BlockchainUtils {
 
       return {
         tokenAddress: deployedAddress,
-        name: "OrthoIQ Agent Token",
+        name: "AequOs Agent Token",
         symbol: "OAT",
         totalSupply: "1000000",
         deploymentTx: null,
@@ -288,7 +288,7 @@ export class BlockchainUtils {
 
     return {
       tokenAddress: mockAddress,
-      name: "OrthoIQ Agent Token (Mock)",
+      name: "AequOs Agent Token (Mock)",
       symbol: "OAT",
       totalSupply: "1000000",
       deploymentTx: `0x${Math.random().toString(16).substring(2, 66)}`,

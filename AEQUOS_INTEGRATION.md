@@ -1,7 +1,7 @@
-# OrthoIQ Platform Integration Guide
+# AequOs Platform Integration Guide
 
 ## Overview
-This guide details the enhanced `/consultation` endpoint with smart triage-first routing for the OrthoIQ platform. The system now intelligently routes questions to relevant specialists based on data completeness, improving performance and user experience.
+This guide details the enhanced `/consultation` endpoint with smart triage-first routing for the AequOs platform. The system now intelligently routes questions to relevant specialists based on data completeness, improving performance and user experience.
 
 ## Key Enhancements
 
@@ -248,7 +248,7 @@ try {
 - Waits for all specialists
 - Best for comprehensive assessments
 
-## Migration Checklist for OrthoIQ Platform
+## Migration Checklist for AequOs Platform
 
 1. **Parse New Response Fields**
    - [ ] Handle `dataCompleteness` score
@@ -290,9 +290,9 @@ try {
 ## Example Integration Code
 
 ```javascript
-// OrthoIQ Platform Integration Example
+// AequOs Platform Integration Example
 
-async function consultOrthoIQAgents(userQuestion, additionalData = {}) {
+async function consultAequOsAgents(userQuestion, additionalData = {}) {
   // Parse user question to extract basic data
   const caseData = {
     symptoms: userQuestion,
@@ -302,11 +302,11 @@ async function consultOrthoIQAgents(userQuestion, additionalData = {}) {
   
   try {
     // Check service health
-    const health = await fetch(`${ORTHOIQ_AGENTS_URL}/health`);
+    const health = await fetch(`${AEQUOS_AGENTS_URL}/health`);
     if (!health.ok) throw new Error('Service unavailable');
     
     // Make consultation request
-    const response = await fetch(`${ORTHOIQ_AGENTS_URL}/consultation`, {
+    const response = await fetch(`${AEQUOS_AGENTS_URL}/consultation`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ caseData, mode: 'fast' })
@@ -334,7 +334,7 @@ async function consultOrthoIQAgents(userQuestion, additionalData = {}) {
     return result.consultation;
     
   } catch (error) {
-    console.error('OrthoIQ Agents error:', error);
+    console.error('AequOs Agents error:', error);
     // Fallback to Claude AI
     return fallbackToClaudeAI(userQuestion);
   }
@@ -356,7 +356,7 @@ async function sendFeedback(consultationId, satisfaction, mdReview) {
   };
   
   try {
-    await fetch(`${ORTHOIQ_AGENTS_URL}/feedback`, {
+    await fetch(`${AEQUOS_AGENTS_URL}/feedback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(feedback)

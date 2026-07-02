@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Basic Agent Example - OrthoIQ Agents
+ * Basic Agent Example - AequOs Agents
  * 
  * This example demonstrates basic agent functionality and API testing
  */
@@ -14,7 +14,7 @@ dotenv.config();
 
 const API_BASE = 'http://localhost:3000';
 
-class OrthoIQTester {
+class AequOsTester {
   constructor() {
     this.results = [];
   }
@@ -242,7 +242,7 @@ class OrthoIQTester {
   }
 
   async runAllTests() {
-    console.log('🚀 Starting OrthoIQ Agents Basic Testing Suite');
+    console.log('🚀 Starting AequOs Agents Basic Testing Suite');
     console.log('=' * 50);
 
     let passCount = 0;
@@ -270,7 +270,7 @@ class OrthoIQTester {
     console.log(`🏁 Testing Complete: ${passCount}/${totalTests} tests passed`);
     
     if (passCount === totalTests) {
-      console.log('✅ All tests passed! OrthoIQ Agents system is working correctly.');
+      console.log('✅ All tests passed! AequOs Agents system is working correctly.');
     } else {
       console.log('⚠️  Some tests failed. Check the logs above for details.');
     }
@@ -281,7 +281,7 @@ class OrthoIQTester {
 
 // Run tests if this file is executed directly
 async function main() {
-  const tester = new OrthoIQTester();
+  const tester = new AequOsTester();
   
   try {
     await tester.runAllTests();
@@ -296,4 +296,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
 
-export default OrthoIQTester;
+export default AequOsTester;

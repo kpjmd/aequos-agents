@@ -1,17 +1,17 @@
 ---
-name: orthoiq-research
-description: Clinical research synthesis skill for OrthoIQ. Fetches and critically appraises musculoskeletal and sports medicine literature from PubMed, applies evidence grading, and returns clinically contextualized citations. Use when a user submits an orthopedic or sports medicine question requiring literature support, when the research agent is invoked, or when asked to "find evidence", "what does the research say", "are there studies on", or "cite literature" for any MSK/ortho topic.
+name: aequos-research
+description: Clinical research synthesis skill for AequOs. Fetches and critically appraises musculoskeletal and sports medicine literature from PubMed, applies evidence grading, and returns clinically contextualized citations. Use when a user submits an orthopedic or sports medicine question requiring literature support, when the research agent is invoked, or when asked to "find evidence", "what does the research say", "are there studies on", or "cite literature" for any MSK/ortho topic.
 metadata:
-  author: OrthoIQ
+  author: AequOs
   version: 1.0.0
-  mcp-server: orthoiq-mcp
+  mcp-server: aequos-mcp
   category: healthcare
   tags: [orthopedics, sports-medicine, research, pubmed, evidence-based]
 ---
 
-# OrthoIQ Research Agent Skill
+# AequOs Research Agent Skill
 
-This skill governs how the OrthoIQ research agent fetches, filters, appraises, and presents musculoskeletal literature. Raw PubMed access is the tool. This skill provides the clinical expertise to use it well.
+This skill governs how the AequOs research agent fetches, filters, appraises, and presents musculoskeletal literature. Raw PubMed access is the tool. This skill provides the clinical expertise to use it well.
 
 **CRITICAL**: Never return a flat citation list. Every research response must be clinically contextualized, evidence-graded, and patient-profile-aware. A citation that is technically relevant but population-mismatched is actively misleading in a clinical context.
 
@@ -70,7 +70,7 @@ This is where most generic research tools fail. Apply these filters before surfa
 
 ## Step 4: Assign Evidence Grades
 
-For each citation returned, assign a grade using the OrthoIQ Evidence Grade system:
+For each citation returned, assign a grade using the AequOs Evidence Grade system:
 
 **Grade A** — High quality, directly applicable
 - Level 1-2 evidence, population-matched, outcome-matched, published within 10 years

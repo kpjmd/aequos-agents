@@ -1,4 +1,4 @@
-# OrthoIQ Clinical Guideline Sources
+# AequOs Clinical Guideline Sources
 
 Reference this file when cross-checking citations against current guidelines (Step 5 of SKILL.md).
 
@@ -7,7 +7,7 @@ Reference this file when cross-checking citations against current guidelines (St
 ### AAOS (American Academy of Orthopaedic Surgeons)
 - Clinical Practice Guidelines: https://www.aaos.org/quality/quality-programs/clinical-practice-guidelines/
 - Update cadence: Rolling; check for revisions annually
-- Key CPGs relevant to OrthoIQ: ACL injury, rotator cuff, knee OA, carpal tunnel, hip fracture
+- Key CPGs relevant to AequOs: ACL injury, rotator cuff, knee OA, carpal tunnel, hip fracture
 
 ### AOSSM (American Orthopaedic Society for Sports Medicine)
 - Position Statements: https://www.sportsmed.org/research/position-statements

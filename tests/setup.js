@@ -1,4 +1,4 @@
-// Jest setup file for OrthoIQ Agents tests
+// Jest setup file for AequOs Agents tests
 import { jest, beforeAll, afterEach } from '@jest/globals';
 
 // Mock environment variables for testing

@@ -1,4 +1,4 @@
-# OrthoIQ Agents - TODO
+# AequOs Agents - TODO
 
 ## ✅ Recently Completed (2026-03-04 — Test Suite Hardening)
 
@@ -36,7 +36,7 @@
 - [x] Create comprehensive Railway deployment guide
 - [x] Document all 48 environment variables for production
 - [x] Create post-deployment test suite (10 tests)
-- [x] Develop ERC20 OrthoIQAgentToken smart contract
+- [x] Develop ERC20 AequOsAgentToken smart contract
 - [x] Setup Hardhat infrastructure for Base Sepolia
 - [x] Write contract deployment script with Basescan verification
 - [x] Write agent authorization script
@@ -52,7 +52,7 @@
 
 ---
 
-# OrthoIQ Agents - TODO
+# AequOs Agents - TODO
 
 ## ⚠️ Pre-Testnet Code Review Remediation (Started 2026-05-09)
 
@@ -87,7 +87,7 @@ GET /status                    -- includes all agent balances
 - [x] **Phase 1 stragglers committed** — `prompt-manager.js` `<patient_input>` tags (T1-6) + `scope-validator.js` PHI log scrub (T1-10) + `package-lock.json` sync were uncommitted; landed in `feat/agent-tasks-column-extraction` branch.
 - [x] **blockchain-utils.js startup crash fixed** — Task 5 audit changed `logger.warn` → `throw new Error` at module load; reverted to graceful warning so Railway can bind. `compiledToken = null` mock fallbacks already handle absent artifact.
 - [x] **Railway env vars** — Added `CORS_ORIGINS` (allowed frontend origins, comma-list) and `FARCASTER_AUTH_DOMAIN` (single production hostname for Farcaster JWT verification). Both were new in Phase 1 but never set in Railway.
-- [x] **OrthoIQ frontend** — `lib/database.ts` updated: `createAgentTask` / `updateAgentTask` now project all 7 new columns (`consultation_id`, `agent_confidence`, `urgency_level`, `triage_classification`, `triage_confidence`, `predicted_recovery_days`, `result_schema_version`) with try/catch fallback to legacy write. Schema migration (ALTER TABLE IF NOT EXISTS) included.
+- [x] **AequOs frontend** — `lib/database.ts` updated: `createAgentTask` / `updateAgentTask` now project all 7 new columns (`consultation_id`, `agent_confidence`, `urgency_level`, `triage_classification`, `triage_confidence`, `predicted_recovery_days`, `result_schema_version`) with try/catch fallback to legacy write. Schema migration (ALTER TABLE IF NOT EXISTS) included.
 
 **⚠️ Known issue found in first test consults (2026-05-11):** `validation_error` (HTTP 400) from `src/schemas/validate.js` on `/consultation` endpoint when frontend attempts comprehensive upgrade after fast triage. Zod schema uses `.strict()` — likely the frontend is sending fields not declared in `consultationSchema`. Feedback modal also non-functional when consult fails. Needs investigation before testnet.
 
@@ -117,7 +117,7 @@ Tests: 379/379 (382 → 379; 3 tests removed for intentionally deleted methods).
 > 4. Confirm `consultation_feedback` table accumulating PROMIS/MD/user-modal data
 > 5. Monitor for any 500s from blockchain error propagation (now throws instead of returning mock)
 > 6. **Frontend audit** — Phases 1–3 changed auth headers, Zod validation limits, prediction market response shapes, and `/recovery/complete` response. Frontend needs its own code review pass before testnet push.
-> 7. **Smart contract audit** — OrthoIQAgentToken ERC20 contract unaudited. Required before mainnet; recommended before any real-value testnet.
+> 7. **Smart contract audit** — AequOsAgentToken ERC20 contract unaudited. Required before mainnet; recommended before any real-value testnet.
 > 8. **Performance/cost audit** — Code review noted LLM cost amplification not fully audited as its own pass. Run before scaling.
 
 ---
@@ -168,7 +168,7 @@ See `docs/code-review-2026-05.md` § "Tier 3" for full list. Includes: `crypto.r
 **Prerequisite — Persistent Agent Wallets** *(must be done before contract deployment)*
 - [ ] **Implement persistent CDP-managed wallets** - Each of the 6 agents currently creates a new
       ephemeral wallet on every server restart; wallet addresses must be stable for on-chain token
-      balances to survive. Use deterministic CDP account names per agent (e.g. `orthoiq-triage-agent-v1`)
+      balances to survive. Use deterministic CDP account names per agent (e.g. `aequos-triage-agent-v1`)
       so CDP's MPC infrastructure returns the same wallet on each startup. No private keys stored
       server-side. Files: `src/utils/cdp-account-manager.js`, `src/agents/base-agent.js`
 - [ ] **Disable mock blockchain mode** - Set `MOCK_BLOCKCHAIN_RESPONSES=false` in Railway once
@@ -179,7 +179,7 @@ See `docs/code-review-2026-05.md` § "Tier 3" for full list. Includes: `crypto.r
 - [ ] **Compile smart contract** - `npm run compile:contract`
 - [ ] **Generate deployer wallet** - Save private key securely
 - [ ] **Fund deployer wallet** - 0.1 ETH from Base Sepolia faucet
-- [ ] **Deploy OrthoIQAgentToken (OAT)** - `npm run deploy:contract`; capture deployed address
+- [ ] **Deploy AequOsAgentToken (OAT)** - `npm run deploy:contract`; capture deployed address
 - [ ] **Update Railway env** - Set `TOKEN_CONTRACT_ADDRESS=0x...`, `MOCK_BLOCKCHAIN_RESPONSES=false`
 
 **Agent Authorization & Funding**

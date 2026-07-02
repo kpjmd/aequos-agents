@@ -1,4 +1,4 @@
-# OrthoIQ Agents - Claude Code Memory
+# AequOs Agents - Claude Code Memory
 
 ## Project Overview
 
@@ -167,7 +167,7 @@ Key environment variables:
 ## File Structure Summary
 
 ```
-orthoiq-agents/
+aequos-agents/
 ├── src/
 │   ├── agents/
 │   │   ├── base-agent.js            # Foundation class (dual-model: Sonnet 4.6 + Haiku 4.5)

@@ -1,8 +1,8 @@
-# OrthoIQ Agents — Consolidated Code Review
+# AequOs Agents — Consolidated Code Review
 
 **Date:** 2026-05-09
 **Reviewer:** Claude Opus 4.7, four-pass scoped audit (read-only)
-**Scope:** `orthoiq-agents` backend only (frontend/Farcaster mini-app/web client out of scope)
+**Scope:** `aequos-agents` backend only (frontend/Farcaster mini-app/web client out of scope)
 **Method:** Four parallel subagent passes, each producing severity-tagged findings with `file:line` citations.
 
 ---

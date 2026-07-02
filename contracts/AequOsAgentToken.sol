@@ -5,8 +5,8 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title OrthoIQAgentToken
- * @dev ERC20 token for rewarding OrthoIQ AI agents based on medical outcomes
+ * @title AequOsAgentToken
+ * @dev ERC20 token for rewarding AequOs AI agents based on medical outcomes
  *
  * Features:
  * - Maximum supply of 1 million tokens
@@ -14,7 +14,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * - Event tracking for transparency
  * - Burn capability for token economics
  */
-contract OrthoIQAgentToken is ERC20, Ownable {
+contract AequOsAgentToken is ERC20, Ownable {
     uint256 public constant MAX_SUPPLY = 1_000_000 * 10**18;
     mapping(address => bool) public authorizedMinters;
 
@@ -26,7 +26,7 @@ contract OrthoIQAgentToken is ERC20, Ownable {
     /**
      * @dev Constructor mints initial supply to deployer
      */
-    constructor() ERC20("OrthoIQ Agent Token", "OAT") Ownable(msg.sender) {
+    constructor() ERC20("AequOs Agent Token", "AAT") Ownable(msg.sender) {
         // Mint initial 100,000 tokens to deployer for agent authorization and testing
         _mint(msg.sender, 100_000 * 10**18);
     }

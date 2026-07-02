@@ -23,12 +23,6 @@ export const agentConfig = {
     id: process.env.NETWORK_ID || 'base-sepolia',
   },
   
-  // OrthoIQ Integration
-  orthoiq: {
-    apiUrl: process.env.ORTHOIQ_API_URL,
-    apiKey: process.env.ORTHOIQ_API_KEY,
-  },
-  
   // Agent Behavior Configuration
   agent: {
     experienceMultiplier: parseFloat(process.env.AGENT_EXPERIENCE_MULTIPLIER) || 1.0,

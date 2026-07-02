@@ -1,11 +1,11 @@
-# OrthoIQ Agents
+# AequOs Agents
 
 AI-powered agent framework for orthopedic medical applications.
 
 ## Project Structure
 
 ```
-orthoiq-agents/
+aequos-agents/
 ├── src/
 │   ├── agents/          # AI agent implementations
 │   ├── tools/           # Agent tools and utilities

@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("\n💰 Checking OrthoIQ Agent Token Balances...\n");
+  console.log("\n💰 Checking AequOs Agent Token Balances...\n");
 
   const tokenAddress = process.env.TOKEN_CONTRACT_ADDRESS;
   if (!tokenAddress) {
@@ -16,7 +16,7 @@ async function main() {
     { name: "Mind Mender", address: process.env.MIND_MENDER_ADDRESS }
   ].filter(agent => agent.address);
 
-  const token = await hre.ethers.getContractAt("OrthoIQAgentToken", tokenAddress);
+  const token = await hre.ethers.getContractAt("AequOsAgentToken", tokenAddress);
 
   console.log("Token Contract:", tokenAddress);
   console.log("Network: Base Sepolia\n");
