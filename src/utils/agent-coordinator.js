@@ -1,11 +1,12 @@
 import logger from './logger.js';
 import { agentConfig } from '../config/agent-config.js';
 import promptManager from './prompt-manager.js';
-import { CoordinationConference, equipoisePopulationMode } from './coordination-conference.js';
+import { CoordinationConference, equipoisePopulationMode, equipoiseArchetypeSweepMode, POSITION_SPECIALISTS } from './coordination-conference.js';
 import sql from './db.js';
 import { storePanelRun } from './panel-run-storage.js';
 import { resolveModelVersionId, createQuery, getSentinelDecisionPointId, resolveDecisionPointIdBySlug } from './equipoise-ingest.js';
-import { buildSynthesizerOutput, storeSynthesizerOutput } from './synthesizer.js';
+import { buildSynthesizerOutput, buildEquipoiseCardSkeleton, storeSynthesizerOutput } from './synthesizer.js';
+import { runArchetypeFlipSweep } from './archetype-sweep.js';
 import { classifyDecisionPoint, loadCatalog } from './dp-classifier.js';
 import { buildEvidenceForPanel, storeEvidenceCitations, toLedgerEntries } from './evidence-research.js';
 
@@ -23,6 +24,11 @@ export class AgentCoordinator {
     this.tokenManager = tokenManager;
     this.consultationPayments = new Map();
     this.consultationPaymentsInFlight = new Set();
+    // Archetype-sweep completion signal (server-local, like activeConsultations). The consult response
+    // carries pending card skeletons; the background sweep persists the real cards ~1-3 min later. The
+    // /equipoise-cards poll reads this so suppression (persisted count < skeleton count) can't hang a
+    // count-match poll. Keyed by consultationId → { complete, expected }.
+    this.equipoiseSweepStatus = new Map();
     // Phase 2.5: shared ResearchAgent, injected by index.js after it is constructed. When null
     // (research disabled / dev / tests) the evidence stage is skipped — best-effort, like DB writes.
     this.researchAgent = null;
@@ -110,17 +116,27 @@ export class AgentCoordinator {
 
       const responses = await this.collectSpecialistResponses(consultation, collectionOptions);
 
-      // Task 1.3: Conduct coordination conference for inter-agent dialogue
+      // Task 1.3: Conduct coordination conference for inter-agent dialogue.
+      // Archetype-sweep mode (default): the synchronous pass only FRAMES the contested decision points
+      // (one cheap triage call); the validated archetype-flip detection runs in the background sweep
+      // below (it's 12-36 model calls per DP — too expensive for the response window). Legacy mode runs
+      // the full single-population conference synchronously (reversible via EQUIPOISE_ARCHETYPE_SWEEP).
+      const sweepMode = equipoiseArchetypeSweepMode();
       let coordinationMetadata = null;
       if (responses.size >= 2) {
         try {
-          logger.info('Running coordination conference (decision points → positions → divergence)');
-          coordinationMetadata = await this.coordinationConference.conductConferenceRound(
-            responses,
-            this.specialists,
-            caseData,
-            { mode }
-          );
+          if (sweepMode) {
+            logger.info('Coordination conference: framing decision points (archetype sweep runs in background)');
+            coordinationMetadata = await this.coordinationConference.frameDecisionPoints(this.specialists, caseData, mode);
+          } else {
+            logger.info('Running coordination conference (decision points → positions → divergence)');
+            coordinationMetadata = await this.coordinationConference.conductConferenceRound(
+              responses,
+              this.specialists,
+              caseData,
+              { mode }
+            );
+          }
           logger.info(`Conference complete: ${coordinationMetadata.decisionPoints?.length || 0} decision point(s), ${coordinationMetadata.divergences?.length || 0} genuine divergence(s), gate ${coordinationMetadata.gateOpen ? 'OPEN' : 'closed'}`);
         } catch (error) {
           logger.error(`Coordination conference error: ${error.message}`);
@@ -136,65 +152,61 @@ export class AgentCoordinator {
       // Synthesize recommendations with coordination metadata
       const synthesizedRecommendations = await this.synthesizeRecommendations(responses, caseData, coordinationMetadata, mode);
 
-      // Build the equipoise card(s) (pure/synchronous) for every decision point the panel evaluated —
-      // converged AND contested — attach to the response, then persist the panel layer in the
-      // background (best-effort, non-blocking; no-op without DATABASE_URL). Replaces the legacy
-      // coordination_divergences write: the owned panel_runs/specialist_positions/synthesizer_outputs
-      // layer is a strict superset.
-      const equipoiseCards = this.buildEquipoiseCards(coordinationMetadata, synthesizedRecommendations);
-      // Suppressed (non-binary/unmapped) cards are withheld from the clinician view but still persisted
-      // for the audit trail, so the response carries only shown cards while persistence gets them all.
-      const shownCards = equipoiseCards.filter(c => !c.output.collapsed);
-      // GUARD: never let a decision point vanish silently. With triage now binarizing decisions, a
-      // suppressed card should be rare (all-defer / below-floor). Log each one — and loudly flag the
-      // FIRST-ranked (primary) DP if it was suppressed, since that is the question the user actually asked.
-      const suppressedCards = equipoiseCards.filter(c => c.output.collapsed);
-      if (suppressedCards.length > 0) {
-        for (let i = 0; i < equipoiseCards.length; i++) {
-          const c = equipoiseCards[i];
-          if (!c.output.collapsed) continue;
-          const q = c.perDP?.decisionPoint?.question ?? '(unspecified)';
-          const msg = `Equipoise card suppressed [${consultationId}]: "${q}" (reason: ${c.output.collapse_reason})`;
-          if (i === 0) logger.warn(`PRIMARY ${msg} — primary decision hidden from clinician view`);
-          else logger.info(msg);
+      // --- Equipoise cards ---
+      // participatingSpecialists (the "N agents coordinated" signal on the response) starts at the
+      // routed subset and grows to the panel below.
+      let allParticipants = [...new Set(availableSpecialists)];
+      if (sweepMode) {
+        // ARCHETYPE-SWEEP (validated) path. The detector is 12-36 model calls per decision point, so it
+        // runs in the BACKGROUND (runSweepAndPersist): classify each DP → decision_type → archetype-flip
+        // sweep → synthesize + persist the real card. The response carries pending card SKELETONS
+        // (question/options + the consult-level route) so the frontend knows how many cards to expect;
+        // the populated cards land on the /equipoise-cards poll. The care plan stays patient-specific.
+        const decisionPoints = coordinationMetadata?.decisionPoints || [];
+        if (decisionPoints.length > 0) {
+          const ctx = this.buildCardContext(synthesizedRecommendations);
+          synthesizedRecommendations.equipoiseCards = decisionPoints.map(dp => buildEquipoiseCardSkeleton(dp, ctx));
+          // The sweep elicits positions from every POSITION_SPECIALIST, so they all participate.
+          allParticipants = [...new Set([...availableSpecialists, ...POSITION_SPECIALISTS])];
+          this.equipoiseSweepStatus.set(consultationId, { complete: false, expected: decisionPoints.length });
+          // Background: sweep → persist cards → reconcile + pay the substantive participant set.
+          this.runSweepAndPersist(consultationId, decisionPoints, ctx, caseData, availableSpecialists)
+            .catch(error => logger.error(`Equipoise archetype sweep failed [${consultationId}]: ${error.message}`));
+        } else if (this.tokenManager) {
+          // No contested decisions → no panel; pay just the routed specialists.
+          this.processConsultationPayments(consultationId, availableSpecialists, caseData)
+            .catch(error => logger.error(`Consultation payment processing failed: ${error.message}`));
         }
-      }
-      if (equipoiseCards.length > 0) {
-        synthesizedRecommendations.equipoiseCards = shownCards.map(c => c.output.card_json);
-        this.persistEquipoisePanels(consultationId, equipoiseCards, caseData).catch(error => {
-          logger.error(`Equipoise panel persistence failed: ${error.message}`);
-        });
-      }
-
-      // Reconcile the panel with the consult: the equipoise panel elicits positions from all
-      // POSITION_SPECIALISTS, independent of the triage-routed subset. Every lens a SHOWN card
-      // surfaces (panel + theSplit) — substantive OR a deliberate deferral — is a real participant,
-      // so a card never references a specialist the consult treats as absent. Participants drive
-      // "N agents coordinated" and must match the distinct names rendered across the cards' panels.
-      const panelParticipants = [...new Set(shownCards.flatMap(c => {
-        const cj = c.output.card_json || {};
-        const fromPanel = (cj.panel || []).map(m => m.specialistType);
-        const fromSplit = (cj.theSplit || []).flatMap(side => (side.specialists || []).map(sp => sp.specialistType));
-        return [...fromPanel, ...fromSplit].filter(Boolean);
-      }))];
-      const allParticipants = [...new Set([...availableSpecialists, ...panelParticipants])];
-
-      // Token recipients = SUBSTANTIVE contributors only (routed specialists + non-abstain panel
-      // positions). A deliberate deferral is shown in the panel and counted as a participant, but not
-      // rewarded — we don't pay a lens for concluding the decision is outside its scope.
-      const tokenContributors = [...new Set(shownCards.flatMap(c => {
-        const cj = c.output.card_json || {};
-        const fromPanel = (cj.panel || []).filter(m => m.stance !== 'abstain').map(m => m.specialistType);
-        const fromSplit = (cj.theSplit || []).flatMap(side => (side.specialists || []).map(sp => sp.specialistType));
-        return [...fromPanel, ...fromSplit].filter(Boolean);
-      }))];
-      const tokenRecipients = [...new Set([...availableSpecialists, ...tokenContributors])];
-
-      // Consultation payments (async, non-blocking) — over the substantive recipient set.
-      if (this.tokenManager) {
-        this.processConsultationPayments(consultationId, tokenRecipients, caseData).catch(error => {
-          logger.error(`Consultation payment processing failed: ${error.message}`);
-        });
+      } else {
+        // LEGACY single-population path (EQUIPOISE_ARCHETYPE_SWEEP=false). Builds the card synchronously
+        // from the conference's single-population perDecisionPoint — lower equipoise sensitivity, kept
+        // only as a reversible fallback.
+        const equipoiseCards = this.buildEquipoiseCards(coordinationMetadata, synthesizedRecommendations);
+        const shownCards = equipoiseCards.filter(c => !c.output.collapsed);
+        const suppressedCards = equipoiseCards.filter(c => c.output.collapsed);
+        if (suppressedCards.length > 0) {
+          for (let i = 0; i < equipoiseCards.length; i++) {
+            const c = equipoiseCards[i];
+            if (!c.output.collapsed) continue;
+            const q = c.perDP?.decisionPoint?.question ?? '(unspecified)';
+            const msg = `Equipoise card suppressed [${consultationId}]: "${q}" (reason: ${c.output.collapse_reason})`;
+            if (i === 0) logger.warn(`PRIMARY ${msg} — primary decision hidden from clinician view`);
+            else logger.info(msg);
+          }
+        }
+        if (equipoiseCards.length > 0) {
+          synthesizedRecommendations.equipoiseCards = shownCards.map(c => c.output.card_json);
+          this.persistEquipoisePanels(consultationId, equipoiseCards, caseData).catch(error => {
+            logger.error(`Equipoise panel persistence failed: ${error.message}`);
+          });
+        }
+        allParticipants = [...new Set([...availableSpecialists, ...this.panelParticipantsFromCards(shownCards)])];
+        const tokenRecipients = [...new Set([...availableSpecialists, ...this.tokenContributorsFromCards(shownCards)])];
+        if (this.tokenManager) {
+          this.processConsultationPayments(consultationId, tokenRecipients, caseData).catch(error => {
+            logger.error(`Consultation payment processing failed: ${error.message}`);
+          });
+        }
       }
 
       // Update consultation
@@ -245,13 +257,59 @@ export class AgentCoordinator {
   buildEquipoiseCards(coordinationMetadata, synthesizedRecommendations) {
     const perDPs = coordinationMetadata?.perDecisionPoint || [];
     if (perDPs.length === 0) return [];
+    const ctx = this.buildCardContext(synthesizedRecommendations);
+    return perDPs.map(perDP => ({ perDP, output: buildSynthesizerOutput(perDP, ctx) }));
+  }
+
+  /**
+   * The shared synthesizer context for a consult's cards: the consult-level red-flag/urgency routing
+   * signal (applies to every card) + the patient-specific care plan (the card's carePlanHome). Used by
+   * both the synchronous skeleton/legacy card build and the background archetype sweep.
+   */
+  buildCardContext(synthesizedRecommendations) {
     const clinicalFlags = synthesizedRecommendations?.clinicalFlags || {};
-    const ctx = {
+    return {
       requiresImmediateMD: clinicalFlags.requiresImmediateMD,
       urgencyLevel: clinicalFlags.urgencyLevel,
       treatmentPlan: synthesizedRecommendations?.treatmentPlan,
     };
-    return perDPs.map(perDP => ({ perDP, output: buildSynthesizerOutput(perDP, ctx) }));
+  }
+
+  /**
+   * Distinct specialist keys a set of SHOWN cards surfaces (panel + theSplit) — every lens the card
+   * references, substantive OR a deliberate deferral, so participants never include a specialist the
+   * consult treats as absent. Drives "N agents coordinated".
+   */
+  panelParticipantsFromCards(shownCards) {
+    return [...new Set(shownCards.flatMap(c => {
+      const cj = c.output.card_json || {};
+      const fromPanel = (cj.panel || []).map(m => m.specialistType);
+      const fromSplit = (cj.theSplit || []).flatMap(side => (side.specialists || []).map(sp => sp.specialistType));
+      return [...fromPanel, ...fromSplit].filter(Boolean);
+    }))];
+  }
+
+  /**
+   * Distinct SUBSTANTIVE contributors across SHOWN cards (non-abstain panel positions + split sides).
+   * A deliberate deferral is a participant but not a token recipient — we don't pay a lens for
+   * concluding a decision is outside its scope.
+   */
+  tokenContributorsFromCards(shownCards) {
+    return [...new Set(shownCards.flatMap(c => {
+      const cj = c.output.card_json || {};
+      const fromPanel = (cj.panel || []).filter(m => m.stance !== 'abstain').map(m => m.specialistType);
+      const fromSplit = (cj.theSplit || []).flatMap(side => (side.specialists || []).map(sp => sp.specialistType));
+      return [...fromPanel, ...fromSplit].filter(Boolean);
+    }))];
+  }
+
+  /**
+   * Archetype-sweep read for the /equipoise-cards poll: whether the background sweep has finished for
+   * this consult. `complete:true` lets the frontend stop polling even when suppression makes the
+   * persisted (shown) card count smaller than the skeleton count. Unknown consult → null.
+   */
+  getEquipoiseSweepStatus(consultationId) {
+    return this.equipoiseSweepStatus.get(consultationId) || null;
   }
 
   /**
@@ -273,122 +331,214 @@ export class AgentCoordinator {
    * @param {Array<{perDP, output}>} cards
    */
   async persistEquipoisePanels(consultationId, cards, caseData = {}) {
-    if (!sql) return;
+    const shared = await this.equipoisePersistenceContext(caseData);
+    if (!shared) return;
+
+    const counters = { stored: 0, classified: 0, evidenced: 0, withCitations: 0 };
+    for (const { perDP, output } of cards) {
+      const dp = perDP.decisionPoint;
+      const match = await this.classifyConsultDP(dp, shared.catalog);
+      const decisionType = this.decisionTypeForMatch(match, shared.catalog);
+      await this.persistPanelCard(consultationId, { dp, perDP, output, match, decisionType }, shared, counters);
+    }
+    this.logPersistence(consultationId, counters);
+  }
+
+  /**
+   * Shared setup for persisting production equipoise panels: resolve the model-version + sentinel DP,
+   * load the classifier catalog, and derive the de-identified evidence context. Returns null (with a
+   * warning) when the DB isn't configured or the seed rows are missing, so callers no-op cleanly.
+   * @returns {Promise<null|{modelVersionId, sentinelId, catalog, evidenceContext, populationCards}>}
+   */
+  async equipoisePersistenceContext(caseData = {}) {
+    if (!sql) return null;
     const modelVersionId = await resolveModelVersionId(sql, POSITION_MODEL);
     const sentinelId = await getSentinelDecisionPointId(sql);
     if (modelVersionId == null || sentinelId == null) {
       logger.warn('Equipoise persistence skipped: missing model_versions or sentinel decision_point (run seed:equipoise?)');
-      return;
+      return null;
     }
-    const catalog = await loadCatalog(sql);
-    // De-identified patient context for population_match (PHI-out: brackets/labels only, never
-    // identifiers — consistent with the queries.patient_context stance). Shared by all cards.
-    const evidenceContext = this.deriveEvidencePatientContext(caseData);
-    // The cards were elicited at the population level when the hybrid instrument is on; judge their
-    // evidence at the same level (lenient population_match) so a population card isn't starved of a
-    // ledger by demand-level strictness. Mirrors the conference's elicitation mode.
-    const populationCards = equipoisePopulationMode();
+    return {
+      modelVersionId,
+      sentinelId,
+      caseData,
+      catalog: await loadCatalog(sql),
+      // De-identified patient context for population_match (PHI-out: brackets/labels only, never
+      // identifiers — consistent with the queries.patient_context stance). Shared by all cards.
+      evidenceContext: this.deriveEvidencePatientContext(caseData),
+      // Population-level elicitation (hybrid instrument on) → judge evidence at the same level (lenient
+      // population_match) so a population card isn't starved of a ledger by demand-level strictness.
+      populationCards: equipoisePopulationMode(),
+    };
+  }
 
-    let stored = 0;
-    let classified = 0;
-    let evidenced = 0;       // panels whose ACCEPTED ledger (card-visible) is non-empty
-    let withCitations = 0;   // panels that retrieved + classified any citations (accepted or not)
-    for (const { perDP, output } of cards) {
-      const dp = perDP.decisionPoint;
-      const [optionALabel = null, optionBLabel = null] = dp?.options || [];
+  /** Classify an ad-hoc consult DP → curated slug (exact) or sentinel. Never throws. */
+  async classifyConsultDP(dp, catalog) {
+    return catalog.length > 0
+      ? await classifyDecisionPoint(dp, catalog)
+      : { slug: null, matchQuality: 'none', nearMissSlug: null };
+  }
 
-      // Classify the ad-hoc consult DP → curated slug (exact) or sentinel (related/none/unavailable).
-      // Best-effort: classifyDecisionPoint never throws; an empty catalog yields 'none'.
-      const match = catalog.length > 0
-        ? await classifyDecisionPoint(dp, catalog)
-        : { slug: null, matchQuality: 'none', nearMissSlug: null };
-      let decisionPointId = sentinelId;
-      if (match.slug) {
-        const matchedId = await resolveDecisionPointIdBySlug(sql, match.slug);
-        if (matchedId != null) { decisionPointId = matchedId; classified++; }
-      }
-      // 'related' near-miss → audit trail on the (sentinel-anchored) query row.
-      const patientContext = match.matchQuality === 'related' && match.nearMissSlug
-        ? { nearMissSlug: match.nearMissSlug, matchQuality: 'related' }
-        : null;
+  /**
+   * decision_type for a classified DP: a curated-slug match supplies it (which_operation → lenient
+   * population + the extra flip axes; others demand_risk/strict); an unclassified sentinel → null.
+   */
+  decisionTypeForMatch(match, catalog) {
+    return match?.slug ? (catalog.find(r => r.slug === match.slug)?.decision_type || null) : null;
+  }
 
-      const queryId = await createQuery(sql, {
-        questionText: dp?.question ?? '(unspecified decision)',
-        decisionPointId,
-        isBenchmark: false,
-        detectedBy: 'classifier',
-        patientContext,
-      });
-      if (queryId == null) continue;
+  /**
+   * Run the validated ARCHETYPE-FLIP sweep for a consult's decision points in the BACKGROUND, then
+   * synthesize + persist the real cards and reconcile token payments. This is what makes production
+   * compute the detector the benchmark validated (archetype-flip), not the 0%-sensitivity single
+   * population panel. Best-effort; marks the sweep complete (for the poll) even on partial failure.
+   *
+   * @param {string} consultationId
+   * @param {Array<{id,question,options}>} decisionPoints - triage-framed contested decisions
+   * @param {Object} ctx - synthesizer context (buildCardContext): red-flag route + care plan
+   * @param {Object} caseData
+   * @param {string[]} availableSpecialists - the triage-routed subset (always paid)
+   */
+  async runSweepAndPersist(consultationId, decisionPoints, ctx, caseData, availableSpecialists) {
+    // One population panel per (archetype), reusing the conference's exact position + divergence logic
+    // — the same transport the benchmark probe drives, so verdicts match by construction.
+    const runPanel = async (dpArg, archetypeCase) => {
+      const r = await this.coordinationConference.runDecisionPoints(
+        [dpArg], archetypeCase, this.specialists,
+        { mode: 'normal', population: false, dialogue: false }
+      );
+      return r.perDecisionPoint[0];
+    };
 
-      const panelRunId = await storePanelRun(sql, {
-        queryId,
-        decisionPointId,
-        modelVersionId,
-        verdict: perDP.verdict,
-        optionALabel,
-        optionBLabel,
-        runKind: 'production',
-        sessionId: consultationId,
-        splitSummary: perDP.splitSummary,
-        positions: perDP.positions,
-      });
-      if (panelRunId == null) continue;
+    const shownCards = [];
+    try {
+      const shared = await this.equipoisePersistenceContext(caseData);
+      const counters = { stored: 0, classified: 0, evidenced: 0, withCitations: 0 };
 
-      // Phase 2.5 — claim-grounded evidence ledger (PURE ANNOTATION). Runs strictly DOWNSTREAM of the
-      // locked verdict + positions (already persisted above) for any SHOWN card — regardless of whether
-      // the DP matched a curated slug — so a contested fork that's simply newer than the catalog (e.g.
-      // quad-vs-hamstring) still carries evidence. Suppressed/collapsed cards are audit-only and skipped.
-      // For an unclassified sentinel card decisionType is null → STRICT population mode (the conservative
-      // setting), so the deterministic acceptance bar in isAccepted() still gates applicability. It
-      // writes evidence_citations + the card's evidenceLedger; it NEVER alters verdict/positions/status/
-      // routing. output.card_json is reassigned to a NEW object so the already-returned consult response
-      // (holding the original empty-ledger card) keeps zero added latency.
-      if (this.researchAgent && !output.collapsed) {
-        try {
-          // A curated-slug match supplies decision_type (which_operation → lenient population; others
-          // strict); an unclassified sentinel card has no slug → null → strict.
-          const decisionType = match.slug
-            ? (catalog.find(r => r.slug === match.slug)?.decision_type || null)
-            : null;
-          const rows = await buildEvidenceForPanel(this.researchAgent, {
-            perDP,
-            patientContext: evidenceContext,
-            caseData,
-            decisionType,
-            population: populationCards,
-          });
-          if (rows.length > 0) {
-            withCitations++;
-            const ledger = toLedgerEntries(rows);
-            // Surface accepted/total (and per-dimension rejection tallies when the ledger is empty)
-            // ONTO the card, so a shown card with an empty ledger is self-explaining rather than a
-            // silent blank. Additive field; never alters verdict/positions/status/routing.
-            const evidenceSummary = {
-              accepted: ledger.length,
-              retrieved: rows.length,
-              ...(ledger.length === 0 && { rejections: this.summarizeEvidenceRejections(rows) }),
-            };
-            output.card_json = { ...(output.card_json || {}), evidenceLedger: ledger, evidenceSummary };
-            await storeEvidenceCitations(sql, panelRunId, rows);
-            if (ledger.length > 0) evidenced++;
-            // Diagnostics: a shown (esp. contested) card can carry an EMPTY ledger when the strict
-            // acceptance bar (grade∈{high,moderate} ∧ population∈{match,partial} ∧ strong study type)
-            // rejects every retrieved citation. Surface accepted count + rejection tallies per
-            // dimension so an empty ledger is always explainable rather than silent.
-            logger.info(
-              `Evidence for ${consultationId} (panel_run ${panelRunId}): ${ledger.length}/${rows.length} accepted; ${this.summarizeEvidenceRejections(rows)}`
-            );
-          }
-        } catch (error) {
-          logger.error(`Evidence research failed for ${consultationId} (panel_run ${panelRunId}): ${error.message}`);
+      for (const dp of decisionPoints) {
+        const match = shared ? await this.classifyConsultDP(dp, shared.catalog) : { slug: null };
+        const decisionType = shared ? this.decisionTypeForMatch(match, shared.catalog) : null;
+
+        const sweep = await runArchetypeFlipSweep(dp, decisionType, runPanel);
+        const perDP = {
+          decisionPoint: dp,
+          verdict: sweep.verdict,
+          positions: sweep.positions,
+          splitSummary: sweep.splitSummary,
+        };
+        const output = buildSynthesizerOutput(perDP, ctx);
+        logger.info(`Equipoise sweep [${consultationId}]: "${dp.question}" → ${sweep.verdict} (${sweep.detail})`);
+        if (output.collapsed) {
+          logger.info(`Equipoise card suppressed [${consultationId}]: "${dp.question}" (reason: ${output.collapse_reason})`);
+        } else {
+          shownCards.push({ perDP, output });
+        }
+        if (shared) {
+          await this.persistPanelCard(consultationId, { dp, perDP, output, match, decisionType }, shared, counters);
         }
       }
+      if (shared) this.logPersistence(consultationId, counters);
+    } finally {
+      // Always release the poll gate and settle payments, even if a sweep/persist step threw partway.
+      const status = this.equipoiseSweepStatus.get(consultationId) || {};
+      this.equipoiseSweepStatus.set(consultationId, { ...status, complete: true });
 
-      await storeSynthesizerOutput(sql, panelRunId, output);
-      stored++;
+      if (this.tokenManager) {
+        const contributors = this.tokenContributorsFromCards(shownCards);
+        const tokenRecipients = [...new Set([...availableSpecialists, ...contributors])];
+        this.processConsultationPayments(consultationId, tokenRecipients, caseData)
+          .catch(error => logger.error(`Consultation payment processing failed: ${error.message}`));
+      }
+    }
+  }
+
+  /**
+   * Persist ONE decision point's production card: query row (slug/sentinel-anchored) → panel_run
+   * (run_kind='production') → evidence ledger (pure annotation) → synthesizer_output. Shared by the
+   * archetype-sweep path and the legacy single-population path. Mutates `counters`. Returns the
+   * panelRunId (or null if a write short-circuited).
+   */
+  async persistPanelCard(consultationId, { dp, perDP, output, match, decisionType }, shared, counters) {
+    const { modelVersionId, sentinelId, evidenceContext, populationCards, caseData } = shared;
+    const [optionALabel = null, optionBLabel = null] = dp?.options || [];
+
+    let decisionPointId = sentinelId;
+    if (match?.slug) {
+      const matchedId = await resolveDecisionPointIdBySlug(sql, match.slug);
+      if (matchedId != null) { decisionPointId = matchedId; counters.classified++; }
+    }
+    // 'related' near-miss → audit trail on the (sentinel-anchored) query row.
+    const patientContext = match?.matchQuality === 'related' && match.nearMissSlug
+      ? { nearMissSlug: match.nearMissSlug, matchQuality: 'related' }
+      : null;
+
+    const queryId = await createQuery(sql, {
+      questionText: dp?.question ?? '(unspecified decision)',
+      decisionPointId,
+      isBenchmark: false,
+      detectedBy: 'classifier',
+      patientContext,
+    });
+    if (queryId == null) return null;
+
+    const panelRunId = await storePanelRun(sql, {
+      queryId,
+      decisionPointId,
+      modelVersionId,
+      verdict: perDP.verdict,
+      optionALabel,
+      optionBLabel,
+      runKind: 'production',
+      sessionId: consultationId,
+      splitSummary: perDP.splitSummary,
+      positions: perDP.positions,
+    });
+    if (panelRunId == null) return null;
+
+    // Phase 2.5 — claim-grounded evidence ledger (PURE ANNOTATION). Runs strictly DOWNSTREAM of the
+    // locked verdict + positions for any SHOWN card — regardless of whether the DP matched a curated
+    // slug — so a contested fork newer than the catalog still carries evidence. Suppressed cards are
+    // audit-only and skipped. Unclassified sentinel → decisionType null → STRICT population mode. It
+    // writes evidence_citations + the card's evidenceLedger; it NEVER alters verdict/positions/status/
+    // routing. output.card_json is reassigned to a NEW object so a consult response already holding the
+    // original empty-ledger card is untouched.
+    if (this.researchAgent && !output.collapsed) {
+      try {
+        const rows = await buildEvidenceForPanel(this.researchAgent, {
+          perDP,
+          patientContext: evidenceContext,
+          caseData,
+          decisionType,
+          population: populationCards,
+        });
+        if (rows.length > 0) {
+          counters.withCitations++;
+          const ledger = toLedgerEntries(rows);
+          const evidenceSummary = {
+            accepted: ledger.length,
+            retrieved: rows.length,
+            ...(ledger.length === 0 && { rejections: this.summarizeEvidenceRejections(rows) }),
+          };
+          output.card_json = { ...(output.card_json || {}), evidenceLedger: ledger, evidenceSummary };
+          await storeEvidenceCitations(sql, panelRunId, rows);
+          if (ledger.length > 0) counters.evidenced++;
+          logger.info(
+            `Evidence for ${consultationId} (panel_run ${panelRunId}): ${ledger.length}/${rows.length} accepted; ${this.summarizeEvidenceRejections(rows)}`
+          );
+        }
+      } catch (error) {
+        logger.error(`Evidence research failed for ${consultationId} (panel_run ${panelRunId}): ${error.message}`);
+      }
     }
 
+    await storeSynthesizerOutput(sql, panelRunId, output);
+    counters.stored++;
+    return panelRunId;
+  }
+
+  /** Summary log after persisting a consult's production panels. */
+  logPersistence(consultationId, counters) {
+    const { stored, classified, evidenced, withCitations } = counters;
     if (stored > 0) {
       logger.info(
         `Persisted ${stored} production panel run(s) for ${consultationId} ` +

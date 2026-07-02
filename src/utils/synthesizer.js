@@ -117,6 +117,36 @@ export function buildSynthesizerOutput(perDP, ctx = {}) {
   };
 }
 
+/**
+ * Pending card skeleton for the consult RESPONSE when equipoise detection runs in the background
+ * archetype sweep. Carries only what's known synchronously — the decision question/options and the
+ * consult-level route (red-flag/urgency) — so the frontend knows how many cards to expect and can
+ * render a loading state. `pending:true` (and `status:'pending'`) flag that verdict/split/panel/
+ * evidence are not yet computed; the real card lands on the /equipoise-cards poll once the sweep
+ * finishes. No verdict is asserted here, so nothing has to flip under the user.
+ * @param {{question,options}} decisionPoint
+ * @param {Object} ctx - buildCardContext output (requiresImmediateMD, urgencyLevel, treatmentPlan)
+ */
+export function buildEquipoiseCardSkeleton(decisionPoint, ctx = {}) {
+  const route_to_human = !!ctx.requiresImmediateMD;
+  const route_reason = route_to_human ? 'risk_category' : 'none';
+  const [optionA = null, optionB = null] = decisionPoint?.options || [];
+  return {
+    decision: { question: decisionPoint?.question ?? null, optionA, optionB },
+    verdict: null,
+    status: 'pending',
+    pending: true,
+    contestedBy: null,
+    theSplit: null,
+    panel: null,
+    deliberationDelta: null,
+    whatWouldTipIt: null,
+    carePlanHome: ctx.treatmentPlan ?? null,
+    evidenceLedger: [],
+    route: buildRoute(route_to_human, route_reason, ctx.urgencyLevel),
+  };
+}
+
 /** Modal-stance support fraction (0..1, 2dp) from the substantive stance distribution; null if none. */
 function computeSupportScore(splitSummary) {
   const counts = splitSummary?.stanceCounts || {};

@@ -95,8 +95,8 @@ async function main() {
   const { stratifiedSample } = await import('../src/utils/benchmark-sampler.js');
   const { toStanceEnum } = await import('../src/utils/equipoise-mappers.js');
   const { DEMAND_RISK_ARCHETYPES, PATHOLOGY_ARCHETYPES, FRACTURE_PATTERN_ARCHETYPES,
-    BIOLOGICAL_WINDOW_ARCHETYPES, archetypeGroupsForDecisionType, computeArchetypeFlipVerdict,
-    combineGroupVerdicts } = await import('../src/utils/archetype-flip.js');
+    BIOLOGICAL_WINDOW_ARCHETYPES } = await import('../src/utils/archetype-flip.js');
+  const { runArchetypeFlipSweep } = await import('../src/utils/archetype-sweep.js');
 
   // ---------- DRY RUN: sample from the CSV, print plan + mapping, no DB/LLM ----------
   if (opts.dryRun) {
@@ -286,47 +286,18 @@ async function main() {
         positions = s.positions;
         detail = stanceLine(s.splitSummary);
       } else {
-        // Archetype-flip: evaluate each axis group for this decision_type (which_operation runs both
-        // pathology and demand_risk), contested if ANY axis flips or is internally split.
-        const groups = archetypeGroupsForDecisionType(dp.decision_type);
-        const groupResults = [];
-        for (const group of groups) {
-          const archetypeResults = [];
-          for (const arch of group.set) {
-            const r = await conference.runDecisionPoints(
-              [decisionPoint], { archetype: arch.label, ...arch.case }, specialists,
-              { mode: 'normal', population: false, dialogue: false }
-            );
-            const s = r.perDecisionPoint[0];
-            archetypeResults.push({
-              key: arch.key, label: arch.label, verdict: s.verdict,
-              stanceCounts: s.splitSummary.stanceCounts, deferredCount: s.splitSummary.deferredCount,
-              positions: s.positions,
-            });
-          }
-          groupResults.push({ name: group.name, flip: computeArchetypeFlipVerdict(archetypeResults, { minModalSupport: group.minModalSupport }), archetypeResults });
-        }
-        const combined = combineGroupVerdicts(groupResults);
-        verdict = combined.verdict;
-        splitSummary = {
-          method: 'archetype_flip',
-          contestedBy: combined.contestedBy,
-          groups: groupResults.map(g => ({
-            name: g.name,
-            verdict: g.flip.verdict,
-            flipDetected: g.flip.flipDetected,
-            internalContested: g.flip.internalContested,
-            modalByArchetype: g.flip.modalByArchetype,
-            archetypes: g.archetypeResults.map(({ key, label, verdict: v, stanceCounts, deferredCount }) =>
-              ({ key, label, verdict: v, stanceCounts, deferredCount })),
-          })),
+        // Archetype-flip via the SHARED sweep (identical to the live production path + batch probe —
+        // see src/utils/archetype-sweep.js). runPanel = one synchronous population panel per archetype;
+        // limit 1 keeps the offline sync path sequential (the --batch path handles large sweeps).
+        const runPanel = async (dpArg, archetypeCase) => {
+          const r = await conference.runDecisionPoints(
+            [dpArg], archetypeCase, specialists,
+            { mode: 'normal', population: false, dialogue: false }
+          );
+          return r.perDecisionPoint[0];
         };
-        // Representative single-panel snapshot = the 'average' demand_risk archetype (or first group's).
-        const repGroup = groupResults.find(g => g.name === 'demand_risk') || groupResults[0];
-        positions = (repGroup.archetypeResults.find(a => a.key === 'average') || repGroup.archetypeResults[0]).positions;
-        detail = groupResults
-          .map(g => `${g.name}=${g.flip.verdict === 'contested' ? (g.flip.flipDetected ? 'flip' : 'split') : 'stable'}`)
-          .join(' ') + (combined.verdict === 'contested' ? ` → CONTESTED(${combined.contestedBy.join(',')})` : '');
+        ({ verdict, splitSummary, positions, detail } =
+          await runArchetypeFlipSweep(decisionPoint, dp.decision_type, runPanel, { limit: 1 }));
       }
 
       await storePanelRun(sql, {

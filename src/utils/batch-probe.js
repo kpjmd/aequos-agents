@@ -31,8 +31,8 @@ import { POSITION_SPECIALISTS, CoordinationConference } from './coordination-con
 import {
   archetypeGroupsForDecisionType,
   computeArchetypeFlipVerdict,
-  combineGroupVerdicts,
 } from './archetype-flip.js';
+import { aggregateSweep } from './archetype-sweep.js';
 
 const TOOL_NAME = 'specialist_position';
 
@@ -276,34 +276,10 @@ export async function runBatchProbe(sample, opts, ctx) {
         return { name: group.name, flip: computeArchetypeFlipVerdict(archetypeResults, { minModalSupport: group.minModalSupport }), archetypeResults };
       });
 
-      const combined = combineGroupVerdicts(groupResults);
-      const splitSummary = {
-        method: 'archetype_flip',
-        contestedBy: combined.contestedBy,
-        groups: groupResults.map((g) => ({
-          name: g.name,
-          verdict: g.flip.verdict,
-          flipDetected: g.flip.flipDetected,
-          internalContested: g.flip.internalContested,
-          modalByArchetype: g.flip.modalByArchetype,
-          archetypes: g.archetypeResults.map(({ key, label, verdict: v, stanceCounts, deferredCount }) => ({
-            key,
-            label,
-            verdict: v,
-            stanceCounts,
-            deferredCount,
-          })),
-        })),
-      };
-      // Representative single-panel snapshot = the 'average' demand_risk archetype (or first group's).
-      const repGroup = groupResults.find((g) => g.name === 'demand_risk') || groupResults[0];
-      const positions = (repGroup.archetypeResults.find((a) => a.key === 'average') || repGroup.archetypeResults[0]).positions;
-      const detail =
-        groupResults
-          .map((g) => `${g.name}=${g.flip.verdict === 'contested' ? (g.flip.flipDetected ? 'flip' : 'split') : 'stable'}`)
-          .join(' ') + (combined.verdict === 'contested' ? ` → CONTESTED(${combined.contestedBy.join(',')})` : '');
+      // Aggregate via the SHARED combine (identical to the live production path + sync benchmark probe).
+      const { verdict, splitSummary, positions, detail } = aggregateSweep(groupResults);
 
-      out.push({ slug: dp.slug, runIndex, verdict: combined.verdict, splitSummary, positions, detail });
+      out.push({ slug: dp.slug, runIndex, verdict, splitSummary, positions, detail });
     }
   }
 

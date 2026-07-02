@@ -1016,9 +1016,15 @@ class AequOsAgentSystem {
       try {
         const { consultationId } = req.params;
         const cards = await getEquipoiseCardsByConsultation(sql, consultationId);
+        // Archetype-sweep runs in the background: `complete` is true once the sweep has finished for
+        // this consult (server-local signal). Poll to `complete` rather than an exact count match —
+        // suppression can make the persisted (shown) card count smaller than the response's skeleton
+        // count, which a count-match poll would wait on forever. `ready`/`count` kept for back-compat.
+        const sweep = this.coordinator.getEquipoiseSweepStatus(consultationId);
         return res.json({
           consultationId,
           ready: cards.length > 0,
+          complete: sweep ? sweep.complete : true,
           count: cards.length,
           cards,
         });
