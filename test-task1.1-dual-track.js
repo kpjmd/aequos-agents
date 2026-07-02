@@ -57,7 +57,7 @@ async function testDualTrackConsultation() {
     requiredSpecialists: ['triage', 'painWhisperer', 'movementDetective'],
     mode: 'fast',
     platformContext: {
-      platform: 'orthoiq-web',
+      platform: 'aequos-web',
       version: '2.0',
       sessionId: 'test-session-123'
     }

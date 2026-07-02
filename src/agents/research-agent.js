@@ -81,7 +81,7 @@ export class ResearchAgent extends BaseAgent {
   }
 
   getSystemPrompt() {
-    return `You are ${this.name}, a medical literature research specialist in the OrthoIQ recovery ecosystem.
+    return `You are ${this.name}, a medical literature research specialist in the AequOs recovery ecosystem.
 
 Your role is to curate and present medical literature evidence to support evidence-based orthopedic care decisions, tailored to each patient's context.
 

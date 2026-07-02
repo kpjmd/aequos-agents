@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * OrthoIQ Agents - End-to-End Recovery Scenario Example
+ * AequOs Agents - End-to-End Recovery Scenario Example
  * 
  * This example demonstrates a complete patient recovery journey
  * using the multi-agent system with token economics and blockchain integration.
@@ -35,7 +35,7 @@ class RecoveryScenarioDemo {
 
   async initialize() {
     try {
-      logger.info('🚀 Initializing OrthoIQ Recovery Scenario Demo');
+      logger.info('🚀 Initializing AequOs Recovery Scenario Demo');
       
       // Initialize blockchain utilities
       await this.blockchainUtils.initialize();

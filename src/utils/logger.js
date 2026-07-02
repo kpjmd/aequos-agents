@@ -10,7 +10,7 @@ const logger = winston.createLogger({
     winston.format.errors({ stack: true }),
     winston.format.json()
   ),
-  defaultMeta: { service: 'orthoiq-agents' },
+  defaultMeta: { service: 'aequos-agents' },
   transports: [
     // Always log to console (Railway captures stdout/stderr)
     new winston.transports.Console({

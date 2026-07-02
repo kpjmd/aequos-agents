@@ -142,7 +142,7 @@ describe('BlockchainUtils', () => {
     const tokenContract = blockchainUtils.createMockTokenContract();
 
     expect(tokenContract.tokenAddress).toBeDefined();
-    expect(tokenContract.name).toBe('OrthoIQ Agent Token (Mock)');
+    expect(tokenContract.name).toBe('AequOs Agent Token (Mock)');
     expect(tokenContract.symbol).toBe('OAT');
     expect(tokenContract.totalSupply).toBe('1000000');
     expect(tokenContract.isMock).toBe(true);

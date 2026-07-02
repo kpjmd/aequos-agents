@@ -1,5 +1,5 @@
 {
-  "name": "orthoiq-agents",
+  "name": "aequos-agents",
   "version": "1.0.0",
   "description": "AI-powered agent framework for orthopedic medical applications",
   "main": "src/index.js",
@@ -68,6 +68,6 @@
     "blockchain",
     "langchain"
   ],
-  "author": "OrthoIQ Team",
+  "author": "AequOs Team",
   "license": "MIT"
 }

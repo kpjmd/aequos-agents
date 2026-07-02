@@ -186,7 +186,7 @@ async function testFeedback() {
 }
 
 async function runAllTests() {
-  console.log('🚀 Starting OrthoIQ Smart Routing Tests\n');
+  console.log('🚀 Starting AequOs Smart Routing Tests\n');
   
   // Check if API is running
   try {

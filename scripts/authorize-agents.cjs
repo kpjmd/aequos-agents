@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("\n🔐 Authorizing OrthoIQ Agents as Token Minters...\n");
+  console.log("\n🔐 Authorizing AequOs Agents as Token Minters...\n");
 
   // Get token contract address from environment
   const tokenAddress = process.env.TOKEN_CONTRACT_ADDRESS;
@@ -27,7 +27,7 @@ async function main() {
   console.log(`Found ${agentAddresses.length} agent addresses\n`);
 
   // Get contract instance
-  const token = await hre.ethers.getContractAt("OrthoIQAgentToken", tokenAddress);
+  const token = await hre.ethers.getContractAt("AequOsAgentToken", tokenAddress);
 
   // Authorize each agent
   for (const agent of agentAddresses) {

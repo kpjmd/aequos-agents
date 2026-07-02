@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * OrthoIQ Agents - Main Entry Point
+ * AequOs Agents - Main Entry Point
  * 
  * Multi-agent recovery ecosystem with token economics and blockchain integration
  */
@@ -157,7 +157,7 @@ function summarizeAgentResponses(responses) {
     .join('; ');
 }
 
-class OrthoIQAgentSystem {
+class AequOsAgentSystem {
   constructor() {
     this.app = express();
     this.port = process.env.PORT || 3000;
@@ -179,7 +179,7 @@ class OrthoIQAgentSystem {
 
   async initialize() {
     try {
-      logger.info('🚀 Initializing OrthoIQ Agent System');
+      logger.info('🚀 Initializing AequOs Agent System');
       
       // Setup Express middleware
       this.setupMiddleware();
@@ -206,7 +206,7 @@ class OrthoIQAgentSystem {
       this.setupErrorHandling();
       
       this.isInitialized = true;
-      logger.info('✅ OrthoIQ Agent System initialized successfully');
+      logger.info('✅ AequOs Agent System initialized successfully');
       
       return true;
     } catch (error) {
@@ -507,7 +507,7 @@ class OrthoIQAgentSystem {
       res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
-        system: 'OrthoIQ Agents',
+        system: 'AequOs Agents',
         agents: Object.keys(this.agents).length,
         blockchain: this.blockchainUtils ? 'connected' : 'offline',
         researchAgent: {
@@ -1541,7 +1541,7 @@ class OrthoIQAgentSystem {
     // API documentation endpoint
     this.app.get('/docs', (req, res) => {
       res.json({
-        name: 'OrthoIQ Agents API',
+        name: 'AequOs Agents API',
         version: '1.0.1',
         description: 'Multi-agent recovery ecosystem with token economics',
         endpoints: {
@@ -1685,7 +1685,7 @@ class OrthoIQAgentSystem {
           if (error) {
             reject(error);
           } else {
-            logger.info(`🌐 OrthoIQ Agents API server listening on port ${this.port}`);
+            logger.info(`🌐 AequOs Agents API server listening on port ${this.port}`);
             logger.info(`📚 API Documentation: http://localhost:${this.port}/docs`);
             logger.info(`💚 Health Check: http://localhost:${this.port}/health`);
             resolve(this.server);
@@ -1702,7 +1702,7 @@ class OrthoIQAgentSystem {
     if (this.server) {
       return new Promise((resolve) => {
         this.server.close(() => {
-          logger.info('🛑 OrthoIQ Agents API server stopped');
+          logger.info('🛑 AequOs Agents API server stopped');
           resolve();
         });
       });
@@ -1920,7 +1920,7 @@ class OrthoIQAgentSystem {
 
 // Start the system if this file is run directly
 async function main() {
-  const system = new OrthoIQAgentSystem();
+  const system = new AequOsAgentSystem();
   
   try {
     await system.start();
@@ -1939,7 +1939,7 @@ async function main() {
     });
     
   } catch (error) {
-    logger.error(`❌ Failed to start OrthoIQ Agent System: ${error.message}`);
+    logger.error(`❌ Failed to start AequOs Agent System: ${error.message}`);
     process.exit(1);
   }
 }
@@ -1949,4 +1949,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
 
-export default OrthoIQAgentSystem;
+export default AequOsAgentSystem;

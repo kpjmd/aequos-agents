@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Interactive Test Scenarios - OrthoIQ Agents
+ * Interactive Test Scenarios - AequOs Agents
  * 
  * This script demonstrates real patient recovery scenarios and multi-agent consultations
  */
@@ -14,7 +14,7 @@ dotenv.config();
 
 const API_BASE = 'http://localhost:3000';
 
-class OrthoIQScenarios {
+class AequOsScenarios {
   constructor() {
     this.patientId = `patient_${Date.now()}`;
   }
@@ -342,9 +342,9 @@ class OrthoIQScenarios {
 
 // Main execution
 async function main() {
-  const scenarios = new OrthoIQScenarios();
+  const scenarios = new AequOsScenarios();
   
-  console.log('🏥 OrthoIQ Agent System - Interactive Test Scenarios');
+  console.log('🏥 AequOs Agent System - Interactive Test Scenarios');
   console.log('Choose what you want to test:');
   
   const args = process.argv.slice(2);
@@ -372,4 +372,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch(console.error);
 }
 
-export default OrthoIQScenarios;
+export default AequOsScenarios;

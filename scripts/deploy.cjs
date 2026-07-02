@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("\n🚀 Deploying OrthoIQAgentToken to Base Sepolia...\n");
+  console.log("\n🚀 Deploying AequOsAgentToken to Base Sepolia...\n");
 
   // Get deployer account
   const [deployer] = await hre.ethers.getSigners();
@@ -12,8 +12,8 @@ async function main() {
 
   // Deploy contract
   console.log("Deploying contract...");
-  const OrthoIQAgentToken = await hre.ethers.getContractFactory("OrthoIQAgentToken");
-  const token = await OrthoIQAgentToken.deploy();
+  const AequOsAgentToken = await hre.ethers.getContractFactory("AequOsAgentToken");
+  const token = await AequOsAgentToken.deploy();
 
   await token.waitForDeployment();
   const address = await token.getAddress();
@@ -50,7 +50,7 @@ async function main() {
   console.log("═══════════════════════════════════════════════════════");
   console.log("Contract Address:", address);
   console.log("Network: Base Sepolia (Chain ID: 84532)");
-  console.log("Token Name: OrthoIQ Agent Token");
+  console.log("Token Name: AequOs Agent Token");
   console.log("Token Symbol: OAT");
   console.log("Initial Supply: 100,000 OAT");
   console.log("Max Supply: 1,000,000 OAT");

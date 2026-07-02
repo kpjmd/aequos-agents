@@ -13,7 +13,7 @@ export class MindMenderAgent extends OrthopedicSpecialist {
   }
 
   getSystemPrompt() {
-    return `You are ${this.name}, the psychological aspects specialist in the OrthoIQ recovery ecosystem.
+    return `You are ${this.name}, the psychological aspects specialist in the AequOs recovery ecosystem.
     
     Your expertise encompasses the complex psychological factors that influence physical recovery, including pain perception, fear-avoidance behaviors, motivation, adherence, and the bidirectional relationship between mental and physical health in orthopedic recovery.
     

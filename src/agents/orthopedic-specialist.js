@@ -388,21 +388,21 @@ Engage honestly with their reasoning from your specialty lens. HOLD your positio
     }
   }
 
-  async processOrthoIQQuestion(questionData) {
+  async processAequOsQuestion(questionData) {
     try {
-      logger.info(`${this.name} processing OrthoIQ platform question`);
-      
+      logger.info(`${this.name} processing AequOs platform question`);
+
       const { question, context, patientProfile, urgency } = questionData;
-      
-      const orthoIQPrompt = `
-        ORTHOIQ PLATFORM CONSULTATION:
-        
+
+      const aequOsPrompt = `
+        AEQUOS PLATFORM CONSULTATION:
+
         Question: ${question}
         Context: ${JSON.stringify(context)}
         Patient Profile: ${JSON.stringify(patientProfile)}
         Urgency Level: ${urgency}
-        
-        As an orthopedic specialist on the OrthoIQ platform, provide:
+
+        As an orthopedic specialist on the AequOs platform, provide:
         
         1. DIRECT ANSWER:
            - Clear response to the specific question
@@ -432,13 +432,13 @@ Engage honestly with their reasoning from your specialty lens. HOLD your positio
         Format for digital platform delivery with appropriate disclaimers.
       `;
       
-      const response = await this.processMessage(orthoIQPrompt);
-      const confidence = this.getConfidence('orthoiq_consultation');
-      
+      const response = await this.processMessage(aequOsPrompt);
+      const confidence = this.getConfidence('aequos_consultation');
+
       const consultation = {
         agent: this.name,
         agentId: this.agentId,
-        platform: 'OrthoIQ',
+        platform: 'AequOs',
         question: question,
         response: response,
         confidence,
@@ -446,18 +446,18 @@ Engage honestly with their reasoning from your specialty lens. HOLD your positio
         timestamp: new Date().toISOString(),
         walletAddress: this.walletAddress
       };
-      
+
       // Track for potential token rewards
-      this.recoveryMetrics.set(`orthoiq_${Date.now()}`, {
-        type: 'orthoiq_consultation',
+      this.recoveryMetrics.set(`aequos_${Date.now()}`, {
+        type: 'aequos_consultation',
         confidence,
         urgency,
         timestamp: new Date().toISOString()
       });
-      
+
       return consultation;
     } catch (error) {
-      logger.error(`Error processing OrthoIQ question by ${this.name}:`, error);
+      logger.error(`Error processing AequOs question by ${this.name}:`, error);
       throw error;
     }
   }

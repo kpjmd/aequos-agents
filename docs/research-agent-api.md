@@ -18,7 +18,7 @@
 ## Production Base URL
 
 ```
-https://orthoiq-agents-api.railway.internal
+https://aequos-agents-api.railway.internal
 ```
 
 > **Note:** This is a Railway-internal URL, accessible only from other services deployed within the same Railway project. If your frontend is hosted outside Railway, use the public `.up.railway.app` URL from the Railway dashboard instead.
@@ -412,11 +412,11 @@ Certain topics trigger additional caveats automatically in the Evidence Gaps sec
 
 #### Skill Methodology
 
-The prompts in `getSystemPrompt()` and `generateResearchIntro()` are derived from the `orthoiq-research` skill definition stored at `skills/orthoiq-research/SKILL.md`. The skill package includes:
+The prompts in `getSystemPrompt()` and `generateResearchIntro()` are derived from the `aequos-research` skill definition stored at `skills/aequos-research/SKILL.md`. The skill package includes:
 
-- `skills/orthoiq-research/SKILL.md` — full 6-step methodology (PICO parsing, evidence hierarchy, population filters, grading, guideline cross-reference, response structure)
-- `skills/orthoiq-research/references/emerging-topics.md` — PRP/biologics, RTS, <5-year surgical techniques, wearables
-- `skills/orthoiq-research/references/guideline-sources.md` — AAOS, AOSSM, APTA, NICE/Cochrane URLs and conflict protocol
+- `skills/aequos-research/SKILL.md` — full 6-step methodology (PICO parsing, evidence hierarchy, population filters, grading, guideline cross-reference, response structure)
+- `skills/aequos-research/references/emerging-topics.md` — PRP/biologics, RTS, <5-year surgical techniques, wearables
+- `skills/aequos-research/references/guideline-sources.md` — AAOS, AOSSM, APTA, NICE/Cochrane URLs and conflict protocol
 
 Skill files are versioned in git and designed for future MCP server exposure.
 

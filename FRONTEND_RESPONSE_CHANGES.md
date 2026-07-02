@@ -1,7 +1,7 @@
 # Frontend Response Format Changes
 
 ## Overview
-All OrthoIQ-Agents now return user-friendly, markdown-formatted text in the `response` field, ready for direct display to users/patients.
+All AequOs Agents now return user-friendly, markdown-formatted text in the `response` field, ready for direct display to users/patients.
 
 ## What Changed
 
@@ -237,7 +237,7 @@ Your care team of 2 specialists has completed a comprehensive evaluation...
 
 ---
 
-*This collaborative assessment was prepared by your OrthoIQ care team.*
+*This collaborative assessment was prepared by your AequOs care team.*
 ```
 
 ## Frontend Implementation Guide
@@ -301,6 +301,6 @@ const urgency = agentResponse.urgencyLevel;  // "semi-urgent"
 
 ## Questions?
 
-Contact the OrthoIQ backend team or refer to the agent source code:
+Contact the AequOs backend team or refer to the agent source code:
 - `src/agents/base-agent.js` - `formatUserFriendlyResponse()` method
 - `src/utils/agent-coordinator.js` - `formatSynthesisResponse()` method

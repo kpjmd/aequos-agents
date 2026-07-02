@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Test script to validate OrthoIQ-Agents optimizations
+ * Test script to validate AequOs-Agents optimizations
  */
 
 import fetch from 'node-fetch';
@@ -25,7 +25,7 @@ const testCase = {
 };
 
 async function runTests() {
-  console.log('🧪 Testing OrthoIQ-Agents Optimizations\n');
+  console.log('🧪 Testing AequOs-Agents Optimizations\n');
   
   // 1. Test Health
   console.log('1️⃣ Testing Health Endpoint...');

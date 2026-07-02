@@ -1,11 +1,11 @@
 /**
  * Equipoise Benchmark & Proprietary Core — schema migrations (Phase 1).
  *
- * Stands up the durable, owned layer behind OrthoIQ's repositioning to a calibrated
+ * Stands up the durable, owned layer behind AequOs's repositioning to a calibrated
  * equipoise-mapping instrument: the curated decision-point benchmark, per-run panel state,
  * the synthesizer card record, the MD review loop, and the moat metric views.
  *
- * Companion to the design sketch (orthoiq_equipoise_schema.sql). Architectural invariants
+ * Companion to the design sketch (aequos_equipoise_schema.sql). Architectural invariants
  * preserved here:
  *   - panel_runs.detector_verdict is AUTHORITATIVE; the synthesizer's card status lives on a
  *     separate column (synthesizer_outputs.status) and can only diverge via an explicit,

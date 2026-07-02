@@ -1,4 +1,4 @@
-# OrthoIQ Emerging & High-Volatility Research Topics
+# AequOs Emerging & High-Volatility Research Topics
 
 These topics have rapidly evolving evidence bases. Apply extra scrutiny when surfacing citations.
 
@@ -39,7 +39,7 @@ These topics have rapidly evolving evidence bases. Apply extra scrutiny when sur
 ---
 
 ## Wearable Technology Integration
-*(Relevant for future OrthoIQ Wearable Agent)*
+*(Relevant for future AequOs Wearable Agent)*
 
 - **Gait analysis wearables**: Growing validation literature; Xsens, APDM Opal, Inertial Labs
 - **Asymmetry indices**: Step asymmetry >15% post-ACLR associated with elevated re-injury risk (emerging)

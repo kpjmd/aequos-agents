@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Demo Mode - OrthoIQ Agents
+ * Demo Mode - AequOs Agents
  * 
  * This example demonstrates the system without requiring Claude API keys
  * by testing only the infrastructure and mock responses
@@ -15,7 +15,7 @@ dotenv.config();
 
 const API_BASE = 'http://localhost:3000';
 
-class OrthoIQDemo {
+class AequOsDemo {
   constructor() {
     this.results = [];
   }
@@ -221,7 +221,7 @@ class OrthoIQDemo {
   }
 
   async runDemo() {
-    console.log('🎭 OrthoIQ Agents Demo Mode');
+    console.log('🎭 AequOs Agents Demo Mode');
     console.log('This demo tests system functionality without requiring Claude API keys');
     console.log('=' * 80);
 
@@ -251,7 +251,7 @@ class OrthoIQDemo {
 
 // Run demo if this file is executed directly
 async function main() {
-  const demo = new OrthoIQDemo();
+  const demo = new AequOsDemo();
   
   try {
     await demo.runDemo();
@@ -266,4 +266,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
 
-export default OrthoIQDemo;
+export default AequOsDemo;

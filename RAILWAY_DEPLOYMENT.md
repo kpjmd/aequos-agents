@@ -1,4 +1,4 @@
-# Railway Deployment Guide - OrthoIQ Agents
+# Railway Deployment Guide - AequOs Agents
 
 ## Production Secrets Generated
 
@@ -16,7 +16,7 @@ ENCRYPTION_KEY=11a3154688bd167a71979555adfd0a511bc1eba42f7980f2817f54286962eaf7
 
 1. Go to [railway.app](https://railway.app) and login
 2. Click **"New Project"** → **"Deploy from GitHub repo"**
-3. Select the `orthoiq-agents` repository
+3. Select the `aequos-agents` repository
 4. Select the `main` branch
 
 ### 2. Build Configuration
@@ -32,7 +32,7 @@ Configure the following in Railway:
 
 In Railway dashboard, configure:
 
-- **Service Name**: `orthoiq-agents-api`
+- **Service Name**: `aequos-agents-api`
 - **Region**: `us-west1` (or closest to your users)
 - **Memory**: 1GB
 - **Restart Policy**: Always
@@ -51,7 +51,7 @@ ANTHROPIC_API_KEY=your-anthropic-api-key-here
 
 #### CDP Blockchain Credentials
 ```bash
-CDP_API_KEY_NAME=OrthoIQ-Agents
+CDP_API_KEY_NAME=AequOs-Agents
 CDP_API_KEY_ID=265c5c1a-fc17-402d-9ea8-1b2d7de132e4
 CDP_API_KEY_PRIVATE_KEY=bE3qf22YdQ3rlpZtJnP0Ba9j72ZFZzZGIEhEE96oQGqZqBoR7+vtjQMxR1V31NJUTZ2h30VBacyZSgQSOeSgkA==
 CDP_API_KEY_SECRET=bE3qf22YdQ3rlpZtJnP0Ba9j72ZFZzZGIEhEE96oQGqZqBoR7+vtjQMxR1V31NJUTZ2h30VBacyZSgQSOeSgkA==
@@ -136,17 +136,17 @@ Watch the build logs for:
 ```
 ✓ npm install completes
 ✓ npm start executes
-🚀 Initializing OrthoIQ Agent System
+🚀 Initializing AequOs Agent System
 ✅ Blockchain connection established
 ⚠️ CDP Account Manager initialization (may warn in mock mode)
 ✅ Database migrations complete (or ⚠️ if no DATABASE_URL)
 👥 Creating 5 specialist agents
 ✓ Research Pioneer - medical literature research
-✅ OrthoIQ Agent System initialized
+✅ AequOs Agent System initialized
 🌐 Server listening on port 3000
 ```
 
-Railway will assign a URL like: `https://orthoiq-agents-production.up.railway.app`
+Railway will assign a URL like: `https://aequos-agents-production.up.railway.app`
 
 ### 7. Post-Deployment Testing
 
