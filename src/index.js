@@ -19,7 +19,8 @@ import cacheManager from './utils/cache-manager.js';
 import promptManager from './utils/prompt-manager.js';
 import { validateScope } from './utils/scope-validator.js';
 import { agentConfig } from './config/agent-config.js';
-import { storeResearchPending, storeResearchResult, storeResearchError, getResearchResult } from './utils/research-storage.js';
+import { storeResearchPending, storeResearchResult, storeResearchError, getResearchResult, isPendingStale } from './utils/research-storage.js';
+import { distributeResearchTokens } from './utils/research-tokens.js';
 import sql from './utils/db.js';
 import { getEquipoiseCardsByConsultation } from './utils/synthesizer.js';
 import { requireApiKey, requireAdmin } from './middleware/auth.js';
@@ -756,21 +757,15 @@ class AequOsAgentSystem {
             const researchCaseData = { ...caseData, triageContext: triageResponse };
             this.researchAgent.curateRelevantStudies(researchCaseData, 'basic')
               .then(async (result) => {
-                this.researchResults.set(consultationId, {
-                  status: 'completed',
-                  result,
-                  completedAt: new Date().toISOString(),
-                });
+                if (this._finalizeResearchInMemory(consultationId, result) === 'failed') {
+                  logger.error(`Auto-research degraded for ${consultationId}: ${result.error || 'unknown error'}`);
+                  return;
+                }
                 try {
-                  await this.tokenManager.distributeTokenReward(
-                    this.researchAgent.agentId,
-                    {
-                      success: result.success,
-                      literatureSearchCompleted: true,
-                      relevantStudiesFound: result.citations?.length > 0,
-                    },
-                    { walletProvider: this.researchAgent.walletProvider }
-                  );
+                  await distributeResearchTokens(consultationId, result, {
+                    tokenManager: this.tokenManager,
+                    researchAgent: this.researchAgent,
+                  });
                 } catch (tokenErr) {
                   logger.warn(`Research token reward failed: ${tokenErr.message}`);
                 }
@@ -781,6 +776,7 @@ class AequOsAgentSystem {
                   error: err.message,
                   failedAt: new Date().toISOString(),
                 });
+                this._scheduleResearchCleanup(consultationId);
                 logger.error(`Auto-research failed for ${consultationId}: ${err.message}`);
               });
           }
@@ -1341,8 +1337,14 @@ class AequOsAgentSystem {
               return res.json({ success: true, consultationId, status: 'complete' });
             }
             if (existing.status === 'pending') {
-              logger.info(`Research already in progress for ${consultationId}, skipping duplicate trigger`);
-              return res.json({ success: true, consultationId, status: 'pending', estimatedSeconds: agentConfig.research?.timeoutSeconds || 25 });
+              const budget = agentConfig.research?.timeoutSeconds || 25;
+              // A fresh pending job is a genuine duplicate — skip. A stale one (process died
+              // mid-run) would otherwise be permanently un-retriggerable, so allow it through (F5).
+              if (!isPendingStale(existing.created_at, budget)) {
+                logger.info(`Research already in progress for ${consultationId}, skipping duplicate trigger`);
+                return res.json({ success: true, consultationId, status: 'pending', estimatedSeconds: budget });
+              }
+              logger.info(`Stale pending research for ${consultationId} — allowing re-trigger`);
             }
             // status === 'failed': allow re-triggering
           }
@@ -1403,12 +1405,16 @@ class AequOsAgentSystem {
           )
         ])
           .then(async (result) => {
-            // Always update in-memory first
-            this.researchResults.set(consultationId, {
-              status: 'completed',
-              result,
-              completedAt: new Date().toISOString(),
-            });
+            // Update in-memory first; a degraded (success:false) result is recorded as failed (F6)
+            if (this._finalizeResearchInMemory(consultationId, result) === 'failed') {
+              try {
+                await storeResearchError(consultationId, result.error || 'Research failed');
+              } catch (dbErr) {
+                logger.warn(`DB persist (error) failed: ${dbErr.message}`);
+              }
+              logger.error(`Research degraded for ${consultationId}: ${result.error || 'unknown error'}`);
+              return;
+            }
 
             // Try DB, non-fatal
             try {
@@ -1423,21 +1429,12 @@ class AequOsAgentSystem {
               logger.warn(`DB persist failed: ${dbErr.message}`);
             }
 
-            // Award tokens for successful research
+            // Award tokens for successful research (granular, doc-aligned breakdown)
             try {
-              const outcome = {
-                success: result.success,
-                literatureSearchCompleted: true,
-                relevantStudiesFound: result.citations?.length > 0,
-                highImpactJournal: result.citations?.some(c => c.qualityScore >= 15),
-                recentEvidence: result.citations?.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
-                multipleStudyTypes: new Set(result.citations?.map(c => c.studyType)).size > 1,
-              };
-              await this.tokenManager.distributeTokenReward(
-                this.researchAgent.agentId,
-                outcome,
-                { walletProvider: this.researchAgent.walletProvider }
-              );
+              await distributeResearchTokens(consultationId, result, {
+                tokenManager: this.tokenManager,
+                researchAgent: this.researchAgent,
+              });
             } catch (tokenErr) {
               logger.warn(`Research token reward failed: ${tokenErr.message}`);
             }
@@ -1458,6 +1455,7 @@ class AequOsAgentSystem {
               error: err.message,
               failedAt: new Date().toISOString(),
             });
+            this._scheduleResearchCleanup(consultationId);
             logger.error(`Research failed for ${consultationId}: ${err.message}`);
           });
       } catch (error) {
@@ -1504,6 +1502,17 @@ class AequOsAgentSystem {
 
         if (row.status === 'pending') {
           const totalBudget = agentConfig.research?.timeoutSeconds || 25;
+          // A pending row older than the whole budget (+ margin) means the job never reached a
+          // terminal state — e.g. the process restarted mid-run. Surface it as failed instead of
+          // a perpetual pending that counts down to 0 and sticks there forever (F5).
+          if (isPendingStale(row.created_at, totalBudget)) {
+            logger.warn(`Stale pending research for ${consultationId} — reporting as failed`);
+            return res.json({
+              status: 'failed',
+              error: `Research did not complete within ${totalBudget}s`,
+              fallback: 'Research unavailable - recommendations based on clinical guidelines',
+            });
+          }
           const elapsedSeconds = (Date.now() - new Date(row.created_at).getTime()) / 1000;
           const estimatedSeconds = Math.max(0, totalBudget - Math.round(elapsedSeconds));
           return res.json({ status: 'pending', estimatedSeconds });
@@ -1714,6 +1723,42 @@ class AequOsAgentSystem {
       });
     }
   }
+
+  /**
+   * Bound in-memory researchResults growth (F7): drop a terminal entry after a TTL, mirroring
+   * consultationResults. The DB (when configured) remains the source of truth for polls; this
+   * map is only a fallback. .unref() so the timer never keeps the process alive on its own.
+   */
+  _scheduleResearchCleanup(consultationId) {
+    const t = setTimeout(() => this.researchResults.delete(consultationId), 30 * 60 * 1000);
+    if (typeof t.unref === 'function') t.unref();
+  }
+
+  /**
+   * Record a terminal research state in the in-memory map and schedule its cleanup.
+   * A result with success === false (e.g. a PubMed transport failure surfaced by
+   * curateRelevantStudies) is recorded as 'failed' rather than a 'completed' result with
+   * empty citations, so the poll reports a degraded job instead of "no studies found" (F6).
+   * Returns 'completed' | 'failed'.
+   */
+  _finalizeResearchInMemory(consultationId, result) {
+    if (result && result.success === false) {
+      this.researchResults.set(consultationId, {
+        status: 'failed',
+        error: result.error || 'Research failed',
+        failedAt: new Date().toISOString(),
+      });
+      this._scheduleResearchCleanup(consultationId);
+      return 'failed';
+    }
+    this.researchResults.set(consultationId, {
+      status: 'completed',
+      result,
+      completedAt: new Date().toISOString(),
+    });
+    this._scheduleResearchCleanup(consultationId);
+    return 'completed';
+  }
   
   /**
    * Trigger research agent asynchronously - persists to DB, awards tokens.
@@ -1749,6 +1794,18 @@ class AequOsAgentSystem {
         ),
       ]);
 
+      // A degraded result (e.g. PubMed transport failure) is persisted as failed, not as a
+      // 'complete' row with empty citations that polls read as "no studies found" (F6).
+      if (result.success === false) {
+        try {
+          await storeResearchError(consultationId, result.error || 'Research failed');
+        } catch (dbErr) {
+          logger.error(`Failed to persist research error to DB: ${dbErr.message}`);
+        }
+        logger.error(`Research degraded for ${consultationId}: ${result.error || 'unknown error'}`);
+        return;
+      }
+
       // Non-fatal: persist to DB if available
       try {
         await storeResearchResult(consultationId, {
@@ -1763,19 +1820,10 @@ class AequOsAgentSystem {
       }
 
       try {
-        const outcome = {
-          success: result.success,
-          literatureSearchCompleted: true,
-          relevantStudiesFound: result.citations?.length > 0,
-          highImpactJournal: result.citations?.some(c => c.qualityScore >= 15),
-          recentEvidence: result.citations?.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
-          multipleStudyTypes: new Set(result.citations?.map(c => c.studyType)).size > 1,
-        };
-        await this.tokenManager.distributeTokenReward(
-          this.researchAgent.agentId,
-          outcome,
-          { walletProvider: this.researchAgent.walletProvider }
-        );
+        await distributeResearchTokens(consultationId, result, {
+          tokenManager: this.tokenManager,
+          researchAgent: this.researchAgent,
+        });
       } catch (tokenErr) {
         logger.warn(`Research token reward failed: ${tokenErr.message}`);
       }
@@ -1810,25 +1858,16 @@ class AequOsAgentSystem {
       const researchCaseData = { ...caseData, triageContext: triageResponse };
       this.researchAgent.curateRelevantStudies(researchCaseData, userTier || 'basic')
         .then(async (result) => {
-          this.researchResults.set(consultationId, {
-            status: 'completed',
-            result,
-            completedAt: new Date().toISOString(),
-          });
+          if (this._finalizeResearchInMemory(consultationId, result) === 'failed') {
+            logger.error(`Informational research degraded for ${consultationId}: ${result.error || 'unknown error'}`);
+            return;
+          }
           try {
-            const hasCitations = (result.citations?.length ?? 0) > 0;
-            await this.tokenManager.distributeTokenReward(
-              this.researchAgent.agentId,
-              {
-                success: hasCitations,
-                literatureSearchCompleted: hasCitations,
-                relevantStudiesFound: hasCitations && result.citations.length >= 3,
-                highImpactJournal: hasCitations && result.citations.some(c => c.qualityScore >= 15),
-                recentEvidence: hasCitations && result.citations.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
-                multipleStudyTypes: hasCitations && new Set(result.citations.map(c => c.studyType)).size > 1,
-              },
-              { walletProvider: this.researchAgent.walletProvider, track: 'informational' }
-            );
+            await distributeResearchTokens(consultationId, result, {
+              tokenManager: this.tokenManager,
+              researchAgent: this.researchAgent,
+              track: 'informational',
+            });
           } catch (tokenErr) {
             logger.warn(`Informational research token reward failed: ${tokenErr.message}`);
           }
@@ -1839,6 +1878,7 @@ class AequOsAgentSystem {
             error: err.message,
             failedAt: new Date().toISOString(),
           });
+          this._scheduleResearchCleanup(consultationId);
           logger.error(`Informational research failed for ${consultationId}: ${err.message}`);
         });
     }

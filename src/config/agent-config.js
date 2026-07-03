@@ -84,6 +84,10 @@ export const agentConfig = {
     llmQueryEnabled: process.env.RESEARCH_LLM_QUERY_ENABLED !== 'false',
     // Per-attempt budget for the Haiku query-generation call. Falls back to heuristic on exceed.
     llmQueryTimeoutMs: parseInt(process.env.RESEARCH_LLM_QUERY_TIMEOUT_MS) || 3000,
+    // Per-attempt budget for the Haiku intro-generation call. On exceed, falls back to a
+    // plain-text summary WITHOUT discarding the already-retrieved citations (F4). Kept well
+    // under timeoutSeconds so a slow intro can't consume the whole job budget.
+    introTimeoutMs: parseInt(process.env.RESEARCH_INTRO_TIMEOUT_MS) || 8000,
   },
 
   // PubMed Research Configuration

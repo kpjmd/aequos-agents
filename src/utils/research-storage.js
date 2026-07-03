@@ -6,6 +6,26 @@ function requireDb() {
   return sql;
 }
 
+/**
+ * A pending research row is "stale" when more time has elapsed since it was created than
+ * the job could possibly still be running (budget + margin). This happens when the process
+ * died mid-job before writing a terminal status. Callers use this to surface a failed poll
+ * (instead of a perpetual pending) and to allow re-triggering (F5).
+ *
+ * @param {string|Date|number} createdAt
+ * @param {number} budgetSeconds - RESEARCH_TIMEOUT_SECONDS
+ * @param {object} [opts]
+ * @param {number} [opts.marginSeconds=15] - grace beyond the budget before declaring stale
+ * @param {number} [opts.now=Date.now()]
+ * @returns {boolean}
+ */
+export function isPendingStale(createdAt, budgetSeconds, { marginSeconds = 15, now = Date.now() } = {}) {
+  if (!createdAt) return false;
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return false;
+  return (now - created) / 1000 > budgetSeconds + marginSeconds;
+}
+
 export async function storeResearchPending(consultationId) {
   const db = requireDb();
   try {

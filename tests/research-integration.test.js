@@ -108,7 +108,7 @@ jest.unstable_mockModule('@coinbase/cdp-agentkit-core', () => ({
 
 // ── Dynamic imports (after mocks) ──────────────────────────────────────────
 
-const { storeResearchPending, storeResearchResult, storeResearchError, getResearchResult } =
+const { storeResearchPending, storeResearchResult, storeResearchError, getResearchResult, isPendingStale } =
   await import('../src/utils/research-storage.js');
 const { ResearchAgent } = await import('../src/agents/research-agent.js');
 const { TokenManager, RESEARCH_TOKEN_EVENTS } = await import('../src/utils/token-manager.js');
@@ -690,6 +690,31 @@ describe('Research Integration Tests', () => {
       expect(tokenResult.breakdown.highImpactJournals).toBe(0);
       expect(tokenResult.breakdown.recentEvidence).toBe(0);
       expect(tokenResult.breakdown.lowRelevancePenalty).toBe(0);
+    });
+  });
+
+  // ── F5: stale-pending detection ────────────────────────────────────────────
+  describe('isPendingStale (F5)', () => {
+    const budget = 25;
+    const now = 1_000_000_000_000;
+
+    test('fresh pending (just created) is NOT stale', () => {
+      expect(isPendingStale(new Date(now).toISOString(), budget, { now })).toBe(false);
+    });
+
+    test('pending within budget+margin is NOT stale', () => {
+      const createdAt = new Date(now - 30 * 1000).toISOString(); // 30s < 25+15
+      expect(isPendingStale(createdAt, budget, { now })).toBe(false);
+    });
+
+    test('pending older than budget+margin IS stale', () => {
+      const createdAt = new Date(now - 60 * 1000).toISOString(); // 60s > 25+15
+      expect(isPendingStale(createdAt, budget, { now })).toBe(true);
+    });
+
+    test('missing or invalid createdAt is treated as not stale', () => {
+      expect(isPendingStale(null, budget, { now })).toBe(false);
+      expect(isPendingStale('not-a-date', budget, { now })).toBe(false);
     });
   });
 });
