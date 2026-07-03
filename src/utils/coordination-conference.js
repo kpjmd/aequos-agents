@@ -40,6 +40,21 @@ export function equipoisePopulationMode(override) {
   return override ?? (process.env.EQUIPOISE_POPULATION_MODE !== 'false');
 }
 
+/**
+ * Whether the live equipoise detector uses the validated ARCHETYPE-FLIP sweep (default on) rather
+ * than a single population panel. A single population panel gives ~0% equipoise sensitivity — the
+ * archetype sweep is the method the 0.978/0.952 benchmark validated (see docs/divergence-spike-
+ * findings.md). Because the sweep is 12–36 model calls per decision point it runs in the BACKGROUND
+ * persistence stage, not inside the consult response. Set EQUIPOISE_ARCHETYPE_SWEEP='false' to revert
+ * to the legacy synchronous single-population card (reversible/spot-checkable). An explicit override
+ * (tests) always wins.
+ * @param {boolean} [override]
+ * @returns {boolean}
+ */
+export function equipoiseArchetypeSweepMode(override) {
+  return override ?? (process.env.EQUIPOISE_ARCHETYPE_SWEEP !== 'false');
+}
+
 export class CoordinationConference {
   constructor() {
     this.dialogueHistory = [];
@@ -116,6 +131,43 @@ export class CoordinationConference {
       return metadata;
     } catch (error) {
       logger.error(`Error in coordination conference: ${error.message}`);
+      return this.emptyMetadata(error.message);
+    }
+  }
+
+  /**
+   * Lightweight framing pass for the archetype-sweep path: run ONLY triage's decision-point
+   * identification (one fast/Haiku call) and return the canonical metadata shape carrying those
+   * decision points, with an empty divergence/position layer. The expensive position + divergence
+   * detection is done later by the background archetype sweep (see AgentCoordinator.runSweepAndPersist),
+   * so the synchronous consult path stays cheap. Fast mode / no-triage / clear-cut cases yield an
+   * empty decision-point list (gate closed), exactly like conductConferenceRound.
+   * @param {Map} specialists
+   * @param {Object} caseData
+   * @param {string} mode
+   * @returns {Promise<Object>} emptyMetadata shape with { decisionPoints }
+   */
+  async frameDecisionPoints(specialists, caseData, mode = 'normal') {
+    if (mode === 'fast') return this.emptyMetadata('fast mode — conference skipped');
+    try {
+      const triage = specialists.get('triage');
+      if (!triage || typeof triage.identifyDecisionPoints !== 'function') {
+        logger.warn('Conference: triage agent unavailable for decision-point framing');
+        return this.emptyMetadata('triage agent unavailable');
+      }
+      const allPoints = await triage.identifyDecisionPoints(caseData, { mode: 'fast' });
+      const decisionPoints = (allPoints || []).slice(0, MAX_DECISION_POINTS);
+      logger.info(
+        decisionPoints.length === 0
+          ? 'Conference: no contested decision points — gate closed'
+          : `Conference: ${decisionPoints.length} decision point(s) framed — archetype sweep deferred to background`
+      );
+      return this.emptyMetadata(
+        decisionPoints.length ? 'decision points framed (archetype sweep pending)' : 'no contested decision points',
+        { decisionPoints }
+      );
+    } catch (error) {
+      logger.error(`Error framing decision points: ${error.message}`);
       return this.emptyMetadata(error.message);
     }
   }
