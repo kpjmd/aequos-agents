@@ -460,7 +460,8 @@ Study types are assigned in the following priority order from PubMed publication
 ### Quality Score Formula
 
 ```
-qualityScore = min(base + journalTier + studyType + recency, 10)
+qualityScore = min(base + journalTier* + studyType + recency, 10)
+   *journalTier is credited ONLY for prestige-eligible (Level 1–2) study designs
 ```
 
 **Component Values**
@@ -472,6 +473,7 @@ qualityScore = min(base + journalTier + studyType + recency, 10)
 | `journalTier` | Tier 2 journal | +2 |
 | `journalTier` | Tier 3 journal | +1 |
 | `journalTier` | Unranked journal | +0 |
+| `journalTier` | **Weak design (see below), any journal** | **+0** |
 | `studyType` | RCT or Meta-Analysis | +2 |
 | `studyType` | Systematic Review | +1.5 |
 | `studyType` | Review | +1 |
@@ -483,11 +485,20 @@ qualityScore = min(base + journalTier + studyType + recency, 10)
 | `recency` | Year 2015–2017 | +0.5 |
 | `recency` | Year < 2015 | +0 |
 
+**Prestige cap (design gates journal credit)**: `journalTier` is added **only** when the study
+is a prestige-eligible design — **Randomized Controlled Trial, Meta-Analysis, or Systematic
+Review**. For any weaker design (Review, Clinical Trial, Other), journal prestige is withheld
+(`+0`), regardless of journal tier. This prevents a narrative review or unclassified study in a
+top-tier journal from outranking a strong RCT in an unranked journal (prestige rescuing weak
+design). Study design decides the ceiling; a credible journal only rewards already-strong
+evidence. Implemented via `ResearchAgent.PRESTIGE_ELIGIBLE_DESIGNS` in
+`filterByQuality()` (`src/agents/research-agent.js`).
+
 **Quality Filter**: Citations with `qualityScore < 6` are discarded before returning results.
 
-**No hard date filter at retrieval**: As of Phase 1 (May 2026), the PubMed query no longer applies a hard `("YYYY"[Date - Publication] : "YYYY"[Date - Publication])` filter. Recency is scored downstream with graceful decay, so seminal older papers (e.g., MOON cohort 2014–2018, foundational systematic reviews) can still surface when highly relevant. Pre-2015 papers can pass `qualityScore >= 6` if combined with a Tier 1/2 journal and strong study type.
+**No hard date filter at retrieval**: As of Phase 1 (May 2026), the PubMed query no longer applies a hard `("YYYY"[Date - Publication] : "YYYY"[Date - Publication])` filter. Recency is scored downstream with graceful decay, so seminal older papers (e.g., MOON cohort 2014–2018, foundational systematic reviews) can still surface when highly relevant. Pre-2015 papers can pass `qualityScore >= 6` only with a strong (prestige-eligible) study type, since journal prestige alone can no longer lift a weak old paper over the threshold.
 
-**Maximum per-tier example**: A 2024 RCT from JBJS would score `5 + 3 + 2 + 2 = 12`, capped to **10**.
+**Maximum per-tier example**: A 2024 RCT from JBJS would score `5 + 3 + 2 + 2 = 12`, capped to **10**. A 2023 narrative Review in a Tier-2 journal now scores `5 + 0 (prestige withheld) + 1 + 1.75 = 7.75` (was `9.75` before the prestige cap).
 
 ### Journal Tier Reference
 
@@ -516,7 +527,7 @@ qualityScore = min(base + journalTier + studyType + recency, 10)
 - BMC Musculoskeletal Disorders
 - European Spine Journal
 
-Matching is case-insensitive substring matching against the full journal title from PubMed. A journal not matching any tier receives **+0**.
+Matching is case-insensitive and word-boundary-aware against the full journal title from PubMed, and the **most specific (longest) matching entry wins**. This prevents a short high-tier token from shadowing a specific lower-tier title — e.g. *European Spine Journal* resolves to Tier 3 rather than matching the Tier-2 `spine` token. A journal not matching any tier receives **+0**. (Residual: a generic single-word journal name that is itself a full title — `arthroscopy`, `bmj`, `lancet` — can still over-match a prefixed spinoff such as *Arthroscopy Techniques* when no more-specific entry exists; a static allowlist cannot fully resolve this. The long-term fix is an external index such as SJR/JCR quartile.)
 
 ---
 

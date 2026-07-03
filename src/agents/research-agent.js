@@ -954,13 +954,25 @@ Apply these notes in the Evidence Gaps section when relevant:
     return String(abstractText);
   }
 
+  // Journal prestige is only credited for higher-evidence (Level 1–2) designs.
+  // Without this, a narrative review or unclassified study in a top-tier journal can
+  // outrank a strong RCT in an unranked journal — prestige rescuing weak design (F2).
+  // Strong designs bank full journal credit; weaker designs get none.
+  static PRESTIGE_ELIGIBLE_DESIGNS = new Set([
+    'Randomized Controlled Trial',
+    'Meta-Analysis',
+    'Systematic Review',
+  ]);
+
   filterByQuality(studies, clinicalQuery = '', tier = 'basic') {
     const scored = studies.map(study => {
       // Base score
       let score = 5;
 
-      // Journal reputation (0-3)
-      score += this.getJournalTierScore(study.journal);
+      // Journal reputation (0-3) — only for prestige-eligible (Level 1–2) designs
+      if (ResearchAgent.PRESTIGE_ELIGIBLE_DESIGNS.has(study.studyType)) {
+        score += this.getJournalTierScore(study.journal);
+      }
 
       // Study type (0-2)
       const typeScores = {
@@ -1008,13 +1020,30 @@ Apply these notes in the Evidence Gaps section when relevant:
 
     const normalized = journalName.toLowerCase();
 
+    // Match every tier entry that appears as a whole word/phrase in the title, then
+    // keep the MOST SPECIFIC (longest) match. This prevents a short high-tier token
+    // from shadowing a specific lower-tier title — e.g. the Tier-2 token "spine"
+    // must not out-rank the Tier-3 entry "european spine journal" for that journal.
+    // Ties on length fall to the higher tier score.
+    //
+    // Residual (documented in F2): a generic single-word journal name that is itself
+    // a full title ("arthroscopy", "bmj", "lancet") can still over-match a prefixed
+    // spinoff ("Arthroscopy Techniques", "BMJ Open") when no more-specific entry
+    // exists. A curated allowlist cannot fully resolve this; the long-term fix is an
+    // external index (SJR/JCR quartile).
+    let best = { score: 0, length: 0 };
     for (const tier of Object.values(this.journalTiers)) {
-      if (tier.journals.some(j => normalized.includes(j))) {
-        return tier.score;
+      for (const j of tier.journals) {
+        const pattern = new RegExp(`\\b${j.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (pattern.test(normalized)) {
+          if (j.length > best.length || (j.length === best.length && tier.score > best.score)) {
+            best = { score: tier.score, length: j.length };
+          }
+        }
       }
     }
 
-    return 0;
+    return best.score;
   }
 
   scoreRelevance(study, clinicalQuery) {
@@ -1147,21 +1176,31 @@ Apply these notes in the Evidence Gaps section when relevant:
     return Math.min(Math.round(score), 10);
   }
 
+  /**
+   * Deterministic evidence grade (A/B/C) from study design + quality score.
+   * This is the CEILING of favorability the intro is allowed to assert for a study:
+   * Haiku may render an equal or more conservative grade (e.g. downgrade for a
+   * population mismatch), but any grade it renders MORE favorable than this is
+   * clamped back down by reconcileIntroGrades(). Never returns 'X' — that flag is
+   * a cautionary guideline-conflict marker Haiku may add, and is always preserved.
+   */
+  computeEvidenceGrade(study) {
+    const type = study.studyType || '';
+    const score = study.qualityScore || 0;
+    if (type === 'Systematic Review' || type === 'Meta-Analysis') return 'A';
+    if (type === 'Randomized Controlled Trial') return score >= 7 ? 'A' : 'B';
+    if (type === 'Prospective Cohort' || type === 'Cohort Study') return 'B';
+    if (type === 'Retrospective Cohort' || type === 'Case-Control') return 'B';
+    return 'C';
+  }
+
   async generateResearchIntro(studies, clinicalQuery) {
     if (!studies || studies.length === 0) {
       return 'No relevant studies were found matching the clinical query.';
     }
 
     try {
-      const gradeFromStudy = (s) => {
-        const type = s.studyType || '';
-        const score = s.qualityScore || 0;
-        if (type === 'Systematic Review' || type === 'Meta-Analysis') return 'A';
-        if (type === 'Randomized Controlled Trial') return score >= 7 ? 'A' : 'B';
-        if (type === 'Prospective Cohort' || type === 'Cohort Study') return 'B';
-        if (type === 'Retrospective Cohort' || type === 'Case-Control') return 'B';
-        return 'C';
-      };
+      const gradeFromStudy = (s) => this.computeEvidenceGrade(s);
 
       const tierLabel = (s) => {
         const t = this.getJournalTierScore(s.journal);
@@ -1256,7 +1295,16 @@ PubMed ID: [PMID]
 [1–2 related PubMed queries the user may want to run for adjacent evidence]`;
 
       const introRaw = await this.processMessage(prompt);
-      const intro = typeof introRaw === 'string' ? introRaw : String(introRaw);
+      let intro = typeof introRaw === 'string' ? introRaw : String(introRaw);
+
+      // Clamp any grade Haiku rendered MORE favorable than the deterministic ceiling.
+      // Prevents e.g. a retrospective case series or narrative review being shown to a
+      // patient as "[Grade A]". Conservative downgrades and 'X' flags are left intact.
+      const { intro: reconciledIntro, corrections } = this.reconcileIntroGrades(intro, studies);
+      if (corrections > 0) {
+        logger.warn(`Reconciled ${corrections} over-graded citation(s) in research intro (clamped to deterministic ceiling)`);
+        intro = reconciledIntro;
+      }
 
       const hallucinated = this.validateIntroCitations(intro, studies);
       if (hallucinated.length > 0) {
@@ -1272,10 +1320,73 @@ PubMed ID: [PMID]
   }
 
   /**
-   * Scan the generated intro for "LastName Year" patterns and flag any that
-   * don't match an author/year pair from the provided studies. Catches the
-   * common hallucination mode where Haiku produces plausible-looking
-   * citations that never went through the PubMed pipeline.
+   * Clamp evidence grades in a generated intro that are MORE favorable than the
+   * deterministic ceiling (computeEvidenceGrade). Haiku is told it may adjust the
+   * suggested grade — legitimately downward (population mismatch) or with an 'X'
+   * guideline-conflict flag — but it must not upgrade a study beyond what its
+   * design supports. Without this, a patient can be shown "[Grade A]" on a
+   * retrospective series.
+   *
+   * Grades are associated with citations by their formal "PubMed ID: <pmid>" line:
+   * the grade owning a citation is the last "[Grade X]" token appearing before that
+   * PMID line (and after the previous one). Returns { intro, corrections }.
+   */
+  reconcileIntroGrades(intro, studies) {
+    if (!intro || !Array.isArray(studies) || studies.length === 0) {
+      return { intro, corrections: 0 };
+    }
+
+    // Favorability rank; 'X' is a cautionary flag and is never overridden.
+    const rank = { C: 1, B: 2, A: 3 };
+    const ceilingByPmid = new Map();
+    for (const s of studies) {
+      const pmid = String(s.pmid || '').trim();
+      if (pmid) ceilingByPmid.set(pmid, this.computeEvidenceGrade(s));
+    }
+
+    const pmidRegex = /PubMed ID:\s*(\d+)/g;
+    const replacements = [];
+    let windowStart = 0;
+    let m;
+    while ((m = pmidRegex.exec(intro)) !== null) {
+      const pmid = m[1];
+      const ceiling = ceilingByPmid.get(pmid);
+      if (ceiling) {
+        // The grade for this citation is the last [Grade X] before this PMID line.
+        const window = intro.slice(windowStart, m.index);
+        const gradeMatches = [...window.matchAll(/\[Grade\s+([ABCX])\]/g)];
+        if (gradeMatches.length > 0) {
+          const last = gradeMatches[gradeMatches.length - 1];
+          const shown = last[1];
+          if (shown !== 'X' && rank[shown] > rank[ceiling]) {
+            replacements.push({
+              from: windowStart + last.index,
+              len: last[0].length,
+              to: `[Grade ${ceiling}]`,
+            });
+          }
+        }
+      }
+      windowStart = m.index;
+    }
+
+    // Apply right-to-left so earlier indices stay valid.
+    let result = intro;
+    for (const r of replacements.reverse()) {
+      result = result.slice(0, r.from) + r.to + result.slice(r.from + r.len);
+    }
+    return { intro: result, corrections: replacements.length };
+  }
+
+  /**
+   * Scan the generated intro for fabricated citations and flag them. Catches the
+   * hallucination mode where Haiku produces plausible-looking references that never
+   * went through the PubMed pipeline. Two checks:
+   *   1. "LastName Year" patterns whose author/year pair isn't in the studies.
+   *   2. Formal "PubMed ID: <pmid>" citation lines whose PMID isn't in the studies.
+   *
+   * (Bare "PMID 12345" mentions in prose are NOT PMID-checked — only the formal
+   * "PubMed ID:" citation form is, to avoid false positives on illustrative numbers.)
    *
    * Returns an array of fabricated reference strings (empty array = clean).
    */
@@ -1283,12 +1394,15 @@ PubMed ID: [PMID]
     if (!intro || !Array.isArray(studies)) return [];
 
     const allowed = new Set();
+    const allowedPmids = new Set();
     for (const s of studies) {
       const first = Array.isArray(s.authors) ? s.authors[0] : s.authors;
       const lastName = String(first || '').trim().split(/[\s,]+/)[0];
       if (lastName && s.year) {
         allowed.add(`${lastName.toLowerCase()}|${s.year}`);
       }
+      const pmid = String(s.pmid || '').trim();
+      if (pmid) allowedPmids.add(pmid);
     }
 
     // Common English words that match [A-Z][a-z]+ but are never author last names.
@@ -1307,6 +1421,20 @@ PubMed ID: [PMID]
         seen.add(key);
       }
     }
+
+    // Check formal citation PMIDs — only the "PubMed ID: <pmid>" form, which is
+    // where the intro renders actual citations. A PMID here that isn't in the
+    // studies set is a fabricated citation.
+    const pmidPattern = /PubMed ID:\s*(\d+)/g;
+    while ((m = pmidPattern.exec(intro)) !== null) {
+      const pmid = m[1];
+      const key = `pmid|${pmid}`;
+      if (!allowedPmids.has(pmid) && !seen.has(key)) {
+        hallucinated.push(`PubMed ID: ${pmid}`);
+        seen.add(key);
+      }
+    }
+
     return hallucinated;
   }
 

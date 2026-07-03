@@ -235,6 +235,16 @@ describe('ResearchAgent - Quality Scoring', () => {
     expect(agent.getJournalTierScore('Unknown Journal')).toBe(0);
   });
 
+  test('should prefer the most specific journal match (F2 substring collision)', () => {
+    // "European Spine Journal" (Tier 3) must NOT be scored as Tier 2 via the bare
+    // "spine" token; longest-match wins.
+    expect(agent.getJournalTierScore('European Spine Journal')).toBe(1);
+    // The actual Tier-2 journal "Spine" still scores 2 (exact token, no longer competitor).
+    expect(agent.getJournalTierScore('Spine')).toBe(2);
+    // Case-insensitive, real PubMed-style full titles still resolve.
+    expect(agent.getJournalTierScore('The Journal of Bone and Joint Surgery. American volume')).toBe(3);
+  });
+
   test('should filter and sort studies by quality', () => {
     const studies = [
       {
@@ -718,7 +728,7 @@ describe('ResearchAgent - Quality Score Calculation', () => {
     expect(result).toHaveLength(0);
   });
 
-  test('should score 9.75 for tier2 + review + 2023 study', () => {
+  test('should NOT credit journal prestige to a weak design (F2 cap): tier2 + review + 2023 = 7.75', () => {
     const studies = [{
       title: 'Spine Review 2023',
       journal: 'Spine',
@@ -726,10 +736,11 @@ describe('ResearchAgent - Quality Score Calculation', () => {
       studyType: 'Review',
       abstract: '',
     }];
-    // 5 (base) + 2 (tier2) + 1 (Review) + 1.75 (2023) = 9.75
+    // Review is a weak design → journal prestige is NOT credited (F2 cap):
+    // 5 (base) + 0 (Tier-2 prestige withheld) + 1 (Review) + 1.75 (2023) = 7.75
     const result = agent.filterByQuality(studies);
     expect(result).toHaveLength(1);
-    expect(result[0].qualityScore).toBe(9.75);
+    expect(result[0].qualityScore).toBe(7.75);
   });
 });
 
@@ -783,7 +794,7 @@ describe('ResearchAgent - Filter Threshold', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  test('should include studies scoring exactly 6 (tier3 + 2017 + Other)', () => {
+  test('should NOT let journal prestige rescue a weak design below threshold (F2 cap): tier3 + 2017 + Other = 5.5, excluded', () => {
     const studies = [{
       title: 'Borderline study',
       journal: 'Journal of Orthopaedic and Sports Physical Therapy',
@@ -791,10 +802,10 @@ describe('ResearchAgent - Filter Threshold', () => {
       studyType: 'Other',
       abstract: '',
     }];
-    // 5 (base) + 1 (tier3) + 0 (Other) + 0.5 (2015–2017) = 6.5 → included
+    // Other is a weak design → Tier-3 prestige withheld (F2 cap):
+    // 5 (base) + 0 (prestige withheld) + 0 (Other) + 0.5 (2015–2017) = 5.5 → excluded (< 6)
     const result = agent.filterByQuality(studies);
-    expect(result).toHaveLength(1);
-    expect(result[0].qualityScore).toBe(6.5);
+    expect(result).toHaveLength(0);
   });
 
   test('should exclude studies scoring below 6 (pre-2015 unknown journal)', () => {
@@ -1758,5 +1769,69 @@ describe('ResearchAgent - Intro Citation Validator', () => {
     // "The 2024 Cochrane review..." triggered the validator in production
     const intro = 'The 2024 guidelines recommend PRP. In 2020, studies showed benefit. Evidence based on the 2018 data.';
     expect(agent.validateIntroCitations(intro, studies)).toEqual([]);
+  });
+
+  test('should flag a fabricated formal PubMed ID citation (F1)', () => {
+    // 111/222/333 are allowed; 999 never went through the pipeline.
+    const intro = '**[Grade A]** Smith et al., 2020 — JBJS\nPubMed ID: 111\n\n**[Grade B]** Fake et al., 2019 — Journal\nPubMed ID: 99999999';
+    const result = agent.validateIntroCitations(intro, studies);
+    expect(result).toContain('PubMed ID: 99999999');
+  });
+
+  test('should not flag formal PubMed ID citations that are in the studies set', () => {
+    const intro = '**[Grade A]** Smith et al., 2020 — JBJS\nPubMed ID: 111\n\n**[Grade C]** Garcia, 2015 — Journal\nPubMed ID: 333';
+    expect(agent.validateIntroCitations(intro, studies)).toEqual([]);
+  });
+});
+
+describe('ResearchAgent - Intro Grade Reconciliation (F1)', () => {
+  let agent;
+
+  beforeEach(() => {
+    agent = new ResearchAgent();
+  });
+
+  test('clamps an over-favorable grade down to the deterministic ceiling', () => {
+    // A retrospective / "Other" design has a C ceiling; Haiku rendered Grade A.
+    const studies = [{ pmid: '111', studyType: 'Review', qualityScore: 8, authors: ['Smith J'], year: '2024' }];
+    const intro = '**[Grade A]** Smith et al., 2024 — JBJS\n*Narrative overview.*\nPubMed ID: 111';
+    const { intro: out, corrections } = agent.reconcileIntroGrades(intro, studies);
+    expect(corrections).toBe(1);
+    expect(out).toContain('[Grade C]');
+    expect(out).not.toContain('[Grade A]');
+  });
+
+  test('leaves a conservative (lower) grade untouched', () => {
+    // Meta-analysis ceiling is A; Haiku downgraded to B for population mismatch — allowed.
+    const studies = [{ pmid: '222', studyType: 'Meta-Analysis', qualityScore: 9, authors: ['Doe A'], year: '2023' }];
+    const intro = '**[Grade B]** Doe et al., 2023 — Lancet\n*Population mismatch noted.*\nPubMed ID: 222';
+    const { intro: out, corrections } = agent.reconcileIntroGrades(intro, studies);
+    expect(corrections).toBe(0);
+    expect(out).toContain('[Grade B]');
+  });
+
+  test('never overrides an X guideline-conflict flag', () => {
+    const studies = [{ pmid: '333', studyType: 'Review', qualityScore: 7, authors: ['Roe B'], year: '2022' }];
+    const intro = '**[Grade X]** Roe et al., 2022 — Journal\n*Contradicts AAOS guidance.*\nPubMed ID: 333';
+    const { intro: out, corrections } = agent.reconcileIntroGrades(intro, studies);
+    expect(corrections).toBe(0);
+    expect(out).toContain('[Grade X]');
+  });
+
+  test('associates the correct grade with each citation across multiple studies', () => {
+    const studies = [
+      { pmid: '111', studyType: 'Meta-Analysis', qualityScore: 10, authors: ['A A'], year: '2024' }, // ceiling A
+      { pmid: '222', studyType: 'Review', qualityScore: 8, authors: ['B B'], year: '2024' },          // ceiling C
+    ];
+    const intro =
+      '**[Grade A]** A et al., 2024 — JBJS\n*Meta-analysis.*\nPubMed ID: 111\n\n' +
+      '**[Grade A]** B et al., 2024 — JBJS\n*Narrative review.*\nPubMed ID: 222';
+    const { intro: out, corrections } = agent.reconcileIntroGrades(intro, studies);
+    expect(corrections).toBe(1); // only the second (Review) is clamped
+    // First citation keeps A, second becomes C
+    const firstBlock = out.slice(0, out.indexOf('PubMed ID: 111'));
+    const secondBlock = out.slice(out.indexOf('PubMed ID: 111'));
+    expect(firstBlock).toContain('[Grade A]');
+    expect(secondBlock).toContain('[Grade C]');
   });
 });
