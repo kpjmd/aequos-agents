@@ -728,6 +728,9 @@ Apply these notes in the Evidence Gaps section when relevant:
         }
 
         const data = await response.json();
+        // An empty idlist is a genuine "no results" — return []. Transport/HTTP errors are
+        // re-thrown (below) so the caller can distinguish a degraded search from an empty one
+        // (F6) rather than silently showing "no studies found."
         return data.esearchresult?.idlist || [];
       } finally {
         clearTimeout(timeoutId);
@@ -735,10 +738,10 @@ Apply these notes in the Evidence Gaps section when relevant:
     } catch (error) {
       if (error.name === 'AbortError') {
         logger.warn('PubMed search timed out');
-      } else {
-        logger.error(`PubMed search error: ${error.message}`);
+        throw new Error('PubMed search timed out');
       }
-      return [];
+      logger.error(`PubMed search error: ${error.message}`);
+      throw error;
     }
   }
 
@@ -776,12 +779,15 @@ Apply these notes in the Evidence Gaps section when relevant:
         clearTimeout(timeoutId);
       }
     } catch (error) {
+      // Transport/HTTP errors are re-thrown so curateRelevantStudies surfaces a degraded
+      // job (success:false) instead of an empty "no studies found" result (F6). Genuine
+      // parse issues on a 200 response are still handled as [] inside parseArticleXML.
       if (error.name === 'AbortError') {
         logger.warn('PubMed article fetch timed out');
-      } else {
-        logger.error(`PubMed article fetch error: ${error.message}`);
+        throw new Error('PubMed article fetch timed out');
       }
-      return [];
+      logger.error(`PubMed article fetch error: ${error.message}`);
+      throw error;
     }
   }
 
@@ -1294,7 +1300,17 @@ PubMed ID: [PMID]
 
 [1–2 related PubMed queries the user may want to run for adjacent evidence]`;
 
-      const introRaw = await this.processMessage(prompt);
+      // Bound the intro call so a slow Haiku response can't consume the whole job budget
+      // and cause already-retrieved citations to be discarded (F4). On timeout we throw into
+      // the catch below, which returns the plain-text fallback — the citations are returned
+      // separately by curateRelevantStudies regardless.
+      const introTimeoutMs = agentConfig.research?.introTimeoutMs || 8000;
+      const introRaw = await Promise.race([
+        this.processMessage(prompt),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`intro generation exceeded ${introTimeoutMs}ms`)), introTimeoutMs)
+        ),
+      ]);
       let intro = typeof introRaw === 'string' ? introRaw : String(introRaw);
 
       // Clamp any grade Haiku rendered MORE favorable than the deterministic ceiling.

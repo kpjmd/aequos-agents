@@ -1579,6 +1579,24 @@ describe('ResearchAgent - Error Handling', () => {
     expect(intro).toBe('No relevant studies were found matching the clinical query.');
   });
 
+  test('searchPubMed throws on a transport/HTTP error instead of returning [] (F6)', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({ ok: false, status: 429 });
+    await expect(agent.searchPubMed('knee pain')).rejects.toThrow();
+  });
+
+  test('searchPubMed still returns [] for a genuinely empty result set (F6)', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ esearchresult: { idlist: [] } }),
+    });
+    await expect(agent.searchPubMed('nonexistent condition xyz')).resolves.toEqual([]);
+  });
+
+  test('fetchArticleDetails throws on a transport/HTTP error instead of returning [] (F6)', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({ ok: false, status: 500 });
+    await expect(agent.fetchArticleDetails(['12345'])).rejects.toThrow();
+  });
+
   test('should return 0 from scoreRelevance when title is undefined', () => {
     expect(agent.scoreRelevance(undefined, 'knee pain')).toBe(0);
   });
@@ -1633,6 +1651,20 @@ describe('ResearchAgent - End-to-End curateRelevantStudies', () => {
     expect(result.success).toBe(true);
     expect(result.citations.length).toBeLessThanOrEqual(3);
     expect(result.tier).toBe('basic');
+  });
+
+  test('preserves citations when intro generation fails/times out (F4)', async () => {
+    const mockStudies = makeMockStudies(4);
+    jest.spyOn(agent, 'searchPubMed').mockResolvedValue(mockStudies.map(s => s.pmid));
+    jest.spyOn(agent, 'fetchArticleDetails').mockResolvedValue(mockStudies);
+    // Simulate a slow/failed Haiku intro — the job must still return the retrieved citations.
+    jest.spyOn(agent, 'processMessage').mockRejectedValue(new Error('intro generation exceeded 8000ms'));
+
+    const result = await agent.curateRelevantStudies('knee reconstruction', 'premium');
+
+    expect(result.success).toBe(true);
+    expect(result.citations.length).toBeGreaterThan(0);
+    expect(result.intro).toContain('We found'); // plain-text fallback, not discarded
   });
 
   test('should return max 5 citations for premium tier', async () => {
