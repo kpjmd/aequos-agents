@@ -10,9 +10,10 @@ import logger from './logger.js';
  * @param {object} options
  * @param {import('./token-manager.js').TokenManager} options.tokenManager
  * @param {import('../agents/research-agent.js').ResearchAgent} options.researchAgent
+ * @param {string} [options.track] - Optional ledger track tag (e.g. 'informational')
  * @returns {Promise<{tokens: number, distributed: object|null, breakdown: object}>}
  */
-export async function distributeResearchTokens(consultationId, researchResult, { tokenManager, researchAgent }) {
+export async function distributeResearchTokens(consultationId, researchResult, { tokenManager, researchAgent, track }) {
   const breakdown = {
     base: 0,
     relevantStudies: 0,
@@ -91,7 +92,7 @@ export async function distributeResearchTokens(consultationId, researchResult, {
     distributed = await tokenManager.distributeTokenReward(
       researchAgent.agentId,
       outcome,
-      { walletProvider: researchAgent.walletProvider }
+      { walletProvider: researchAgent.walletProvider, ...(track ? { track } : {}) }
     );
   } catch (error) {
     logger.error(`Research token distribution failed for ${consultationId}: ${error.message}`);

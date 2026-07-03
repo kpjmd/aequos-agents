@@ -20,6 +20,7 @@ import promptManager from './utils/prompt-manager.js';
 import { validateScope } from './utils/scope-validator.js';
 import { agentConfig } from './config/agent-config.js';
 import { storeResearchPending, storeResearchResult, storeResearchError, getResearchResult } from './utils/research-storage.js';
+import { distributeResearchTokens } from './utils/research-tokens.js';
 import sql from './utils/db.js';
 import { getEquipoiseCardsByConsultation } from './utils/synthesizer.js';
 import { requireApiKey, requireAdmin } from './middleware/auth.js';
@@ -762,15 +763,10 @@ class AequOsAgentSystem {
                   completedAt: new Date().toISOString(),
                 });
                 try {
-                  await this.tokenManager.distributeTokenReward(
-                    this.researchAgent.agentId,
-                    {
-                      success: result.success,
-                      literatureSearchCompleted: true,
-                      relevantStudiesFound: result.citations?.length > 0,
-                    },
-                    { walletProvider: this.researchAgent.walletProvider }
-                  );
+                  await distributeResearchTokens(consultationId, result, {
+                    tokenManager: this.tokenManager,
+                    researchAgent: this.researchAgent,
+                  });
                 } catch (tokenErr) {
                   logger.warn(`Research token reward failed: ${tokenErr.message}`);
                 }
@@ -1423,21 +1419,12 @@ class AequOsAgentSystem {
               logger.warn(`DB persist failed: ${dbErr.message}`);
             }
 
-            // Award tokens for successful research
+            // Award tokens for successful research (granular, doc-aligned breakdown)
             try {
-              const outcome = {
-                success: result.success,
-                literatureSearchCompleted: true,
-                relevantStudiesFound: result.citations?.length > 0,
-                highImpactJournal: result.citations?.some(c => c.qualityScore >= 15),
-                recentEvidence: result.citations?.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
-                multipleStudyTypes: new Set(result.citations?.map(c => c.studyType)).size > 1,
-              };
-              await this.tokenManager.distributeTokenReward(
-                this.researchAgent.agentId,
-                outcome,
-                { walletProvider: this.researchAgent.walletProvider }
-              );
+              await distributeResearchTokens(consultationId, result, {
+                tokenManager: this.tokenManager,
+                researchAgent: this.researchAgent,
+              });
             } catch (tokenErr) {
               logger.warn(`Research token reward failed: ${tokenErr.message}`);
             }
@@ -1763,19 +1750,10 @@ class AequOsAgentSystem {
       }
 
       try {
-        const outcome = {
-          success: result.success,
-          literatureSearchCompleted: true,
-          relevantStudiesFound: result.citations?.length > 0,
-          highImpactJournal: result.citations?.some(c => c.qualityScore >= 15),
-          recentEvidence: result.citations?.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
-          multipleStudyTypes: new Set(result.citations?.map(c => c.studyType)).size > 1,
-        };
-        await this.tokenManager.distributeTokenReward(
-          this.researchAgent.agentId,
-          outcome,
-          { walletProvider: this.researchAgent.walletProvider }
-        );
+        await distributeResearchTokens(consultationId, result, {
+          tokenManager: this.tokenManager,
+          researchAgent: this.researchAgent,
+        });
       } catch (tokenErr) {
         logger.warn(`Research token reward failed: ${tokenErr.message}`);
       }
@@ -1816,19 +1794,11 @@ class AequOsAgentSystem {
             completedAt: new Date().toISOString(),
           });
           try {
-            const hasCitations = (result.citations?.length ?? 0) > 0;
-            await this.tokenManager.distributeTokenReward(
-              this.researchAgent.agentId,
-              {
-                success: hasCitations,
-                literatureSearchCompleted: hasCitations,
-                relevantStudiesFound: hasCitations && result.citations.length >= 3,
-                highImpactJournal: hasCitations && result.citations.some(c => c.qualityScore >= 15),
-                recentEvidence: hasCitations && result.citations.some(c => parseInt(c.year) >= new Date().getFullYear() - 2),
-                multipleStudyTypes: hasCitations && new Set(result.citations.map(c => c.studyType)).size > 1,
-              },
-              { walletProvider: this.researchAgent.walletProvider, track: 'informational' }
-            );
+            await distributeResearchTokens(consultationId, result, {
+              tokenManager: this.tokenManager,
+              researchAgent: this.researchAgent,
+              track: 'informational',
+            });
           } catch (tokenErr) {
             logger.warn(`Informational research token reward failed: ${tokenErr.message}`);
           }
