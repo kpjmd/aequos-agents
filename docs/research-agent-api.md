@@ -823,9 +823,17 @@ All 333 tests across 7 test files pass with 0 failures.
 
 ### Known Limitations
 
-- **One term per category per query** — `extractClinicalTerms()` picks at most one body part,
-  one condition, and one treatment per PubMed query (3-term max). Queries involving multiple
-  body parts or conditions may not reflect the full clinical picture.
+- **Limited multi-term extraction (heuristic fallback)** — `extractClinicalTerms()` collects up
+  to **2 body parts + 2 conditions + 1 treatment** (F3). Same-category terms are OR-grouped and
+  categories are AND-joined, so a multi-joint / multi-diagnosis case (e.g. "knee + shoulder, ACL
+  tear + rotator cuff tear") no longer collapses to a single joint/condition. A second body part
+  is only added for a genuinely distinct top-level joint (both generic regions), so a specific
+  sub-structure is not split from its parent region (e.g. "navicular" stays specific, not
+  "navicular OR foot"). This governs the **heuristic path only** — the primary path is the LLM
+  query builder (`RESEARCH_LLM_QUERY_ENABLED`, default on), which constructs multi-concept boolean
+  queries directly; the heuristic runs when the LLM is disabled, times out, or in the broader-query
+  fallbacks. Cases with 3+ distinct joints, or a distinct joint named only by a sub-structure, may
+  still be incompletely represented in the heuristic path.
 - **Relevance threshold** — `filterByQuality()` requires `relevanceScore >= 3/10`. Papers from
   lower-prestige journals that are otherwise clinically relevant may be excluded if the title and
   abstract share few terms with the query.

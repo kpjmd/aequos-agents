@@ -482,11 +482,14 @@ Apply these notes in the Evidence Gaps section when relevant:
   /**
    * Extract focused clinical terms from free text for PubMed search.
    * Uses simple unquoted keywords so PubMed automatic term mapping works correctly.
-   * Returns max 3 terms to avoid over-constraining the query.
+   *
+   * Returns one clause per category (body part, condition, treatment). To support
+   * multi-joint / multi-diagnosis cases (F3) up to 2 body parts and 2 conditions are
+   * collected; same-category terms are OR-grouped into a single clause (e.g.
+   * `(knee OR shoulder)`) while a single term stays bare. Callers AND-join the clauses
+   * (buildPubMedQuery) or OR-join them (buildBroaderQuery). Max 3 clauses.
    */
   extractClinicalTerms(queryText, clinicalQuery) {
-    const terms = [];
-
     // Priority 0: pull in triage-identified diagnosis terms.
     // When a user provides vague symptoms, triage converts them to specific conditions
     // (e.g. "knee pain + slipping after basketball" → ["anterior cruciate ligament", "meniscus"]).
@@ -502,7 +505,7 @@ Apply these notes in the Evidence Gaps section when relevant:
 
     // 1. Body part / anatomical term — simple unquoted keywords for PubMed auto-mapping.
     //
-    // Ordering rules (both matter because the loop breaks on the first match):
+    // Ordering rules (both matter because the loop collects the earliest matches in map order):
     //   a) Multi-word phrases before their single-word substrings
     //      ("tibial plateau" before "tibia" — "tibial" contains the substring "tibia")
     //   b) Specific sub-anatomical structures before their parent joint name
@@ -615,11 +618,30 @@ Apply these notes in the Evidence Gaps section when relevant:
       (typeof clinicalQuery === 'object' && (clinicalQuery.bodyPart || clinicalQuery.location)) || '';
     const searchText = (structuredPart + ' ' + queryText + ' ' + triageText).toLowerCase();
 
+    // Generic top-level joints/regions. A SECOND body part is only added for a genuinely
+    // distinct joint — i.e. when both the already-captured term and the candidate are generic
+    // regions (e.g. "knee" + "shoulder"). This prevents a specific sub-structure from being
+    // split off from its own parent region (e.g. "navicular" + "foot", "femoral neck" + the
+    // spurious "neck"→cervical match, "proximal humerus" + "humerus"), which the map's
+    // specific→generic ordering + a single match used to guarantee.
+    const GENERIC_REGIONS = new Set([
+      'shoulder', 'elbow', 'wrist', 'hand', 'finger', 'thumb', 'forearm',
+      'hip', 'knee', 'ankle', 'foot', 'toe',
+      'lumbar', 'cervical', 'thoracic', 'spine', 'sacrum',
+    ]);
+
+    // Collect up to 2 body parts (multi-joint support, F3). The first match is the most
+    // specific (map is ordered specific → generic); a second is added only under the
+    // distinct-generic-joint rule above. Dedup by mapped term.
+    const bodyParts = [];
     for (const [keyword, meshTerm] of Object.entries(bodyPartMap)) {
-      if (searchText.includes(keyword)) {
-        terms.push(meshTerm);
-        break; // one body part is enough
+      if (!searchText.includes(keyword) || bodyParts.includes(meshTerm)) continue;
+      if (bodyParts.length === 0) {
+        bodyParts.push(meshTerm);
+      } else if (GENERIC_REGIONS.has(bodyParts[0]) && GENERIC_REGIONS.has(meshTerm)) {
+        bodyParts.push(meshTerm);
       }
+      if (bodyParts.length >= 2) break;
     }
 
     // 2. Condition / diagnosis terms — use simple keywords, NOT quoted MeSH descriptors.
@@ -665,10 +687,12 @@ Apply these notes in the Evidence Gaps section when relevant:
       'distal radioulnar': '"distal radioulnar joint"',
     };
 
+    // Collect up to 2 distinct conditions (multi-diagnosis support, F3), deduped.
+    const conditions = [];
     for (const [keyword, term] of Object.entries(conditionMap)) {
-      if (searchText.includes(keyword)) {
-        terms.push(term);
-        break; // one condition term is enough
+      if (searchText.includes(keyword) && !conditions.includes(term)) {
+        conditions.push(term);
+        if (conditions.length >= 2) break;
       }
     }
 
@@ -688,16 +712,25 @@ Apply these notes in the Evidence Gaps section when relevant:
       'stem cell': '"stem cell"',
     };
 
-    if (terms.length < 3) {
-      for (const [keyword, term] of Object.entries(treatmentMap)) {
-        if (searchText.includes(keyword)) {
-          terms.push(term);
-          break;
-        }
+    // One treatment term (unchanged).
+    let treatment = null;
+    for (const [keyword, term] of Object.entries(treatmentMap)) {
+      if (searchText.includes(keyword)) {
+        treatment = term;
+        break;
       }
     }
 
-    return terms.slice(0, 3);
+    // Assemble one clause per category: a single term stays bare (byte-for-byte identical
+    // output for single-picture queries); two same-category terms become an OR group so the
+    // caller's AND-join keeps both joints/diagnoses instead of dropping one.
+    const toClause = (arr) => (arr.length === 1 ? arr[0] : `(${arr.join(' OR ')})`);
+    const clauses = [];
+    if (bodyParts.length) clauses.push(toClause(bodyParts));
+    if (conditions.length) clauses.push(toClause(conditions));
+    if (treatment) clauses.push(treatment);
+
+    return clauses;
   }
 
   async searchPubMed(query) {
