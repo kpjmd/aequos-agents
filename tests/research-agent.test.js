@@ -919,8 +919,67 @@ describe('ResearchAgent - Query Building (Expanded Abbreviations)', () => {
   test('should expand multiple abbreviations in one query', () => {
     const query = agent.buildPubMedQuery('acl and mcl combined injury treatment');
     expect(query).toContain('anterior cruciate ligament');
+    // F3: both conditions are now retained (MCL was previously dropped after the first match)
+    expect(query).toContain('medial collateral ligament');
     expect(query).not.toMatch(/\bacl\b/i);
     expect(query).not.toMatch(/\bmcl\b/i);
+  });
+});
+
+describe('ResearchAgent - Multi-joint / multi-diagnosis queries (F3)', () => {
+  let agent;
+
+  beforeEach(() => {
+    agent = new ResearchAgent();
+  });
+
+  test('buildPubMedQuery keeps BOTH joints and BOTH conditions (does not collapse to one)', () => {
+    const query = agent.buildPubMedQuery({
+      primaryComplaint: 'knee and shoulder pain',
+      triageContext: { suggestedDiagnoses: ['anterior cruciate ligament', 'rotator cuff'] },
+    });
+    expect(query).toContain('knee');
+    expect(query).toContain('shoulder');
+    expect(query).toContain('"anterior cruciate ligament"');
+    expect(query).toContain('"rotator cuff"');
+    // Same-category terms are OR-grouped; categories AND-joined
+    expect(query).toMatch(/\(shoulder OR knee\)|\(knee OR shoulder\)/);
+    expect(query).toContain(' AND ');
+  });
+
+  test('buildBroaderQuery OR-joins both joints and conditions', () => {
+    const query = agent.buildBroaderQuery({
+      primaryComplaint: 'knee and shoulder pain',
+      triageContext: { suggestedDiagnoses: ['anterior cruciate ligament', 'rotator cuff'] },
+    });
+    expect(query).toContain('knee');
+    expect(query).toContain('shoulder');
+    expect(query).toContain('"anterior cruciate ligament"');
+    expect(query).toContain('"rotator cuff"');
+  });
+
+  test('single-picture query is unchanged — no spurious OR grouping', () => {
+    const query = agent.buildPubMedQuery('acl reconstruction recovery');
+    expect(query).toContain('anterior cruciate ligament');
+    // Only one condition, no second body part/condition → no OR group in the term clause
+    const termClause = query.split(' AND (Meta')[0];
+    expect(termClause).not.toContain(' OR ');
+  });
+
+  test('extractClinicalTerms de-duplicates same-category synonyms', () => {
+    // "meniscus" and "meniscal" both map to 'meniscus' — must not appear twice
+    const terms = agent.extractClinicalTerms('meniscus meniscal tear', {});
+    const meniscusCount = terms.filter(t => t === 'meniscus').length;
+    expect(meniscusCount).toBeLessThanOrEqual(1);
+  });
+
+  test('caps at 2 body parts even when more are mentioned', () => {
+    const query = agent.buildPubMedQuery('knee shoulder hip ankle pain');
+    // group contains at most 2 OR-ed body parts (one clause, one OR at most)
+    const bodyGroup = query.match(/\(([a-z ]+ OR [a-z ]+)\)/i);
+    if (bodyGroup) {
+      expect(bodyGroup[1].split(' OR ').length).toBe(2);
+    }
   });
 });
 
