@@ -78,6 +78,7 @@ export async function runEquipoiseMigrations(sql) {
     label_source_refs  JSONB,
     is_active          BOOLEAN     NOT NULL DEFAULT true,
     absolute_indication BOOLEAN    NOT NULL DEFAULT false,
+    is_pediatric       BOOLEAN     NOT NULL DEFAULT false,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
   )`;
@@ -86,6 +87,9 @@ export async function runEquipoiseMigrations(sql) {
   // this flag: the detector may over-flag them as contested, but that routes to urgent surgical
   // consultation (product-safe), so the benchmark SEGMENTS them rather than scoring them as equipoise.
   await sql`ALTER TABLE decision_points ADD COLUMN IF NOT EXISTS absolute_indication BOOLEAN NOT NULL DEFAULT false`;
+  // Additive migration: pediatric DPs are routed to the remodeling/growth archetype axis (children are
+  // not small adults) instead of the adult demand×surgical-risk axis. Seeded from pediatric-indications.json.
+  await sql`ALTER TABLE decision_points ADD COLUMN IF NOT EXISTS is_pediatric BOOLEAN NOT NULL DEFAULT false`;
 
   // ---- Sentinel anchor for PRODUCTION panel runs (Phase 2b) ----
   // A real consult surfaces ad-hoc, triage-framed decision points that don't map 1:1 to a curated

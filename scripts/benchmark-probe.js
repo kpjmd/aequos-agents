@@ -44,7 +44,7 @@ const POSITION_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 const POPULATION_CASE = { population: true, note: 'equipoise benchmark probe — population-level' };
 
 function parseArgs(argv) {
-  const opts = { decisionTypes: [], slugs: [], labels: [], n: 1, dialogue: false, dryRun: false, all: false, limit: null, population: false, noControls: false, batch: false, resumeBatch: null };
+  const opts = { decisionTypes: [], slugs: [], labels: [], n: 1, dialogue: false, dryRun: false, all: false, limit: null, population: false, noControls: false, batch: false, resumeBatch: null, runKind: 'benchmark_probe' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') opts.dryRun = true;
@@ -59,6 +59,9 @@ function parseArgs(argv) {
     else if (a === '--decision-type') opts.decisionTypes.push(argv[++i]);
     else if (a === '--slug') opts.slugs.push(argv[++i]);
     else if (a === '--label') opts.labels.push(argv[++i]);
+    // --run-kind isolates A/B runs into a separate bucket so a candidate-archetype re-probe never
+    // overwrites the validated 'benchmark_probe' baseline (equipoise-audit.js reads that kind).
+    else if (a === '--run-kind') opts.runKind = argv[++i];
   }
   return opts;
 }
@@ -185,7 +188,8 @@ async function main() {
   // Load + sample the benchmark from the DB (need decision_points.id for the FK).
   const all = await sql`
     SELECT id, slug, title, decision_type, expected_equipoise,
-           canonical_question, option_a_label, option_b_label
+           canonical_question, option_a_label, option_b_label,
+           is_operative, is_pediatric
     FROM decision_points
     WHERE is_active = true
     ORDER BY id
@@ -241,7 +245,7 @@ async function main() {
         verdict: res.verdict,
         optionALabel: dp.option_a_label,
         optionBLabel: dp.option_b_label,
-        runKind: 'benchmark_probe',
+        runKind: opts.runKind,
         runIndex: res.runIndex,
         splitSummary: res.splitSummary,
         positions: res.positions,
@@ -307,7 +311,7 @@ async function main() {
         verdict,
         optionALabel: dp.option_a_label,
         optionBLabel: dp.option_b_label,
-        runKind: 'benchmark_probe',
+        runKind: opts.runKind,
         runIndex,
         splitSummary,
         positions,

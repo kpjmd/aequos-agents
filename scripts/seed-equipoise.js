@@ -31,6 +31,9 @@ const modelVersions = JSON.parse(
 const absoluteIndications = JSON.parse(
   readFileSync(join(__dirname, '..', 'db', 'seeds', 'absolute-indications.json'), 'utf8')
 );
+const pediatricIndications = JSON.parse(
+  readFileSync(join(__dirname, '..', 'db', 'seeds', 'pediatric-indications.json'), 'utf8')
+);
 
 /** Empty string -> null (optional columns); leave everything else intact. */
 const nz = (v) => (v === undefined || v === null || String(v).trim() === '' ? null : v);
@@ -84,6 +87,15 @@ async function main() {
   // Idempotent: sets true for the curated slugs and false for everything else.
   await sql`UPDATE decision_points SET absolute_indication = (slug = ANY(${absoluteIndications}::text[]))`;
   console.log(`✓ absolute_indication: ${absoluteIndications.length} tagged`);
+
+  // ---- pediatric overlay ----
+  // AequOs is directed at ADULTS; pediatric decisions flip on remodeling/growth and displacement
+  // thresholds the adult archetype instrument does not model (Phase B validation, kpjohnsonmd), so
+  // they are tagged and DROPPED from the active adult benchmark (is_active=false). Kept in the DB as a
+  // tagged bonus set, reactivatable if a pediatric instrument is ever built.
+  await sql`UPDATE decision_points SET is_pediatric = (slug = ANY(${pediatricIndications}::text[]))`;
+  await sql`UPDATE decision_points SET is_active = false WHERE is_pediatric = true`;
+  console.log(`✓ is_pediatric: ${pediatricIndications.length} tagged + dropped from active benchmark`);
 
   // ---- report the ground-truth distribution (moat sanity check) ----
   const dist = await sql`

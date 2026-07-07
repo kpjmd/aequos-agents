@@ -52,8 +52,15 @@ export const DEMAND_RISK_ARCHETYPES = [
     key: 'low_demand_high_risk',
     label: 'low-demand, elevated surgical risk',
     case: {
-      activityLevel: 'low functional demand (sedentary, modest functional goals)',
-      surgicalRisk: 'elevated (comorbidities raising operative risk)',
+      // Elevated risk is weighed, not a veto: surgical risk is patient- AND condition-specific, so
+      // "elevated risk" alone is not a contraindication — the consequences of NOT operating on THIS
+      // condition (and its urgency) must be weighed against it. Without this, the panel reflexively
+      // manufactured non-op bailouts on settled-operative cases where non-op is not a durable result
+      // (e.g. a displaced olecranon disrupting the extensor mechanism), false-positiving the
+      // specificity arm. Genuine equipoise is preserved: where non-op remains a reasonable option for
+      // a low-demand patient, the flip still occurs. (Clinical framing: kpjohnsonmd.)
+      activityLevel: 'low functional demand (sedentary, modest functional goals), but still needs a durable, pain-free result and to avoid the sequelae of an inadequately treated injury',
+      surgicalRisk: 'elevated (comorbidities raise operative risk); weigh this risk against the consequences of non-operative management for THIS condition — elevated risk is not by itself a contraindication to surgery',
       priorities: DEMAND_RISK_GOAL,
     },
   },
@@ -228,6 +235,11 @@ export function archetypesForDecisionType(decisionType) {
  * @param {string} decisionType
  * @returns {Array<{name:string, set:Array}>}
  */
+// NOTE: extra args are accepted and ignored for call-site compatibility. Population/nature-specific
+// axes (pediatric remodeling, non-surgical symptom-burden) were prototyped and REVERTED — Phase B
+// validation showed they regressed more than they fixed (peds fracture equipoise flips on
+// displacement/stability, not remodeling; the non-surgical 'refractory' archetype over-escalated
+// settled first-line care). Pending redesign; see memory/equipoise-benchmark-expansion.md.
 export function archetypeGroupsForDecisionType(decisionType) {
   if (decisionType === 'which_operation') {
     return [
