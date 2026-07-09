@@ -1,0 +1,33 @@
+{
+  "id": "dupuytren-mild-observation-vs-fasciectomy",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with mild Dupuytren disease (MCP contracture under 30 degrees and no functional deficit), is observation or fasciectomy preferred?",
+  "options": [
+    "Observation",
+    "Fasciectomy"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with mild Dupuytren disease (MCP contracture under 30 degrees and no functional deficit), is observation or fasciectomy preferred?\nOptions:\n  1. Observation\n  2. Fasciectomy",
+  "label": "settled",
+  "label_rationale": "Intervention is indicated by contracture threshold and functional loss; mild disease is watched.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "dupuytren-mild-observation-vs-fasciectomy",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

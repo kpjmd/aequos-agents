@@ -1,0 +1,40 @@
+{
+  "id": "hamstring-tendon-avulsion-operative-vs-nonoperative",
+  "schema_version": "1.0.0",
+  "decision_point": "In an active adult with a complete 2-tendon proximal hamstring avulsion, is nonoperative rehabilitation or surgical repair preferred?",
+  "options": [
+    "Nonoperative rehabilitation",
+    "Surgical repair"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an active adult with a complete 2-tendon proximal hamstring avulsion, is nonoperative rehabilitation or surgical repair preferred?\nOptions:\n  1. Nonoperative rehabilitation\n  2. Surgical repair",
+  "label": "patient_dependent",
+  "label_rationale": "Surgical repair preserves peak power and reduces hamstring fatigue but carries sciatic nerve and wound risks; nonoperative care is non-invasive but may leave a residual strength deficit.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "hamstring-tendon-avulsion-operative-vs-nonoperative",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Complete proximal hamstring avulsion management lacks a landmark trial or eponymous debate; it remains a practice-variation issue with guideline discordance between conservative and operative approaches, driven by individual patient factors and surgeon preference rather than settled consensus."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

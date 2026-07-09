@@ -1,0 +1,33 @@
+{
+  "id": "unicameral-bone-cyst-asymptomatic-observation-vs-surgery",
+  "schema_version": "1.0.0",
+  "decision_point": "In a patient with an asymptomatic unicameral (simple) bone cyst and no impending pathologic fracture, is observation with optional injection or surgical intervention preferred?",
+  "options": [
+    "Observation with optional aspiration or injection",
+    "Surgical intervention"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a patient with an asymptomatic unicameral (simple) bone cyst and no impending pathologic fracture, is observation with optional injection or surgical intervention preferred?\nOptions:\n  1. Observation with optional aspiration or injection\n  2. Surgical intervention",
+  "label": "settled",
+  "label_rationale": "Asymptomatic cysts are monitored; impending fracture is what drives intervention.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "unicameral-bone-cyst-asymptomatic-observation-vs-surgery",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "shoulder",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "id": "olecranon-bursitis-nonseptic-aspiration-vs-bursectomy",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with non-septic olecranon bursitis, is conservative management or aspiration or surgical bursectomy preferred?",
+  "options": [
+    "Conservative management or aspiration",
+    "Surgical bursectomy"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with non-septic olecranon bursitis, is conservative management or aspiration or surgical bursectomy preferred?\nOptions:\n  1. Conservative management or aspiration\n  2. Surgical bursectomy",
+  "label": "settled",
+  "label_rationale": "First-line is compression and activity modification with optional aspiration; bursectomy is for refractory or recurrent cases.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "olecranon-bursitis-nonseptic-aspiration-vs-bursectomy",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "elbow",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

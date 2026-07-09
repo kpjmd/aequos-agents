@@ -1,0 +1,33 @@
+{
+  "id": "suspected-soft-tissue-sarcoma-referral-biopsy-vs-unplanned-excision",
+  "schema_version": "1.0.0",
+  "decision_point": "For an adult with a deep, larger than 5 cm, or enlarging soft-tissue mass suspicious for sarcoma, is referral to a sarcoma center for planned core biopsy or local or unplanned excision preferred?",
+  "options": [
+    "Referral for planned core biopsy",
+    "Local or unplanned excision"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: For an adult with a deep, larger than 5 cm, or enlarging soft-tissue mass suspicious for sarcoma, is referral to a sarcoma center for planned core biopsy or local or unplanned excision preferred?\nOptions:\n  1. Referral for planned core biopsy\n  2. Local or unplanned excision",
+  "label": "settled",
+  "label_rationale": "Unplanned excisions compromise limb salvage and outcomes; the guideline pathway is referral for planned biopsy before any resection.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "suspected-soft-tissue-sarcoma-referral-biopsy-vs-unplanned-excision",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "which_intervention",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

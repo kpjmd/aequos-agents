@@ -1,0 +1,33 @@
+{
+  "id": "pediatric-gartland-iii-supracondylar-pinning-vs-cast",
+  "schema_version": "1.0.0",
+  "decision_point": "In a child with a Gartland type III (completely displaced) supracondylar humerus fracture, is closed reduction plus percutaneous pinning or cast immobilization preferred?",
+  "options": [
+    "Reduction plus percutaneous pinning",
+    "Cast immobilization"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a child with a Gartland type III (completely displaced) supracondylar humerus fracture, is closed reduction plus percutaneous pinning or cast immobilization preferred?\nOptions:\n  1. Reduction plus percutaneous pinning\n  2. Cast immobilization",
+  "label": "settled",
+  "label_rationale": "Displaced type III fractures require reduction and fixation; the type II variant is less clear-cut.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "pediatric-gartland-iii-supracondylar-pinning-vs-cast",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "elbow",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": true
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

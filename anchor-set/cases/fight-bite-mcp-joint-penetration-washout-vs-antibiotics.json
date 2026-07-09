@@ -1,0 +1,33 @@
+{
+  "id": "fight-bite-mcp-joint-penetration-washout-vs-antibiotics",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a clenched-fist fight-bite injury and confirmed MCP joint penetration, is surgical exploration and washout plus antibiotics or oral antibiotics alone preferred?",
+  "options": [
+    "Surgical washout plus antibiotics",
+    "Oral antibiotics alone"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a clenched-fist fight-bite injury and confirmed MCP joint penetration, is surgical exploration and washout plus antibiotics or oral antibiotics alone preferred?\nOptions:\n  1. Surgical washout plus antibiotics\n  2. Oral antibiotics alone",
+  "label": "settled",
+  "label_rationale": "Joint-penetrating human bites seed the joint; washout is standard to prevent septic arthritis.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "fight-bite-mcp-joint-penetration-washout-vs-antibiotics",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

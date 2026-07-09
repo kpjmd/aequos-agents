@@ -1,0 +1,40 @@
+{
+  "id": "knee-oa-young-hto-vs-uka",
+  "schema_version": "1.0.0",
+  "decision_point": "In a younger patient with isolated unicompartmental knee OA and malalignment, is high tibial osteotomy or unicompartmental arthroplasty preferred?",
+  "options": [
+    "High tibial osteotomy",
+    "Unicompartmental arthroplasty"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a younger patient with isolated unicompartmental knee OA and malalignment, is high tibial osteotomy or unicompartmental arthroplasty preferred?\nOptions:\n  1. High tibial osteotomy\n  2. Unicompartmental arthroplasty",
+  "label": "patient_dependent",
+  "label_rationale": "Both are defensible; the choice depends on age, activity, alignment, and surgeon experience, with genuine practice variation.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "knee-oa-young-hto-vs-uka",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Both HTO and UKA are defensible options for younger patients with unicompartmental OA and malalignment, with genuine practice variation driven by surgeon experience and patient-specific factors (age, activity level, alignment severity) rather than a famous landmark debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: HTO (joint-preserving realignment) and UKA (partial replacement) require different anatomy/compliance profiles; not interchangeable. | Claude second opinion: Agree. ACL status, alignment severity, and activity level are hard gating criteria between a realignment procedure and a partial replacement -- not interchangeable."
+    }
+  ]
+}

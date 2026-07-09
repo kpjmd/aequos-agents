@@ -1,0 +1,40 @@
+{
+  "id": "periprosthetic-femur-fracture-vancouver-b1-orif-vs-revision",
+  "schema_version": "1.0.0",
+  "decision_point": "In a patient with a Vancouver Type B1 periprosthetic femur fracture (stable stem), is locking plate ORIF or stem revision arthroplasty preferred?",
+  "options": [
+    "Locking plate ORIF",
+    "Stem revision arthroplasty"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a patient with a Vancouver Type B1 periprosthetic femur fracture (stable stem), is locking plate ORIF or stem revision arthroplasty preferred?\nOptions:\n  1. Locking plate ORIF\n  2. Stem revision arthroplasty",
+  "label": "evidence_split",
+  "label_rationale": "ORIF vs revision hinges on confirmed stem stability: a truly stable B1 stem favors plate ORIF, but stem fixation is often uncertain and occult B2 features shift the choice to revision, making it genuinely contested.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "periprosthetic-femur-fracture-vancouver-b1-orif-vs-revision",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "md_adjudication",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "which-option label stratum via deterministic"
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

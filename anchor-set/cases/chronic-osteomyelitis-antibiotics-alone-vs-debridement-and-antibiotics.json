@@ -1,0 +1,40 @@
+{
+  "id": "chronic-osteomyelitis-antibiotics-alone-vs-debridement-and-antibiotics",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with chronic, localized long-bone osteomyelitis, is long-term antibiotics alone or surgical debridement with antibiotics preferred?",
+  "options": [
+    "Long-term antibiotics alone",
+    "Surgical debridement and antibiotics"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with chronic, localized long-bone osteomyelitis, is long-term antibiotics alone or surgical debridement with antibiotics preferred?\nOptions:\n  1. Long-term antibiotics alone\n  2. Surgical debridement and antibiotics",
+  "label": "settled",
+  "label_rationale": "Surgical debridement of necrotic bone is standard for cure, but long-term suppressive antibiotics alone are a reasonable option in frail or nonambulatory patients and poor surgical candidates, so the choice is contested.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "chronic-osteomyelitis-antibiotics-alone-vs-debridement-and-antibiotics",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "md_adjudication",
+    "legacy_body_region": "lower_leg",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "stratum via deterministic"
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Source control (debridement) plus antibiotics is the established standard for localized chronic long-bone osteomyelitis; antibiotics alone is reserved for non-surgical candidates. Remove from contested list. | Claude second opinion: Agree. Source control plus antibiotics is textbook standard for localized disease; antibiotics-alone is a fallback for non-surgical candidates, not a coequal option."
+    }
+  ]
+}

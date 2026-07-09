@@ -1,0 +1,33 @@
+{
+  "id": "septic-native-joint",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with an acute septic native joint, is urgent surgical drainage or antibiotics-alone management preferred?",
+  "options": [
+    "Antibiotics alone",
+    "Urgent surgical drainage"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with an acute septic native joint, is urgent surgical drainage or antibiotics-alone management preferred?\nOptions:\n  1. Antibiotics alone\n  2. Urgent surgical drainage",
+  "label": "settled",
+  "label_rationale": "Urgent surgical drainage plus antibiotics is standard of care; delay risks rapid joint destruction.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "septic-native-joint",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

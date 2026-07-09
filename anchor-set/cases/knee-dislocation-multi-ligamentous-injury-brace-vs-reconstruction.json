@@ -1,0 +1,40 @@
+{
+  "id": "knee-dislocation-multi-ligamentous-injury-brace-vs-reconstruction",
+  "schema_version": "1.0.0",
+  "decision_point": "In an active adult after an acute knee dislocation with multi-ligament instability, is simple knee brace immobilization or surgical reconstruction preferred?",
+  "options": [
+    "Knee brace immobilization",
+    "Surgical multi-ligament reconstruction"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an active adult after an acute knee dislocation with multi-ligament instability, is simple knee brace immobilization or surgical reconstruction preferred?\nOptions:\n  1. Knee brace immobilization\n  2. Surgical multi-ligament reconstruction",
+  "label": "settled",
+  "label_rationale": "Reconstruction restores kinematics in most, but operative-vs-nonoperative management and timing remain genuinely debated, and bracing has a role in low-demand patients, so the choice is contested.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "knee-dislocation-multi-ligamentous-injury-brace-vs-reconstruction",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "md_adjudication",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "stratum via deterministic"
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Surgical reconstruction is the accepted standard for multi-ligament knee instability in an active adult; bracing alone is not a genuine competing standard. Remove from contested list. | Claude second opinion: Agree. Surgical reconstruction is the accepted standard for an active adult with multi-ligament instability."
+    }
+  ]
+}

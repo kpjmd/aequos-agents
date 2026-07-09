@@ -1,0 +1,40 @@
+{
+  "id": "carpal-tunnel-endoscopic-vs-open-release",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with severe carpal tunnel syndrome, is endoscopic or open surgical release preferred?",
+  "options": [
+    "Open carpal tunnel release",
+    "Endoscopic carpal tunnel release"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with severe carpal tunnel syndrome, is endoscopic or open surgical release preferred?\nOptions:\n  1. Open carpal tunnel release\n  2. Endoscopic carpal tunnel release",
+  "label": "equivalent_options",
+  "label_rationale": "Endoscopic release offers faster early recovery and less scar tenderness, but carries a slightly higher risk of transient nerve injury and incomplete transverse ligament release compared to open.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "carpal-tunnel-endoscopic-vs-open-release",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Both endoscopic and open carpal tunnel release have robust evidence supporting their use with different risk-benefit profiles (faster recovery vs. lower complication risk), creating genuine literature conflict on which is superior without a clear consensus winner."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: High-quality meta-analyses show equivalent 3-6mo outcomes; genuinely interchangeable, surgeon-preference driven. | Claude second opinion: Agree. Meta-analytic equivalence by 3-6 months is well established; remaining variation is training/equipment, which is the definition of quietly-contested equivalent options."
+    }
+  ]
+}

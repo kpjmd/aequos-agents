@@ -1,0 +1,40 @@
+{
+  "id": "developmental-dysplasia-hip-closed-vs-open-reduction",
+  "schema_version": "1.0.0",
+  "decision_point": "In an infant with developmental dysplasia of the hip failing bracing, is closed reduction or open surgical reduction preferred?",
+  "options": [
+    "Closed manual reduction",
+    "Open surgical reduction"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an infant with developmental dysplasia of the hip failing bracing, is closed reduction or open surgical reduction preferred?\nOptions:\n  1. Closed manual reduction\n  2. Open surgical reduction",
+  "label": "patient_dependent",
+  "label_rationale": "Closed reduction under anesthesia is less invasive but has higher failure and osteonecrosis rates in select patterns; open reduction provides definitive clearance but carries surgical morbidity.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "developmental-dysplasia-hip-closed-vs-open-reduction",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — DDH management after failed bracing involves genuine trade-offs between invasiveness and durability—closed reduction risks higher osteonecrosis and redislocation in certain patterns (e.g., older age, high dislocation), while open reduction ensures anatomic reduction but adds surgical morbidity; the literature shows outcome variation by patient factors rather than consensus superiority of one approach."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Age, femoral head position, and intra-articular obstacles (limbus/pulvinar) directly gate closed vs open reduction. | Claude second opinion: Agree. Age and imaging findings (limbus, pulvinar interposition) are the actual decision drivers in standard teaching."
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "id": "cauda-equina-syndrome",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with acute cauda equina syndrome, is emergent surgical decompression or non-urgent management preferred?",
+  "options": [
+    "Non-urgent management",
+    "Emergent surgical decompression"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with acute cauda equina syndrome, is emergent surgical decompression or non-urgent management preferred?\nOptions:\n  1. Non-urgent management\n  2. Emergent surgical decompression",
+  "label": "settled",
+  "label_rationale": "Emergent decompression is standard; delay risks permanent bladder, bowel, and neurologic injury.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "cauda-equina-syndrome",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "timing_of_surgery",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

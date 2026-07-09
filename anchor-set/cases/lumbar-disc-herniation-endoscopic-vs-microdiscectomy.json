@@ -1,0 +1,40 @@
+{
+  "id": "lumbar-disc-herniation-endoscopic-vs-microdiscectomy",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with symptomatic lumbar disc herniation, is endoscopic discectomy or standard open microdiscectomy preferred?",
+  "options": [
+    "Open microdiscectomy",
+    "Endoscopic discectomy"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with symptomatic lumbar disc herniation, is endoscopic discectomy or standard open microdiscectomy preferred?\nOptions:\n  1. Open microdiscectomy\n  2. Endoscopic discectomy",
+  "label": "equivalent_options",
+  "label_rationale": "Endoscopic approaches minimize paraspinal muscle dissection and shorten hospital recovery, but have a steep learning curve and similar long-term outcomes to open microdiscectomy.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "lumbar-disc-herniation-endoscopic-vs-microdiscectomy",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Both endoscopic and open microdiscectomy achieve similar long-term clinical outcomes for symptomatic lumbar disc herniation, with trade-offs between minimally invasive recovery benefits and established technique reliability, representing genuine equivalence rather than a famous debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

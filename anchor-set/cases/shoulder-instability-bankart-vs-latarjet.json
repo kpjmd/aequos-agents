@@ -1,0 +1,40 @@
+{
+  "id": "shoulder-instability-bankart-vs-latarjet",
+  "schema_version": "1.0.0",
+  "decision_point": "In a patient with recurrent anterior shoulder instability and minimal bone loss, is arthroscopic soft-tissue Bankart repair or an open Latarjet coracoid transfer preferred?",
+  "options": [
+    "Arthroscopic Bankart repair",
+    "Open Latarjet procedure"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a patient with recurrent anterior shoulder instability and minimal bone loss, is arthroscopic soft-tissue Bankart repair or an open Latarjet coracoid transfer preferred?\nOptions:\n  1. Arthroscopic Bankart repair\n  2. Open Latarjet procedure",
+  "label": "patient_dependent",
+  "label_rationale": "Latarjet dramatically reduces the recurrence rate, especially in high-risk patients, but is technically demanding with serious nerve and joint-overclosure risks compared to arthroscopic repair.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "shoulder-instability-bankart-vs-latarjet",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "shoulder",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — This is a famous debate in shoulder surgery with landmark trials (e.g., BANKART-LATARJET studies) and named eponymous techniques showing conflicting evidence: Latarjet offers superior recurrence prevention but carries higher morbidity, while arthroscopic Bankart is less invasive but has higher failure rates in certain populations, creating genuine equipoise on which approach is superior for the minimal bone-loss scenario."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Modern consensus (ISIS score) makes this patient-risk-stratified rather than a pure evidence conflict. | Claude second opinion: Agree. The ISIS-based algorithm is widely taught and genuinely patient-risk-stratified; it's also a legitimately loud, editorialized podium debate."
+    }
+  ]
+}

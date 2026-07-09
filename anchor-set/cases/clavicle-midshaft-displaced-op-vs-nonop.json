@@ -1,0 +1,40 @@
+{
+  "id": "clavicle-midshaft-displaced-op-vs-nonop",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a displaced midshaft clavicle fracture, is nonoperative management or open reduction and internal fixation preferred?",
+  "options": [
+    "Nonoperative management",
+    "Open reduction internal fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a displaced midshaft clavicle fracture, is nonoperative management or open reduction and internal fixation preferred?\nOptions:\n  1. Nonoperative management\n  2. Open reduction internal fixation",
+  "label": "evidence_split",
+  "label_rationale": "Surgery lowers nonunion and symptomatic malunion but adds operative risk; benefit concentrates with greater shortening or displacement, and thresholds are debated.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "clavicle-midshaft-displaced-op-vs-nonop",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "shoulder",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Displaced midshaft clavicle fracture management is a famous, landmark-trial-driven debate (CREST, UK trials) with well-publicized shifts in practice toward operative fixation, making it a named and widely editorialized controversy in orthopedic literature."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: COTS vs UK Clavicle trial / meta-analyses reach opposing conclusions on whether fixation's nonunion benefit justifies its complication cost — genuine evidence split. | Claude second opinion: Agree. COTS and the UK Clavicle trial/meta-analyses genuinely point in different directions on whether the nonunion benefit justifies the complication cost."
+    }
+  ]
+}

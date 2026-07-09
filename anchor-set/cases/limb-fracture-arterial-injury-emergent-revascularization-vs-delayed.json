@@ -1,0 +1,33 @@
+{
+  "id": "limb-fracture-arterial-injury-emergent-revascularization-vs-delayed",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a limb fracture and associated arterial injury or critical ischemia, is emergent revascularization plus stabilization or delayed management preferred?",
+  "options": [
+    "Emergent revascularization plus stabilization",
+    "Delayed management"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a limb fracture and associated arterial injury or critical ischemia, is emergent revascularization plus stabilization or delayed management preferred?\nOptions:\n  1. Emergent revascularization plus stabilization\n  2. Delayed management",
+  "label": "settled",
+  "label_rationale": "The warm-ischemia window governs limb salvage, so emergent revascularization is mandatory.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "limb-fracture-arterial-injury-emergent-revascularization-vs-delayed",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "timing_of_surgery",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "lower_leg",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

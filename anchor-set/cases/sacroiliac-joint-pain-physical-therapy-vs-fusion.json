@@ -1,0 +1,33 @@
+{
+  "id": "sacroiliac-joint-pain-physical-therapy-vs-fusion",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with chronic, uncomplicated sacroiliac joint pain, is structured physical therapy or surgical SI joint fusion preferred?",
+  "options": [
+    "Structured physical therapy",
+    "Surgical SI joint fusion"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with chronic, uncomplicated sacroiliac joint pain, is structured physical therapy or surgical SI joint fusion preferred?\nOptions:\n  1. Structured physical therapy\n  2. Surgical SI joint fusion",
+  "label": "settled",
+  "label_rationale": "Guidelines and clinical trials support structured core, pelvic floor, and hip stabilization exercises; surgical fusion is not indicated for uncomplicated joint pain.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "sacroiliac-joint-pain-physical-therapy-vs-fusion",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

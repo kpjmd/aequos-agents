@@ -1,0 +1,33 @@
+{
+  "id": "ankle-fracture-stable-weberb-op-vs-nonop",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with an isolated minimally displaced stable Weber B lateral malleolus fracture, is nonoperative management or ORIF preferred?",
+  "options": [
+    "Nonoperative management",
+    "Open reduction internal fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with an isolated minimally displaced stable Weber B lateral malleolus fracture, is nonoperative management or ORIF preferred?\nOptions:\n  1. Nonoperative management\n  2. Open reduction internal fixation",
+  "label": "settled",
+  "label_rationale": "Isolated stable minimally-displaced Weber B fractures heal reliably with functional nonoperative care; ORIF is reserved for instability or displacement on weightbearing/stress assessment. Nonoperative-first is the settled standard (MD adjudication 2026-06-27; panel reproducibly converged at N=3).",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "ankle-fracture-stable-weberb-op-vs-nonop",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "md_adjudication",
+    "legacy_body_region": "foot_ankle",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

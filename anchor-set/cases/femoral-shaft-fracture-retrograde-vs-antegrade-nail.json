@@ -1,0 +1,40 @@
+{
+  "id": "femoral-shaft-fracture-retrograde-vs-antegrade-nail",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a femoral shaft fracture, is retrograde or antegrade intramedullary nailing preferred?",
+  "options": [
+    "Antegrade nailing",
+    "Retrograde nailing"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a femoral shaft fracture, is retrograde or antegrade intramedullary nailing preferred?\nOptions:\n  1. Antegrade nailing\n  2. Retrograde nailing",
+  "label": "equivalent_options",
+  "label_rationale": "Both techniques achieve high union rates; antegrade nailing risks hip pain and heterotopic ossification, while retrograde nailing risks knee pain and intra-articular irritation.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "femoral-shaft-fracture-retrograde-vs-antegrade-nail",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Both antegrade and retrograde intramedullary nailing achieve comparable union rates with different morbidity profiles (hip vs. knee complications); no landmark trial has definitively established superiority, and technique selection depends on patient-specific factors rather than evidence of one being objectively better."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

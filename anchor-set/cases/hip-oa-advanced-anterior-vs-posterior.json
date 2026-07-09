@@ -1,0 +1,40 @@
+{
+  "id": "hip-oa-advanced-anterior-vs-posterior",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult undergoing total hip arthroplasty for hip osteoarthritis, is the direct anterior or posterior approach preferred?",
+  "options": [
+    "Posterior approach",
+    "Direct anterior approach"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult undergoing total hip arthroplasty for hip osteoarthritis, is the direct anterior or posterior approach preferred?\nOptions:\n  1. Posterior approach\n  2. Direct anterior approach",
+  "label": "equivalent_options",
+  "label_rationale": "Direct anterior approach may reduce early dislocation rates and speed early recovery, but posterior approach offers excellent visualization, lower fracture rates, and similar mid-term outcomes.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "hip-oa-advanced-anterior-vs-posterior",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — This is a well-known, actively debated controversy in hip arthroplasty with published landmark trials and strong advocates on both sides; the literature shows genuine trade-offs (anterior: lower early dislocation and faster recovery vs. posterior: better visualization, lower fracture rates, equivalent mid-term outcomes) without clear superiority of either approach."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Mid/long-term RCT and registry data converge (not split); it's a procedural-preference/editorialized debate over equivalent outcomes. | Claude second opinion: Agree. Mid/long-term registries and RCTs converge on equivalence; the noise is almost entirely marketing/training-driven, which is what editorialized + equivalent_options is meant to capture."
+    }
+  ]
+}

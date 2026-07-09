@@ -1,0 +1,40 @@
+{
+  "id": "adult-spinal-deformity-long-fusion-to-l5-vs-sacrum",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult undergoing long instrumented posterior spinal fusion for deformity, is terminating the construct at L5 or extending to the sacrum/pelvis preferred?",
+  "options": [
+    "Termination of fusion at L5",
+    "Extension of fusion to the sacrum"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult undergoing long instrumented posterior spinal fusion for deformity, is terminating the construct at L5 or extending to the sacrum/pelvis preferred?\nOptions:\n  1. Termination of fusion at L5\n  2. Extension of fusion to the sacrum",
+  "label": "patient_dependent",
+  "label_rationale": "Terminating at L5 preserves lumbosacral motion and reduces surgical time, but carries high rates of subsequent L5-S1 breakdown; extending to the pelvis protects L5-S1 but adds massive surgical morbidity.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "adult-spinal-deformity-long-fusion-to-l5-vs-sacrum",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — This represents a genuine trade-off between preserving lumbosacral motion (L5 termination) versus preventing adjacent-segment degeneration (sacral extension), with conflicting literature on long-term outcomes and no consensus guideline, making it a quietly contested decision without a famous eponymous debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Loud SRS podium debate (not quiet); decision tracks L5-S1 disc health, fractional curve, sagittal balance, bone density. | Claude second opinion: Agree. SRS meetings feature this constantly, and L5-S1 disc/curve/bone-density findings are concrete gating factors."
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "id": "knee-oa-exercise-vs-viscosupplementation",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with symptomatic knee osteoarthritis, is supervised exercise and physical therapy or intra-articular hyaluronic acid the preferred intervention?",
+  "options": [
+    "Supervised exercise",
+    "Intra-articular hyaluronic acid"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with symptomatic knee osteoarthritis, is supervised exercise and physical therapy or intra-articular hyaluronic acid the preferred intervention?\nOptions:\n  1. Supervised exercise\n  2. Intra-articular hyaluronic acid",
+  "label": "settled",
+  "label_rationale": "Exercise is a core recommended treatment, whereas hyaluronic acid is recommended against by AAOS and not endorsed by OARSI.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "knee-oa-exercise-vs-viscosupplementation",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "which_intervention",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": false,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

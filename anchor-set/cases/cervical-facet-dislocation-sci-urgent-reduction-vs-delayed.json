@@ -1,0 +1,33 @@
+{
+  "id": "cervical-facet-dislocation-sci-urgent-reduction-vs-delayed",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a cervical facet dislocation and spinal cord injury, is urgent reduction and decompression or delayed intervention preferred?",
+  "options": [
+    "Urgent reduction and decompression",
+    "Delayed intervention"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a cervical facet dislocation and spinal cord injury, is urgent reduction and decompression or delayed intervention preferred?\nOptions:\n  1. Urgent reduction and decompression\n  2. Delayed intervention",
+  "label": "settled",
+  "label_rationale": "Earlier decompression is associated with better neurologic recovery.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "cervical-facet-dislocation-sci-urgent-reduction-vs-delayed",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "timing_of_surgery",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "id": "orthopedic-major-surgery-txa-vs-no-txa",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult undergoing major reconstructive orthopedic or trauma surgery, is prophylactic intravenous Tranexamic Acid or standard care (no TXA) preferred to reduce blood loss?",
+  "options": [
+    "Standard care (no TXA)",
+    "Prophylactic Tranexamic Acid"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult undergoing major reconstructive orthopedic or trauma surgery, is prophylactic intravenous Tranexamic Acid or standard care (no TXA) preferred to reduce blood loss?\nOptions:\n  1. Standard care (no TXA)\n  2. Prophylactic Tranexamic Acid",
+  "label": "settled",
+  "label_rationale": "Evidenced by CRASH-2 and clinical guidelines, prophylactic intravenous TXA significantly reduces blood loss and transfusion requirements without elevating thromboembolic risks.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "orthopedic-major-surgery-txa-vs-no-txa",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "which_intervention",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "lower_leg",
+    "legacy_is_operative": false,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

@@ -17,7 +17,7 @@ export default {
     'html'
   ],
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
-  moduleFileExtensions: ['js', 'json'],
+  moduleFileExtensions: ['js', 'mjs', 'json'],
   moduleNameMapper: {
     '^@coinbase/agentkit$': '<rootDir>/tests/__mocks__/@coinbase/agentkit.js',
     '^@coinbase/agentkit-langchain$': '<rootDir>/tests/__mocks__/@coinbase/agentkit-langchain.js',

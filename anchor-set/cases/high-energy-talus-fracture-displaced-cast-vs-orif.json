@@ -1,0 +1,40 @@
+{
+  "id": "high-energy-talus-fracture-displaced-cast-vs-orif",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a displaced talar neck fracture (Hawkins Type II-IV), is closed cast immobilization or ORIF preferred?",
+  "options": [
+    "Closed cast immobilization",
+    "Open reduction internal fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a displaced talar neck fracture (Hawkins Type II-IV), is closed cast immobilization or ORIF preferred?\nOptions:\n  1. Closed cast immobilization\n  2. Open reduction internal fixation",
+  "label": "settled",
+  "label_rationale": "Anatomic ORIF is standard to limit AVN/malunion, but closed management has a role in frail or nonambulatory patients for whom operative risk outweighs the functional benefit, so the choice is patient-dependent.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "high-energy-talus-fracture-displaced-cast-vs-orif",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "md_adjudication",
+    "legacy_body_region": "foot_ankle",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Displaced talar neck fractures have a clear standard-of-care preference for ORIF to prevent AVN and malunion, but closed management remains a legitimate option in select patient populations (frail, nonambulatory), making this a guideline-concordant but clinically nuanced decision without a famous public debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: ORIF is the standard of care for displaced talar neck fractures to prevent AVN/malunion; closed management is a narrow exception, not genuine equipoise. Remove from contested list. | Claude second opinion: Agree. ORIF to prevent AVN/malunion is the standard of care for displaced talar neck fractures in ambulatory patients."
+    }
+  ]
+}

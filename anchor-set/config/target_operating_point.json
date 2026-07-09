@@ -1,0 +1,5 @@
+{
+  "target_sensitivity": 0.85,
+  "min_specificity": 0.80,
+  "notes": "Recalibration reads these. They are TARGETS the release gate must hit on the anchor set, not thresholds. Every threshold constant (the retired 0.78 mean-confidence cutoff, archetype minModalSupport, etc.) is DERIVED output produced by /recalibration/ and stamped with (model_version, anchor_set_version) — never declared in detector code. target_sensitivity is deliberately below the historical 0.93 point estimate: the historical number is contaminated by topic-recognition (see /validation/ stratum-gap + cue-injection), so the durable target is the behaviorally-defensible operating point, revisited once the validation experiments quantify the recognition share. sensitivity = should-contest classes {patient_dependent, evidence_split}; specificity = settled non-absolute; absolute-indication cases are segmented, never scored as equipoise. equivalent_options is NOT scored for sensitivity (a forced pick looks confident) — it is tracked separately via the choice-lability feature."
+}

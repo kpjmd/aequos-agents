@@ -1,0 +1,33 @@
+{
+  "id": "displaced-femoral-neck-older-arthroplasty-vs-fixation",
+  "schema_version": "1.0.0",
+  "decision_point": "In an older adult with a displaced intracapsular femoral neck fracture, is arthroplasty or internal fixation preferred?",
+  "options": [
+    "Arthroplasty",
+    "Internal fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an older adult with a displaced intracapsular femoral neck fracture, is arthroplasty or internal fixation preferred?\nOptions:\n  1. Arthroplasty\n  2. Internal fixation",
+  "label": "settled",
+  "label_rationale": "Fixation of displaced necks has high failure and reoperation in this group; the THA-versus-hemiarthroplasty choice within arthroplasty is the contested one.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "displaced-femoral-neck-older-arthroplasty-vs-fixation",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

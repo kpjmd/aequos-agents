@@ -1,0 +1,33 @@
+{
+  "id": "locked-buckethandle-meniscus-tear-surgery-vs-conservative",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a mechanically locked knee from a displaced bucket-handle meniscus tear, is arthroscopic surgery or conservative management preferred?",
+  "options": [
+    "Arthroscopic surgery (reduction or repair)",
+    "Conservative management"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a mechanically locked knee from a displaced bucket-handle meniscus tear, is arthroscopic surgery or conservative management preferred?\nOptions:\n  1. Arthroscopic surgery (reduction or repair)\n  2. Conservative management",
+  "label": "settled",
+  "label_rationale": "A genuinely locked knee from a displaced fragment requires surgical reduction, unlike degenerative meniscal tears.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "locked-buckethandle-meniscus-tear-surgery-vs-conservative",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

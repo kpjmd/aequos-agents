@@ -1,0 +1,33 @@
+{
+  "id": "acute-mechanical-low-back-pain",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with acute uncomplicated mechanical low back pain and no red flags, is conservative management or surgical evaluation preferred?",
+  "options": [
+    "Conservative management",
+    "Surgical evaluation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with acute uncomplicated mechanical low back pain and no red flags, is conservative management or surgical evaluation preferred?\nOptions:\n  1. Conservative management\n  2. Surgical evaluation",
+  "label": "settled",
+  "label_rationale": "Guidelines uniformly support conservative care; surgery is not indicated without specific structural pathology.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "acute-mechanical-low-back-pain",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": false,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

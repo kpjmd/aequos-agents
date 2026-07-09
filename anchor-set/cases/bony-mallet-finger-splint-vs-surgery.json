@@ -1,0 +1,33 @@
+{
+  "id": "bony-mallet-finger-splint-vs-surgery",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a closed bony mallet finger involving less than one-third of the articular surface and no DIP subluxation, is extension splinting or surgical fixation preferred?",
+  "options": [
+    "Extension splinting",
+    "Surgical fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a closed bony mallet finger involving less than one-third of the articular surface and no DIP subluxation, is extension splinting or surgical fixation preferred?\nOptions:\n  1. Extension splinting\n  2. Surgical fixation",
+  "label": "settled",
+  "label_rationale": "Meta-analyses show no superiority of surgery; splinting is first-line, with surgery reserved for large fragments with volar subluxation or failed reduction.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "bony-mallet-finger-splint-vs-surgery",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

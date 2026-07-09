@@ -1,0 +1,40 @@
+{
+  "id": "osteoarthritis-knee-prp-vs-hyaluronic-acid",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with mild-to-moderate symptomatic knee osteoarthritis, is intra-articular PRP or hyaluronic acid injection preferred?",
+  "options": [
+    "Hyaluronic acid injection",
+    "Platelet-rich plasma injection"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with mild-to-moderate symptomatic knee osteoarthritis, is intra-articular PRP or hyaluronic acid injection preferred?\nOptions:\n  1. Hyaluronic acid injection\n  2. Platelet-rich plasma injection",
+  "label": "evidence_split",
+  "label_rationale": "Clinical trials show variable, highly contested efficacy; some meta-analyses suggest PRP provides superior anti-inflammatory symptom relief, but standard of care remains highly variable.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "osteoarthritis-knee-prp-vs-hyaluronic-acid",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_intervention",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": false,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Clinical trials show conflicting efficacy data with variable outcomes between PRP and hyaluronic acid, no clear consensus winner, and highly variable practice patterns without a famous landmark debate driving the controversy."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Data conflict is real (keep evidence_split), but this is a loud, heavily commercialized/cash-pay debate, not quiet — stratum only. | Claude second opinion: Agree. This is a heavily marketed, cash-pay, actively conflicting-data space -- editorialized fits better than quiet."
+    }
+  ]
+}

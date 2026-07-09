@@ -1,0 +1,33 @@
+{
+  "id": "pediatric-femur-fracture-open-traction-vs-debridement-stabilization",
+  "schema_version": "1.0.0",
+  "decision_point": "In a child with an open femoral shaft fracture, is skeletal traction alone or emergent surgical debridement with stabilization preferred?",
+  "options": [
+    "Skeletal traction alone",
+    "Emergent surgical debridement and fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a child with an open femoral shaft fracture, is skeletal traction alone or emergent surgical debridement with stabilization preferred?\nOptions:\n  1. Skeletal traction alone\n  2. Emergent surgical debridement and fixation",
+  "label": "settled",
+  "label_rationale": "Open long-bone fractures require immediate surgical debridement and stabilization to prevent bone infection and nonunion, regardless of patient age.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "pediatric-femur-fracture-open-traction-vs-debridement-stabilization",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": true
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

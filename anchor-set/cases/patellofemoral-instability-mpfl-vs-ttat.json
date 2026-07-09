@@ -1,0 +1,40 @@
+{
+  "id": "patellofemoral-instability-mpfl-vs-ttat",
+  "schema_version": "1.0.0",
+  "decision_point": "In a patient with recurrent patellar dislocation and borderline TT-TG distance, is isolated MPFL reconstruction or combined MPFL with tibial tubercle osteotomy preferred?",
+  "options": [
+    "Isolated MPFL reconstruction",
+    "Combined MPFL and tubercle osteotomy"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a patient with recurrent patellar dislocation and borderline TT-TG distance, is isolated MPFL reconstruction or combined MPFL with tibial tubercle osteotomy preferred?\nOptions:\n  1. Isolated MPFL reconstruction\n  2. Combined MPFL and tubercle osteotomy",
+  "label": "patient_dependent",
+  "label_rationale": "Combined surgery directly corrects bony malalignment but is more invasive; isolated soft-tissue reconstruction is less invasive but may under-address biomechanical drivers.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "patellofemoral-instability-mpfl-vs-ttat",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — This represents genuine literature conflict on whether borderline TT-TG malalignment requires concurrent correction versus soft-tissue stabilization alone, with no landmark trial or eponymous technique defining the debate, yet substantial practice variation exists across high-volume centers."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Decision hinges on the patient's broader alignment picture (trochlear dysplasia, patella alta, Q-angle), not a raw literature conflict. | Claude second opinion: Agree. TT-TG is genuinely borderline by definition here, and trochlear dysplasia/patella alta/Q-angle are the real decision drivers, not an unresolved literature fight."
+    }
+  ]
+}

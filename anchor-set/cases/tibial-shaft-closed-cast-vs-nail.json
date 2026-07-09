@@ -1,0 +1,40 @@
+{
+  "id": "tibial-shaft-closed-cast-vs-nail",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a closed tibial shaft fracture, is cast or functional bracing, or intramedullary nailing preferred?",
+  "options": [
+    "Cast or functional bracing",
+    "Intramedullary nailing"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a closed tibial shaft fracture, is cast or functional bracing, or intramedullary nailing preferred?\nOptions:\n  1. Cast or functional bracing\n  2. Intramedullary nailing",
+  "label": "patient_dependent",
+  "label_rationale": "A historic controversy; nailing is favored for displaced or unstable patterns, but acceptable-alignment fractures show practice variation.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "tibial-shaft-closed-cast-vs-nail",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "lower_leg",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Tibial shaft fracture management shows significant practice variation between conservative (cast/bracing) and operative (nailing) approaches for acceptable-alignment patterns, without a famous landmark trial or eponymous debate driving consensus."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

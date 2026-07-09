@@ -1,0 +1,33 @@
+{
+  "id": "thoracolumbar-burst-with-deficit-surgery-vs-nonop",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a thoracolumbar burst fracture and a neurologic deficit, is surgical decompression and stabilization or nonoperative management preferred?",
+  "options": [
+    "Surgery",
+    "Nonoperative management"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a thoracolumbar burst fracture and a neurologic deficit, is surgical decompression and stabilization or nonoperative management preferred?\nOptions:\n  1. Surgery\n  2. Nonoperative management",
+  "label": "settled",
+  "label_rationale": "Neural compression with deficit favors surgery; the neurologically intact version is genuine equipoise.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "thoracolumbar-burst-with-deficit-surgery-vs-nonop",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

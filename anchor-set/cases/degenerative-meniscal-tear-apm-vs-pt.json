@@ -1,0 +1,33 @@
+{
+  "id": "degenerative-meniscal-tear-apm-vs-pt",
+  "schema_version": "1.0.0",
+  "decision_point": "In a middle-aged adult with a degenerative meniscal tear and no true mechanical locking, is physical therapy or arthroscopic partial meniscectomy preferred?",
+  "options": [
+    "Physical therapy",
+    "Arthroscopic partial meniscectomy"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a middle-aged adult with a degenerative meniscal tear and no true mechanical locking, is physical therapy or arthroscopic partial meniscectomy preferred?\nOptions:\n  1. Physical therapy\n  2. Arthroscopic partial meniscectomy",
+  "label": "settled",
+  "label_rationale": "Multiple randomized trials show no benefit of arthroscopic partial meniscectomy over physical therapy absent true mechanical symptoms.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "degenerative-meniscal-tear-apm-vs-pt",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

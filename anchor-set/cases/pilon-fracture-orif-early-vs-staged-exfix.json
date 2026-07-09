@@ -1,0 +1,40 @@
+{
+  "id": "pilon-fracture-orif-early-vs-staged-exfix",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with an acute high-energy distal tibia pilon fracture, is immediate ORIF or staged spanning external fixation with delayed ORIF preferred?",
+  "options": [
+    "Immediate open reduction internal fixation",
+    "Spanning external fixation with delayed ORIF"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with an acute high-energy distal tibia pilon fracture, is immediate ORIF or staged spanning external fixation with delayed ORIF preferred?\nOptions:\n  1. Immediate open reduction internal fixation\n  2. Spanning external fixation with delayed ORIF",
+  "label": "patient_dependent",
+  "label_rationale": "Immediate ORIF secures anatomical reconstruction early but is associated with catastrophic wound breakdown and infection; staged care protects the soft tissue envelope but prolongs hospital stay.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "pilon-fracture-orif-early-vs-staged-exfix",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "timing_of_surgery",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "lower_leg",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — The pilon fracture management strategy (immediate ORIF vs. staged external fixation) is a famous, landmark debate in orthopedic trauma with well-established competing schools of thought based on seminal trials comparing soft-tissue outcomes and infection rates."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: AO-trauma-taught algorithm across high-volume centers, not a public podium war — stratum only; logic (soft-tissue envelope gates timing) is patient-dependent, confirmed. | Claude second opinion: Agree. This is AO-course-taught uniformly across trauma centers; the underlying patient-dependent logic (soft tissue envelope) is sound, it was just mislabeled as editorialized."
+    }
+  ]
+}

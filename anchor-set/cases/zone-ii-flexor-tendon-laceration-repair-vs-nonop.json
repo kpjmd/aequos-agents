@@ -1,0 +1,33 @@
+{
+  "id": "zone-ii-flexor-tendon-laceration-repair-vs-nonop",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a complete zone II FDP flexor tendon laceration, is surgical repair or nonoperative management preferred?",
+  "options": [
+    "Surgical repair",
+    "Nonoperative management"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a complete zone II FDP flexor tendon laceration, is surgical repair or nonoperative management preferred?\nOptions:\n  1. Surgical repair\n  2. Nonoperative management",
+  "label": "settled",
+  "label_rationale": "A divided flexor tendon will not restore active flexion without repair.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "zone-ii-flexor-tendon-laceration-repair-vs-nonop",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

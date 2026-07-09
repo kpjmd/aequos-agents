@@ -1,0 +1,40 @@
+{
+  "id": "tka-cemented-vs-cementless-fixation",
+  "schema_version": "1.0.0",
+  "decision_point": "In an active patient undergoing total knee arthroplasty, is cemented or cementless implant fixation preferred?",
+  "options": [
+    "Cemented implant fixation",
+    "Cementless implant fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an active patient undergoing total knee arthroplasty, is cemented or cementless implant fixation preferred?\nOptions:\n  1. Cemented implant fixation\n  2. Cementless implant fixation",
+  "label": "evidence_split",
+  "label_rationale": "Cemented TKA is the historic gold standard with reliable, long-term survival; cementless TKA utilizes biological ingrowth to preserve bone but has higher component costs and rare early loosening.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "tka-cemented-vs-cementless-fixation",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Cemented TKA remains the gold standard with proven long-term survival, but cementless designs show comparable outcomes in selected active patients with potential bone-preservation benefits, creating genuine literature conflict without a famous public debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Genuine long-term (20yr+) uncertainty remains (keep evidence_split), but this is one of the loudest, most heavily marketed AAHKS/AAOS debates — stratum only. | Claude second opinion: Agree. Real uncertainty remains on 20+ year cementless data, and this is genuinely one of the more heavily marketed AAHKS/AAOS debates -- editorialized fits."
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "massive-rc-tear-irreparable",
+  "schema_version": "1.0.0",
+  "decision_point": "In a patient with a massive irreparable rotator cuff tear, is a joint-preserving reconstruction (debridement/capsular/transfer) or reverse shoulder arthroplasty preferred?",
+  "options": [
+    "Joint-preserving options",
+    "Reverse total shoulder arthroplasty"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a patient with a massive irreparable rotator cuff tear, is a joint-preserving reconstruction (debridement/capsular/transfer) or reverse shoulder arthroplasty preferred?\nOptions:\n  1. Joint-preserving options\n  2. Reverse total shoulder arthroplasty",
+  "label": "patient_dependent",
+  "label_rationale": "A rapidly evolving area; capsular reconstruction, transfers, balloon spacers, and reverse arthroplasty compete without a settled hierarchy.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "massive-rc-tear-irreparable",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "shoulder",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Massive irreparable rotator cuff tears represent a famous, rapidly evolving debate with competing techniques (capsular reconstruction, transfers, balloon spacers, reverse arthroplasty) lacking a settled hierarchy, generating significant literature conflict on which approach yields superior functional outcomes."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Choice is stratified by age and OA status (SCR/tendon transfer <60 no OA vs RSA older/cuff arthropathy), not a raw evidence conflict. | Claude second opinion: Agree. Age-and-arthritis stratification (SCR/tendon transfer <60 without OA vs RSA for older/cuff arthropathy) is standard algorithmic teaching, not an open evidence fight."
+    }
+  ]
+}

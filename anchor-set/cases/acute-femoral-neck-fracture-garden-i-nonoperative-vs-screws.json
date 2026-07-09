@@ -1,0 +1,40 @@
+{
+  "id": "acute-femoral-neck-fracture-garden-i-nonoperative-vs-screws",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with an acute Garden Type I (valgus impacted/incomplete) femoral neck fracture, is nonoperative management or percutaneous pinning preferred?",
+  "options": [
+    "Nonoperative management",
+    "Percutaneous screw pinning"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with an acute Garden Type I (valgus impacted/incomplete) femoral neck fracture, is nonoperative management or percutaneous pinning preferred?\nOptions:\n  1. Nonoperative management\n  2. Percutaneous screw pinning",
+  "label": "patient_dependent",
+  "label_rationale": "Percutaneous pinning prevents secondary displacement/AVN in most, but a truly nondisplaced valgus-impacted fracture in a low-demand or high-risk patient can be managed nonoperatively, so the choice is contested.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "acute-femoral-neck-fracture-garden-i-nonoperative-vs-screws",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "md_adjudication",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "stratum via deterministic"
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

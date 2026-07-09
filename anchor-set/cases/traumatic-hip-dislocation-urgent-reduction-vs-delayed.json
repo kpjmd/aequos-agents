@@ -1,0 +1,33 @@
+{
+  "id": "traumatic-hip-dislocation-urgent-reduction-vs-delayed",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a traumatic native hip dislocation, is urgent reduction (within about 6 hours) or delayed reduction preferred?",
+  "options": [
+    "Urgent reduction",
+    "Delayed reduction"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a traumatic native hip dislocation, is urgent reduction (within about 6 hours) or delayed reduction preferred?\nOptions:\n  1. Urgent reduction\n  2. Delayed reduction",
+  "label": "settled",
+  "label_rationale": "Osteonecrosis risk rises sharply with time to reduction, so urgent reduction is standard.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "traumatic-hip-dislocation-urgent-reduction-vs-delayed",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "timing_of_surgery",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

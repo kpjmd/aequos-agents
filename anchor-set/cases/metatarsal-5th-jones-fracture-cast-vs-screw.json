@@ -1,0 +1,40 @@
+{
+  "id": "metatarsal-5th-jones-fracture-cast-vs-screw",
+  "schema_version": "1.0.0",
+  "decision_point": "In an active adult with an acute Jones fracture (5th metatarsal zone II), is nonoperative non-weightbearing casting or percutaneous screw fixation preferred?",
+  "options": [
+    "Non-weightbearing casting",
+    "Percutaneous screw fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an active adult with an acute Jones fracture (5th metatarsal zone II), is nonoperative non-weightbearing casting or percutaneous screw fixation preferred?\nOptions:\n  1. Non-weightbearing casting\n  2. Percutaneous screw fixation",
+  "label": "patient_dependent",
+  "label_rationale": "Surgery results in faster union and quicker return to activity, particularly in athletes, but carries risk of hardware pain; casting is non-invasive but has higher nonunion rates.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "metatarsal-5th-jones-fracture-cast-vs-screw",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "foot_ankle",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Jones fracture management is a famous debate in orthopedics with landmark studies comparing operative versus nonoperative outcomes, particularly in the athlete population, making it a well-known and frequently discussed controversy."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}
