@@ -9,6 +9,34 @@ import { canonicalize } from '../detector/option-order.js';
 const TOOL_NAME = 'specialist_position';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Transient HTTP statuses worth retrying (gateway/overload/rate-limit); network errors carry no status.
+const TRANSIENT_STATUS = new Set([408, 409, 429, 500, 502, 503, 504, 529]);
+
+/**
+ * Retry a call on transient failures with exponential backoff. Used around batch create/poll/results so
+ * a single Cloudflare 502 or overload doesn't sink (or orphan) a submitted batch. A non-transient error
+ * (4xx auth/validation) throws immediately.
+ * @param {Function} fn
+ * @param {{tries?:number, baseMs?:number, label?:string}} [opts]
+ */
+export async function withRetry(fn, { tries = 5, baseMs = 2000, label = 'request' } = {}) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      const status = e?.status;
+      const transient = status ? TRANSIENT_STATUS.has(status) : true; // no status → network/timeout → transient
+      if (!transient || i === tries - 1) throw e;
+      const wait = baseMs * 2 ** i;
+      console.log(`  ⚠︎ ${label} failed (${status || e?.code || 'network'}), retry ${i + 1}/${tries - 1} in ${wait}ms`);
+      await sleep(wait);
+    }
+  }
+  throw last;
+}
+
 export function positionTool(options) {
   return {
     name: TOOL_NAME,
@@ -63,18 +91,19 @@ export async function runValidationBatch(requests, { pollMs = 15000, resumeBatch
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   let batchId = resumeBatchId;
   if (!batchId) {
-    const batch = await client.beta.messages.batches.create({ requests });
+    const batch = await withRetry(() => client.beta.messages.batches.create({ requests }), { label: 'batch create' });
     batchId = batch.id;
     console.log(`  › validation batch submitted: ${batchId} (${requests.length} requests)`);
   }
   for (;;) {
-    const b = await client.beta.messages.batches.retrieve(batchId);
+    const b = await withRetry(() => client.beta.messages.batches.retrieve(batchId), { label: 'batch poll' });
     if (b.processing_status === 'ended') break;
     const c = b.request_counts || {};
     console.log(`  … ${b.processing_status}: succeeded=${c.succeeded ?? '?'} errored=${c.errored ?? '?'}`);
     await sleep(pollMs);
   }
   const byId = new Map();
-  for await (const r of await client.beta.messages.batches.results(batchId)) byId.set(r.custom_id, r);
+  const stream = await withRetry(() => client.beta.messages.batches.results(batchId), { label: 'batch results' });
+  for await (const r of stream) byId.set(r.custom_id, r);
   return { byId, batchId };
 }
