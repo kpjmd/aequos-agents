@@ -16,7 +16,8 @@ import { loadCases, anchorSetVersion } from '../anchor-set/index.js';
 import { AGENTS } from '../detector/grid.js';
 import { buildMaskedPrompt, EVIDENCE_GRID } from './masked-evidence/build.js';
 import { buildPair } from './cue-injection/pairs.js';
-import { analyzeMasked, analyzeCue } from './analyze.js';
+import { analyzeMasked, analyzeCue, deltaByGroup } from './analyze.js';
+import { modelForAgent } from '../detector/panel-composition.js';
 import { stratumGap } from './slots.js';
 import { wilson } from '../recalibration/report.js';
 import { loadDetectorFeatureCases } from '../recalibration/detector-cases.js';
@@ -30,7 +31,7 @@ const MAX_TOKENS = parseInt(process.env.MAX_TOKENS, 10) || 2500;
 const RECAL_MODEL = process.env.RECAL_MODEL || 'same_family_multi_version';
 
 function parseArgs(argv) {
-  const o = { harness: argv[0], cases: [], dryRun: true, submit: false, replicates: 2, cue: 0, model: RECAL_MODEL };
+  const o = { harness: argv[0], cases: [], dryRun: true, submit: false, replicates: 2, cue: 0, model: RECAL_MODEL, composition: 'personas_single_model', select: null };
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--submit') { o.submit = true; o.dryRun = false; }
@@ -38,9 +39,20 @@ function parseArgs(argv) {
     else if (a === '--replicates') o.replicates = Math.max(1, parseInt(argv[++i], 10) || 2);
     else if (a === '--cue') o.cue = parseInt(argv[++i], 10) || 0;
     else if (a === '--model') o.model = argv[++i];
+    else if (a === '--composition') o.composition = argv[++i];
+    else if (a === '--select') o.select = argv[++i];
     else if (a === '--cases') { while (argv[i + 1] && !argv[i + 1].startsWith('--')) o.cases.push(argv[++i]); }
   }
   return o;
+}
+
+const SHOULD_CONTEST = new Set(['patient_dependent', 'evidence_split']);
+/** Reproducible case selection: `should-contest` = the 57 active pd/es cases in a contested stratum. */
+function selectByName(all, name) {
+  if (name === 'should-contest') {
+    return all.filter((c) => !c.provenance?.is_pediatric && SHOULD_CONTEST.has(c.label) && ['editorialized', 'quietly_contested'].includes(c.controversy_stratum));
+  }
+  throw new Error(`unknown --select set: ${name} (expected: should-contest)`);
 }
 
 async function buildSpecialists() {
@@ -105,18 +117,21 @@ async function runMasked(cases, opts) {
 }
 
 async function runCue(cases, opts) {
+  const stratumOf = new Map(cases.map((c) => [c.id, c.controversy_stratum]));
+  const labelOf = new Map(cases.map((c) => [c.id, c.label]));
   const built = [];
   for (const c of cases) {
     const pair = buildPair(c, opts.cue);
     for (const agent of AGENTS) for (let r = 1; r <= opts.replicates; r++) {
-      built.push({ caseId: c.id, agent, replicate: r, phrasing: 'neutral', user: pair.neutral, options: pair.options });
-      built.push({ caseId: c.id, agent, replicate: r, phrasing: 'cued', user: pair.cued, options: pair.options, cue: pair.cue });
+      built.push({ caseId: c.id, agent, replicate: r, phrasing: 'neutral', user: pair.neutral, options: pair.options, stratum: c.controversy_stratum });
+      built.push({ caseId: c.id, agent, replicate: r, phrasing: 'cued', user: pair.cued, options: pair.options, cue: pair.cue, stratum: c.controversy_stratum });
     }
   }
-  console.log(`cue-injection: ${cases.length} case(s) × 2 phrasings × ${AGENTS.length} lenses × ${opts.replicates} replicates = ${built.length} calls (cue="${buildPair(cases[0], opts.cue).cue}")`);
+  console.log(`cue-injection: ${cases.length} case(s) × 2 phrasings × ${AGENTS.length} lenses × ${opts.replicates} replicates = ${built.length} calls (composition=${opts.composition}, cue="${buildPair(cases[0], opts.cue).cue}")`);
 
   if (opts.dryRun) {
     const pair = buildPair(cases[0], opts.cue);
+    console.log('\nper-agent models:', AGENTS.map((a) => `${a}=${modelForAgent(opts.composition, a, MODEL)}`).join(', '));
     console.log('\nneutral prompt:\n' + pair.neutral);
     console.log('\ncued prompt (differs ONLY by the cue line):\n' + pair.cued);
     console.log('\nDRY RUN — re-run with --submit to spend.');
@@ -127,7 +142,7 @@ async function runCue(cases, opts) {
   const { toRequests, runValidationBatch, parseResult } = await import('./transport.js');
   const specs = built.map((b, i) => ({
     custom_id: `c-${i}`, system: specialists.get(b.agent).getSystemPrompt(),
-    user: b.user, options: b.options, model: MODEL, maxTokens: MAX_TOKENS,
+    user: b.user, options: b.options, model: modelForAgent(opts.composition, b.agent, MODEL), maxTokens: MAX_TOKENS,
   }));
   const { byId, batchId } = await runValidationBatch(toRequests(specs));
   const parsed = built.map((b, i) => ({ ...b, ...parseResult(byId.get(`c-${i}`), b.options) }));
@@ -140,14 +155,33 @@ async function runCue(cases, opts) {
     agg.get(k).push(p.confidence);
   }
   const m = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
-  const pairs = cases.map((c) => ({ caseId: c.id, neutralConfidence: m(agg.get(`${c.id}|neutral`) || []), cuedConfidence: m(agg.get(`${c.id}|cued`) || []) }));
+  const pairs = cases.map((c) => ({ caseId: c.id, stratum: stratumOf.get(c.id), label: labelOf.get(c.id), neutralConfidence: m(agg.get(`${c.id}|neutral`) || []), cuedConfidence: m(agg.get(`${c.id}|cued`) || []) }));
   const analysis = analyzeCue(pairs);
+  // The interpretive views: delta by stratum (does the cue inflate MORE on famous debates?) and by agent
+  // (which model slot is cue-sensitive). Computed over the raw per-request rows.
+  const byStratum = deltaByGroup(parsed, 'stratum');
+  const byAgent = deltaByGroup(parsed, 'agent');
+  const gapOfDeltas =
+    byStratum.editorialized && byStratum.quietly_contested ? byStratum.editorialized.delta - byStratum.quietly_contested.delta : null;
+
   const out = join(artifactDir(), `cue-injection-${batchId}.json`);
-  writeFileSync(out, JSON.stringify({ analysis, pairs }, null, 2) + '\n');
+  writeFileSync(out, JSON.stringify({ composition: opts.composition, analysis, by_stratum: byStratum, by_agent: byAgent, gap_of_deltas: gapOfDeltas, pairs }, null, 2) + '\n');
   console.log('\ncue-injection analysis (confidence delta = recognition component):');
-  console.log(`  mean delta (cued − neutral): ${analysis.meanDelta.toFixed(4)}`);
-  for (const p of analysis.perCase) console.log(`    ${p.caseId.padEnd(48)} Δ=${p.delta.toFixed(3)}`);
-  console.log(`  ✓ ${out}`);
+  console.log(`  overall mean delta (cued − neutral): ${analysis.meanDelta.toFixed(4)}`);
+  console.log('\n  delta BY STRATUM (the interpretation of the +16.6pt sensitivity gap):');
+  for (const s of ['editorialized', 'quietly_contested']) {
+    const b = byStratum[s];
+    if (b) console.log(`    ${s.padEnd(18)} Δ=${b.delta.toFixed(4)} (neutral ${b.neutral.toFixed(3)} → cued ${b.cued.toFixed(3)}, n=${b.n})`);
+  }
+  console.log(`    gap of deltas (editorialized − quiet): ${gapOfDeltas == null ? 'n/a' : gapOfDeltas.toFixed(4)}`);
+  console.log('    → large positive gap = the cue inflates confidence on famous debates ⇒ recognition contamination;');
+  console.log('      ≈0 = the sensitivity gap is genuine balance, not fame.');
+  console.log('\n  delta BY AGENT/MODEL slot:');
+  for (const a of AGENTS) {
+    const b = byAgent[a];
+    if (b) console.log(`    ${a.padEnd(20)} (${modelForAgent(opts.composition, a, MODEL)}) Δ=${b.delta.toFixed(4)}, n=${b.n}`);
+  }
+  console.log(`\n  ✓ ${out}`);
 }
 
 // stratum-gap is analysis-only: no batch, no spend. It reads the DERIVED threshold from the
@@ -193,8 +227,9 @@ async function main() {
   }
   if (opts.harness === 'stratum-gap') { await runStratumGap(opts); process.exit(0); }
 
-  const cases = selectCases(loadCases(), opts.cases);
-  if (cases.length === 0) { console.error('no cases selected — pass --cases <id> …'); process.exit(1); }
+  const all = loadCases();
+  const cases = opts.select ? selectByName(all, opts.select) : selectCases(all, opts.cases);
+  if (cases.length === 0) { console.error('no cases selected — pass --cases <id> … or --select should-contest'); process.exit(1); }
   if (opts.submit && !process.env.ANTHROPIC_API_KEY) { console.error('ANTHROPIC_API_KEY not set.'); process.exit(1); }
 
   if (opts.harness === 'masked-evidence') await runMasked(cases, opts);

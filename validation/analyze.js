@@ -50,3 +50,29 @@ export function analyzeCue(pairs) {
   const perCase = pairs.map((p) => ({ caseId: p.caseId, delta: (p.cuedConfidence ?? 0) - (p.neutralConfidence ?? 0) }));
   return { n: pairs.length, meanDelta: mean(perCase.map((p) => p.delta)), perCase };
 }
+
+/**
+ * Mean cue-delta (cued − neutral confidence) grouped by an arbitrary key, over per-request rows. This is
+ * the interpretive lever for the stratum-gap: `groupKey='stratum'` says whether the recognition cue
+ * inflates confidence MORE on editorialized than quietly_contested cases (⇒ recognition is carrying the
+ * detector), and `groupKey='agent'` localizes which model slot is cue-sensitive.
+ * @param {Array<{phrasing:'neutral'|'cued', confidence:number}>} rows - each carries the group key too
+ * @param {string} groupKey - property to group on (e.g. 'stratum', 'agent')
+ * @returns {Object<string,{neutral:number, cued:number, delta:number, n:number}>}
+ */
+export function deltaByGroup(rows, groupKey) {
+  const buckets = new Map(); // key -> {neutral:[], cued:[]}
+  for (const r of rows) {
+    const k = r[groupKey];
+    if (k == null || (r.phrasing !== 'neutral' && r.phrasing !== 'cued') || typeof r.confidence !== 'number') continue;
+    if (!buckets.has(k)) buckets.set(k, { neutral: [], cued: [] });
+    buckets.get(k)[r.phrasing].push(r.confidence);
+  }
+  const out = {};
+  for (const [k, v] of buckets) {
+    const neutral = mean(v.neutral);
+    const cued = mean(v.cued);
+    out[k] = { neutral, cued, delta: cued - neutral, n: v.neutral.length + v.cued.length };
+  }
+  return out;
+}
