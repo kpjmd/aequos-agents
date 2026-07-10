@@ -12,25 +12,32 @@
 import dotenv from 'dotenv';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadCases } from '../anchor-set/index.js';
+import { loadCases, anchorSetVersion } from '../anchor-set/index.js';
 import { AGENTS } from '../detector/grid.js';
 import { buildMaskedPrompt, EVIDENCE_GRID } from './masked-evidence/build.js';
 import { buildPair } from './cue-injection/pairs.js';
 import { analyzeMasked, analyzeCue } from './analyze.js';
+import { stratumGap } from './slots.js';
+import { wilson } from '../recalibration/report.js';
+import { loadDetectorFeatureCases } from '../recalibration/detector-cases.js';
+import { loadArtifact } from '../recalibration/artifacts.js';
 
 dotenv.config();
 
 const MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 const MAX_TOKENS = parseInt(process.env.MAX_TOKENS, 10) || 2500;
+// Detector features for stratum-gap come from a specific panel composition; default to the ratified run.
+const RECAL_MODEL = process.env.RECAL_MODEL || 'same_family_multi_version';
 
 function parseArgs(argv) {
-  const o = { harness: argv[0], cases: [], dryRun: true, submit: false, replicates: 2, cue: 0 };
+  const o = { harness: argv[0], cases: [], dryRun: true, submit: false, replicates: 2, cue: 0, model: RECAL_MODEL };
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--submit') { o.submit = true; o.dryRun = false; }
     else if (a === '--dry-run') o.dryRun = true;
     else if (a === '--replicates') o.replicates = Math.max(1, parseInt(argv[++i], 10) || 2);
     else if (a === '--cue') o.cue = parseInt(argv[++i], 10) || 0;
+    else if (a === '--model') o.model = argv[++i];
     else if (a === '--cases') { while (argv[i + 1] && !argv[i + 1].startsWith('--')) o.cases.push(argv[++i]); }
   }
   return o;
@@ -85,7 +92,7 @@ async function runMasked(cases, opts) {
     user: b.userPrompt, options: b.options, model: MODEL, maxTokens: MAX_TOKENS,
   }));
   const { byId, batchId } = await runValidationBatch(toRequests(specs));
-  const rows = built.map((b, i) => ({ ...parseResult(byId.get(`m-${i}`), b.options), evidenceStructure: b.evidenceStructure, caseId: b.caseId }));
+  const rows = built.map((b, i) => ({ ...parseResult(byId.get(`m-${i}`), b.options), evidenceStructure: b.evidenceStructure, caseId: b.caseId, agent: b.agent }));
   const analysis = analyzeMasked(rows);
   const out = join(artifactDir(), `masked-evidence-${batchId}.json`);
   writeFileSync(out, JSON.stringify({ analysis, rows }, null, 2) + '\n');
@@ -143,12 +150,49 @@ async function runCue(cases, opts) {
   console.log(`  ✓ ${out}`);
 }
 
-async function main() {
-  const opts = parseArgs(process.argv.slice(2));
-  if (!['masked-evidence', 'cue-injection'].includes(opts.harness)) {
-    console.error('usage: node validation/run.js <masked-evidence|cue-injection> --cases <id> … [--dry-run|--submit]');
+// stratum-gap is analysis-only: no batch, no spend. It reads the DERIVED threshold from the
+// recalibration artifact and the existing detector feature artifacts, then splits sensitivity by
+// controversy_stratum. A large editorialized-over-quiet gap = topic-recognition share (informs, but
+// does NOT change, the 0.85 target — that stays fixed in config per the invariant).
+async function runStratumGap(opts) {
+  const anchorVer = anchorSetVersion();
+  const recal = loadArtifact(opts.model, anchorVer);
+  if (!recal) {
+    console.error(`no recalibration artifact for model=${opts.model}, anchor_set=${anchorVer} — run \`node recalibration/index.js\` first (pass --model to match).`);
     process.exit(1);
   }
+  const cases = loadDetectorFeatureCases().filter((c) => !c.pediatric);
+  if (cases.length === 0) { console.error('no detector artifacts in artifacts/detector/ — run the detector first.'); process.exit(1); }
+
+  const result = stratumGap(cases, recal.threshold, wilson);
+  const pct = (x) => (x * 100).toFixed(1);
+  const ci = (w) => `${pct(w.p)}% [${pct(w.lo)}–${pct(w.hi)}], n=${w.n}`;
+  console.log(`stratum-gap: model=${opts.model}, anchor_set=${anchorVer}`);
+  console.log(`  derived threshold: modal_variance>=${result.threshold.between_archetype_modal_variance.toFixed(4)} OR entropy>=${result.threshold.within_archetype_stance_entropy.toFixed(4)}`);
+  console.log(`  should-contest cases scored: ${result.coverage.should_contest_n} (n_a stratum: ${result.n_a_should_contest})`);
+  console.log('\n  sensitivity by controversy_stratum (Wilson 95% CI):');
+  for (const s of ['editorialized', 'quietly_contested']) {
+    const b = result.by_stratum[s];
+    console.log(`    ${s.padEnd(18)} ${ci(b)}`);
+    console.log(`      patient_dependent: ${ci(b.by_label.patient_dependent)} | evidence_split: ${ci(b.by_label.evidence_split)}`);
+  }
+  console.log(`\n  GAP (editorialized − quietly_contested): ${result.gap == null ? 'n/a (empty arm)' : (result.gap >= 0 ? '+' : '') + pct(result.gap) + ' pts'}`);
+  console.log('  interpretation: a large positive gap ⇒ recognition of famous debates carries sensitivity;');
+  console.log('                  a small gap ⇒ sensitivity is evidence-appraisal-driven and the 0.85 target stands.');
+
+  const out = join(artifactDir(), 'stratum-gap.json');
+  writeFileSync(out, JSON.stringify({ model: opts.model, anchor_set_version: anchorVer, ...result }, null, 2) + '\n');
+  console.log(`  ✓ ${out}`);
+}
+
+async function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  if (!['masked-evidence', 'cue-injection', 'stratum-gap'].includes(opts.harness)) {
+    console.error('usage: node validation/run.js <masked-evidence|cue-injection|stratum-gap> [--cases <id> …] [--dry-run|--submit] [--model <recal-model>]');
+    process.exit(1);
+  }
+  if (opts.harness === 'stratum-gap') { await runStratumGap(opts); process.exit(0); }
+
   const cases = selectCases(loadCases(), opts.cases);
   if (cases.length === 0) { console.error('no cases selected — pass --cases <id> …'); process.exit(1); }
   if (opts.submit && !process.env.ANTHROPIC_API_KEY) { console.error('ANTHROPIC_API_KEY not set.'); process.exit(1); }

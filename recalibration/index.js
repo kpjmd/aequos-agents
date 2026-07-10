@@ -14,24 +14,31 @@
  * achieved_*} keyed by (model_version, anchor_set_version). On gate failure it throws loudly.
  */
 import dotenv from 'dotenv';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { loadCases, loadTargetOperatingPoint, anchorSetVersion } from '../anchor-set/index.js';
+import { loadTargetOperatingPoint, anchorSetVersion } from '../anchor-set/index.js';
 import { deriveThreshold } from './levels/level1.js';
+import { buildLevel2Reference } from './levels/level2.js';
+import { level3FromOutcomePairs } from './levels/level3.js';
 import { buildReport } from './report.js';
 import { assertGate, GateError } from './gate.js';
 import { saveArtifact } from './artifacts.js';
+import { loadDetectorFeatureCases } from './detector-cases.js';
 
 dotenv.config();
 
 /**
  * Core entry point (also unit-testable): derive + gate + assemble the artifact.
+ *
+ * Level 1 (deriveThreshold) is the GATE and is always run. Level 2 (percentile/z-score reference) is
+ * additive and always persisted so a live case can be percentile-mapped against this model version.
+ * Level 3 (per-agent Platt/isotonic) is only populated when an outcome signal is supplied via
+ * `outcomePairs` (e.g. from a masked-evidence run) — until then calibration_maps stays null. Neither
+ * Level 2 nor Level 3 touches the threshold or the gate.
  * @param {string} modelVersion
  * @param {string} anchorSetVer
- * @param {{cases:Array, target:object, partial?:object}} inputs - cases already carry {label, absolute, pediatric, features}
- * @returns {{threshold, reference_distribution, calibration_maps, gate_passed, achieved_sensitivity, achieved_specificity, model_version, anchor_set_version, partial}}
+ * @param {{cases:Array, target:object, partial?:object, outcomePairs?:Array}} inputs - cases already carry {label, absolute, pediatric, features}
+ * @returns {{threshold, reference_distribution, percentile_reference, calibration_maps, gate_passed, achieved_sensitivity, achieved_specificity, model_version, anchor_set_version, partial}}
  */
-export function recalibrate(modelVersion, anchorSetVer, { cases, target, partial = null }) {
+export function recalibrate(modelVersion, anchorSetVer, { cases, target, partial = null, outcomePairs = null }) {
   const derived = deriveThreshold(cases, target);
   const report = buildReport(cases, derived.threshold, target);
   const artifact = {
@@ -39,7 +46,8 @@ export function recalibrate(modelVersion, anchorSetVer, { cases, target, partial
     anchor_set_version: anchorSetVer,
     threshold: derived.threshold,
     reference_distribution: derived.reference_distribution,
-    calibration_maps: null, // Level 3 stub
+    percentile_reference: buildLevel2Reference(derived.reference_distribution), // Level 2: pooled per-feature reference
+    calibration_maps: outcomePairs ? level3FromOutcomePairs(outcomePairs).calibration_maps : null, // Level 3: needs an outcome signal
     gate_passed: derived.gate_passed,
     achieved_sensitivity: derived.achieved_sensitivity,
     achieved_specificity: derived.achieved_specificity,
@@ -49,33 +57,6 @@ export function recalibrate(modelVersion, anchorSetVer, { cases, target, partial
     partial,
   };
   return artifact;
-}
-
-/** Load fresh detector artifacts and join them to anchor-case labels. */
-function loadFromArtifacts() {
-  const dir = join(process.cwd(), 'artifacts', 'detector');
-  if (!existsSync(dir)) return [];
-  const byId = new Map(loadCases().map((c) => [c.id, c]));
-  const cases = [];
-  const seen = new Set();
-  // Prefer the most recent artifact per case (files are <id>-<batch>.json; last write wins by sort).
-  for (const f of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
-    const art = JSON.parse(readFileSync(join(dir, f), 'utf8'));
-    const c = byId.get(art.case_id);
-    if (!c) continue;
-    seen.add(art.case_id);
-    // Overwrite earlier entries for the same case (keeps the latest batch).
-    const idx = cases.findIndex((x) => x.id === art.case_id);
-    const row = {
-      id: art.case_id,
-      label: c.label,
-      absolute: Boolean(c.provenance?.absolute_indication),
-      pediatric: Boolean(c.provenance?.is_pediatric),
-      features: art.features,
-    };
-    if (idx >= 0) cases[idx] = row; else cases.push(row);
-  }
-  return cases;
 }
 
 async function main() {
@@ -96,7 +77,7 @@ async function main() {
     const { replayFromPanelRuns } = await import('./replay.js');
     ({ cases, partial } = await replayFromPanelRuns(sql));
   } else {
-    cases = loadFromArtifacts();
+    cases = loadDetectorFeatureCases();
     if (cases.length === 0) {
       console.error('no detector artifacts in artifacts/detector/ — run `node detector/index.js --submit …` first, or use --from panel-runs.');
       process.exit(1);
