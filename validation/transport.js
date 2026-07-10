@@ -86,13 +86,71 @@ export function parseResult(result, canonicalOptions) {
   };
 }
 
+/** True for connection truncations the SDK surfaces as a 400 but are really network-transient. */
+function isPrematureClose(e) {
+  return /premature close|socket hang up|econnreset|terminated|network|fetch failed/i.test(e?.message || '');
+}
+
+/** List recent batch ids (best-effort; [] on failure so callers can still proceed). */
+async function recentBatchIds(client) {
+  try {
+    const l = await client.beta.messages.batches.list({ limit: 20 });
+    return l.data.map((b) => b.id);
+  } catch {
+    return [];
+  }
+}
+
+/** A batch created since `beforeSet` whose request count matches — i.e. a phantom from a truncated create. */
+async function findNewBatch(client, beforeSet, reqCount) {
+  try {
+    const l = await client.beta.messages.batches.list({ limit: 20 });
+    for (const b of l.data) {
+      if (beforeSet.has(b.id)) continue;
+      const rc = b.request_counts || {};
+      const total = (rc.processing ?? 0) + (rc.succeeded ?? 0) + (rc.errored ?? 0) + (rc.canceled ?? 0) + (rc.expired ?? 0);
+      if (total === reqCount) return b.id;
+    }
+  } catch { /* ignore — treated as "no phantom found" */ }
+  return null;
+}
+
+/**
+ * Create a batch idempotently under a flaky endpoint. Batch creation is NOT idempotent server-side (no
+ * idempotency key), and a "Premature close" can truncate the response AFTER the batch was created — so a
+ * blind retry would spawn a duplicate. On any transport error we first LIST batches and ADOPT a newly
+ * created one matching our request count; only if none exists do we retry create.
+ * @returns {Promise<string>} batchId
+ */
+export async function createBatchIdempotent(client, requests, { tries = 6, baseMs = 3000 } = {}) {
+  const before = new Set(await recentBatchIds(client));
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const batch = await client.beta.messages.batches.create({ requests });
+      return batch.id;
+    } catch (e) {
+      last = e;
+      const status = e?.status;
+      const transient = isPrematureClose(e) || (status ? TRANSIENT_STATUS.has(status) : true);
+      // A truncated create may have landed server-side — adopt it rather than re-create.
+      const phantom = await findNewBatch(client, before, requests.length);
+      if (phantom) { console.log(`  › adopted batch created despite transport error: ${phantom}`); return phantom; }
+      if (!transient || i === tries - 1) throw e;
+      const wait = baseMs * 2 ** i;
+      console.log(`  ⚠︎ batch create failed (${status || e?.code || 'network'}${isPrematureClose(e) ? ' premature-close' : ''}), no phantom — retry ${i + 1}/${tries - 1} in ${wait}ms`);
+      await sleep(wait);
+    }
+  }
+  throw last;
+}
+
 /** Submit + poll a validation batch; returns a Map custom_id -> raw result. */
 export async function runValidationBatch(requests, { pollMs = 15000, resumeBatchId = null } = {}) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   let batchId = resumeBatchId;
   if (!batchId) {
-    const batch = await withRetry(() => client.beta.messages.batches.create({ requests }), { label: 'batch create' });
-    batchId = batch.id;
+    batchId = await createBatchIdempotent(client, requests);
     console.log(`  › validation batch submitted: ${batchId} (${requests.length} requests)`);
   }
   for (;;) {
