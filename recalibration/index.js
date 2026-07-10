@@ -18,6 +18,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadCases, loadTargetOperatingPoint, anchorSetVersion } from '../anchor-set/index.js';
 import { deriveThreshold } from './levels/level1.js';
+import { buildReport } from './report.js';
 import { assertGate, GateError } from './gate.js';
 import { saveArtifact } from './artifacts.js';
 
@@ -32,6 +33,7 @@ dotenv.config();
  */
 export function recalibrate(modelVersion, anchorSetVer, { cases, target, partial = null }) {
   const derived = deriveThreshold(cases, target);
+  const report = buildReport(cases, derived.threshold, target);
   const artifact = {
     model_version: modelVersion,
     anchor_set_version: anchorSetVer,
@@ -43,6 +45,7 @@ export function recalibrate(modelVersion, anchorSetVer, { cases, target, partial
     achieved_specificity: derived.achieved_specificity,
     coverage: derived.coverage,
     sweep_size: derived.sweep_size,
+    report, // per-class sensitivity + Wilson CIs + entropy-lift ablation (reporting, not gating)
     partial,
   };
   return artifact;
@@ -108,6 +111,18 @@ async function main() {
   console.log(`\n  derived threshold: modal_variance>=${artifact.threshold.between_archetype_modal_variance.toFixed(4)} OR entropy>=${artifact.threshold.within_archetype_stance_entropy.toFixed(4)}`);
   console.log(`  achieved: sensitivity=${artifact.achieved_sensitivity.toFixed(3)}, specificity=${artifact.achieved_specificity.toFixed(3)} (over n=${artifact.coverage.should_contest_n} should-contest / ${artifact.coverage.settled_control_n} settled controls)`);
   console.log(`  equivalent-options lability coverage: ${artifact.coverage.equivalent_options_lability_covered}/${artifact.coverage.equivalent_options_n}`);
+
+  const rep = artifact.report;
+  const pct = (x) => (x * 100).toFixed(1);
+  const ci = (w) => `${pct(w.p)}% [${pct(w.lo)}–${pct(w.hi)}], n=${w.n}`;
+  console.log('\n  per-class sensitivity (Wilson 95% CI):');
+  console.log(`    patient_dependent: ${ci(rep.per_class_sensitivity.patient_dependent)}`);
+  console.log(`    evidence_split:    ${ci(rep.per_class_sensitivity.evidence_split)}`);
+  console.log(`    specificity (settled controls): ${ci(rep.specificity)}`);
+  const el = rep.entropy_lift.evidence_split_at_operating_point;
+  console.log(`  entropy lift on evidence_split: recall_full=${pct(el.recall_full)}% vs modal_only=${pct(el.recall_modal_only)}% — entropy uniquely catches ${el.entropy_unique_count} case(s)${el.entropy_unique_count ? ` [${el.entropy_unique_ids.join(', ')}]` : ''}`);
+  const mo = rep.entropy_lift.modal_only_gate;
+  console.log(`  modal-only gate: ${mo.reaches_target ? 'reaches target' : 'CANNOT reach target'} (best-Youden sens=${pct(mo.best_youden.sens)}%/spec=${pct(mo.best_youden.spec)}%)`);
 
   if (!dryRun) {
     const p = saveArtifact(model, anchorVer, artifact);

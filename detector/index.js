@@ -19,8 +19,8 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadCases, isActive, anchorSetVersion } from '../anchor-set/index.js';
 import { computeFeatures } from './features.js';
-import { gridShape, requestsPerCase } from './grid.js';
-import { compositionMeta, DEFAULT_COMPOSITION } from './panel-composition.js';
+import { gridShape, requestsPerCase, AGENTS } from './grid.js';
+import { compositionMeta, DEFAULT_COMPOSITION, modelMap } from './panel-composition.js';
 import { countRequests } from './transport.js';
 
 dotenv.config();
@@ -42,6 +42,9 @@ export function buildArtifact(caseObj, cells, meta) {
     model_version: meta.modelVersion,
     panel_composition: comp.id,
     pseudo_replicated: comp.pseudo_replicated,
+    // per-agent model map for a decorrelated panel (null for single-model) — full audit of which
+    // model produced each slot's stances.
+    panel_models: meta.models || null,
     grid: gridShape(meta.replicates),
     sampling: SAMPLING,
     // Anchor cases are curated vignettes → completeness 1.0 by construction; the field is carried for
@@ -53,13 +56,14 @@ export function buildArtifact(caseObj, cells, meta) {
 }
 
 function parseArgs(argv) {
-  const o = { cases: [], replicates: 2, dryRun: true, submit: false, store: false, all: false, replay: null };
+  const o = { cases: [], replicates: 2, dryRun: true, submit: false, store: false, all: false, replay: null, composition: DEFAULT_COMPOSITION };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--submit') { o.submit = true; o.dryRun = false; }
     else if (a === '--dry-run') o.dryRun = true;
     else if (a === '--store') o.store = true;
     else if (a === '--all') o.all = true;
+    else if (a === '--composition') o.composition = argv[++i];
     else if (a === '--replicates') o.replicates = Math.max(1, parseInt(argv[++i], 10) || 2);
     else if (a === '--replay') { o.replay = argv[++i]; o.submit = true; o.dryRun = false; }
     else if (a === '--cases') { while (argv[i + 1] && !argv[i + 1].startsWith('--')) o.cases.push(argv[++i]); }
@@ -86,10 +90,19 @@ async function main() {
     process.exit(1);
   }
 
+  const comp = compositionMeta(opts.composition); // throws loudly on an unknown composition id
+  const models = modelMap(opts.composition, AGENTS, POSITION_MODEL);
+  const modelVersionLabel = opts.composition === DEFAULT_COMPOSITION ? POSITION_MODEL : opts.composition;
+
   const shape = gridShape(opts.replicates);
   const perCase = requestsPerCase(opts.replicates);
   console.log(`detector: ${cases.length} case(s) — grid ${shape.archetypes}×${shape.agents}×${shape.replicates}×${shape.orders} = ${perCase} calls/case`);
-  console.log(`  composition=${DEFAULT_COMPOSITION} (pseudo_replicated=${compositionMeta().pseudo_replicated}), model=${POSITION_MODEL}`);
+  console.log(`  composition=${comp.id} (pseudo_replicated=${comp.pseudo_replicated})`);
+  if (opts.composition === DEFAULT_COMPOSITION) {
+    console.log(`  model=${POSITION_MODEL} (single-model panel)`);
+  } else {
+    console.log(`  per-agent models: ${AGENTS.map((a) => `${a}=${models[a]}`).join(', ')}`);
+  }
 
   if (opts.dryRun) {
     console.log(`\nDRY RUN — ${countRequests(cases, opts.replicates, null)} Anthropic request(s) total, submitted as one Message Batch (50% off).`);
@@ -119,11 +132,17 @@ async function main() {
   const maxTokens = parseInt(process.env.MAX_TOKENS, 10) || 2500;
   const { cellsByCase, batchId } = await runBatch(
     cases,
-    { replicates: opts.replicates, model: POSITION_MODEL, maxTokens, resumeBatchId: opts.replay },
+    { replicates: opts.replicates, model: POSITION_MODEL, maxTokens, composition: opts.composition, resumeBatchId: opts.replay },
     { specialists }
   );
 
-  const meta = { replicates: opts.replicates, composition: DEFAULT_COMPOSITION, modelVersion: POSITION_MODEL, anchorSetVersion: anchorSetVersion() };
+  const meta = {
+    replicates: opts.replicates,
+    composition: opts.composition,
+    models: opts.composition === DEFAULT_COMPOSITION ? null : models,
+    modelVersion: modelVersionLabel,
+    anchorSetVersion: anchorSetVersion(),
+  };
   const artifacts = cases.map((c) => buildArtifact(c, cellsByCase.get(c.id) || [], meta));
 
   const dir = join(process.cwd(), 'artifacts', 'detector');
@@ -137,7 +156,7 @@ async function main() {
 
   if (opts.store) {
     const { storeFeatureRuns } = await import('./store.js');
-    const n = await storeFeatureRuns(artifacts, { modelVersion: POSITION_MODEL });
+    const n = await storeFeatureRuns(artifacts, { modelVersion: modelVersionLabel });
     console.log(`✓ stored ${n} row(s) in detector_feature_runs`);
   }
   process.exit(0);

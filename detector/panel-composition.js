@@ -22,6 +22,50 @@ export const DECORRELATION_LADDER = [
 export const DEFAULT_COMPOSITION = 'personas_single_model';
 
 /**
+ * The same-family multi-version panel: one distinct Claude model per specialist slot, spanning the
+ * size/generation tiers so the four members carry genuinely different priors (the decorrelation the
+ * within-archetype entropy feature needs). These are MODEL IDS — configuration, not derived
+ * thresholds; the recalibration gate remains DERIVED. Keys are the POSITION_SPECIALISTS agent types.
+ */
+export const SAME_FAMILY_MODELS = {
+  painWhisperer: 'claude-opus-4-8',
+  movementDetective: 'claude-sonnet-4-6',
+  strengthSage: 'claude-haiku-4-5',
+  mindMender: 'claude-opus-4-6',
+};
+
+/**
+ * Resolve the model for one agent slot under a composition. Only same_family_multi_version routes
+ * per-agent; every other rung (personas_single_model default, and the not-yet-wired
+ * seed_temperature_ensemble / cross_provider) returns the single default model, so the default path
+ * and all existing behavior are unchanged.
+ * @param {string} composition
+ * @param {string} agentType - a POSITION_SPECIALISTS key
+ * @param {string} defaultModel - the single-model fallback (POSITION_MODEL)
+ * @returns {string} model id
+ */
+export function modelForAgent(composition, agentType, defaultModel) {
+  if (composition === 'same_family_multi_version') {
+    return SAME_FAMILY_MODELS[agentType] || defaultModel;
+  }
+  return defaultModel;
+}
+
+/**
+ * The per-agent model map a composition will use over a set of agent types — carried into the
+ * artifact so every feature row records exactly which model produced each slot's stances.
+ * @param {string} composition
+ * @param {string[]} agentTypes
+ * @param {string} defaultModel
+ * @returns {Object<string,string>}
+ */
+export function modelMap(composition, agentTypes, defaultModel) {
+  const m = {};
+  for (const a of agentTypes) m[a] = modelForAgent(composition, a, defaultModel);
+  return m;
+}
+
+/**
  * @param {string} id
  * @returns {{id, pseudo_replicated, desc}}
  */

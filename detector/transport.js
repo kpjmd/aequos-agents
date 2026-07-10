@@ -11,6 +11,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS, buildGridPoints } from './grid.js';
 import { orderedOptions, canonicalize } from './option-order.js';
+import { modelForAgent, DEFAULT_COMPOSITION } from './panel-composition.js';
 
 const TOOL_NAME = 'specialist_position';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -42,12 +43,17 @@ function usableAgents(specialists) {
 
 /**
  * Build all batch requests for a set of anchor cases.
+ *
+ * The per-request model is resolved per agent slot via the composition: personas_single_model (and
+ * the not-yet-wired temperature/cross-provider rungs) use the single `model` for every slot, while
+ * same_family_multi_version assigns a distinct Claude model per specialist. All models remain
+ * Anthropic, so this is still ONE Message Batch.
  * @param {Array<{id, decision_point, options:string[]}>} cases
- * @param {{replicates, model, maxTokens}} opts
+ * @param {{replicates, model, maxTokens, composition}} opts
  * @param {{specialists:Map}} ctx
  * @returns {{entries:Array, requests:Array}}
  */
-export function buildRequests(cases, { replicates, model, maxTokens }, { specialists }) {
+export function buildRequests(cases, { replicates, model, maxTokens, composition = DEFAULT_COMPOSITION }, { specialists }) {
   const agents = usableAgents(specialists);
   const points = buildGridPoints(replicates);
   const entries = [];
@@ -62,11 +68,12 @@ export function buildRequests(cases, { replicates, model, maxTokens }, { special
       const caseData = { archetype: p.archetype.label, ...p.archetype.case };
       for (const [agent, inst] of agents) {
         const customId = `req-${i++}`;
-        entries.push({ customId, caseId: c.id, archetypeKey: p.archetypeKey, replicate: p.replicate, order: p.order, agent });
+        const agentModel = modelForAgent(composition, agent, model);
+        entries.push({ customId, caseId: c.id, archetypeKey: p.archetypeKey, replicate: p.replicate, order: p.order, agent, model: agentModel });
         requests.push({
           custom_id: customId,
           params: {
-            model,
+            model: agentModel,
             max_tokens: maxTokens,
             temperature: 0.3, // match base-agent.js this.llm — iid replicate draws (no API seed)
             system: inst.getSystemPrompt(),
@@ -110,9 +117,9 @@ function resultToCell(entry, canonicalOptions, result) {
  * @returns {Promise<{cellsByCase:Map<string,Array>, batchId:string}>}
  */
 export async function runBatch(cases, opts, ctx) {
-  const { replicates, model, maxTokens, pollMs = 15000, resumeBatchId = null } = opts;
+  const { replicates, model, maxTokens, composition = DEFAULT_COMPOSITION, pollMs = 15000, resumeBatchId = null } = opts;
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const { entries, requests } = buildRequests(cases, { replicates, model, maxTokens }, ctx);
+  const { entries, requests } = buildRequests(cases, { replicates, model, maxTokens, composition }, ctx);
 
   let batchId = resumeBatchId;
   if (!batchId) {
