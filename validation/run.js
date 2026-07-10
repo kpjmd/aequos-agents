@@ -86,10 +86,11 @@ async function runMasked(cases, opts) {
     const m = buildMaskedPrompt(c, ev);
     for (const agent of AGENTS) built.push({ caseId: c.id, agent, ...m });
   }
-  console.log(`masked-evidence: ${cases.length} case(s) × ${EVIDENCE_GRID.length} evidence structures × ${AGENTS.length} lenses = ${built.length} calls`);
+  console.log(`masked-evidence: ${cases.length} case(s) × ${EVIDENCE_GRID.length} evidence structures × ${AGENTS.length} lenses = ${built.length} calls (composition=${opts.composition})`);
 
   if (opts.dryRun) {
     const s = built[0];
+    console.log('\nper-agent models:', AGENTS.map((a) => `${a}=${modelForAgent(opts.composition, a, MODEL)}`).join(', '));
     console.log('\nsample masked prompt (topic identity removed):');
     console.log(s.userPrompt);
     console.log('\naudit — removed:', JSON.stringify(s.audit.removed, null, 2));
@@ -101,13 +102,13 @@ async function runMasked(cases, opts) {
   const { toRequests, runValidationBatch, parseResult } = await import('./transport.js');
   const specs = built.map((b, i) => ({
     custom_id: `m-${i}`, system: specialists.get(b.agent).getSystemPrompt(),
-    user: b.userPrompt, options: b.options, model: MODEL, maxTokens: MAX_TOKENS,
+    user: b.userPrompt, options: b.options, model: modelForAgent(opts.composition, b.agent, MODEL), maxTokens: MAX_TOKENS,
   }));
   const { byId, batchId } = await runValidationBatch(toRequests(specs));
   const rows = built.map((b, i) => ({ ...parseResult(byId.get(`m-${i}`), b.options), evidenceStructure: b.evidenceStructure, caseId: b.caseId, agent: b.agent }));
   const analysis = analyzeMasked(rows);
   const out = join(artifactDir(), `masked-evidence-${batchId}.json`);
-  writeFileSync(out, JSON.stringify({ analysis, rows }, null, 2) + '\n');
+  writeFileSync(out, JSON.stringify({ composition: opts.composition, analysis, rows }, null, 2) + '\n');
   console.log('\nmasked-evidence analysis:');
   console.log(`  confidence by GRADE certainty:`, analysis.confidenceByCertainty);
   console.log(`  confidence tracks certainty (monotone): ${analysis.confidenceTracksCertainty}`);

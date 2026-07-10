@@ -64,6 +64,7 @@ async function main() {
   const model = argv.includes('--model') ? argv[argv.indexOf('--model') + 1] : (process.env.CLAUDE_MODEL || 'claude-sonnet-4-6');
   const from = argv.includes('--from') ? argv[argv.indexOf('--from') + 1] : 'artifacts';
   const dryRun = argv.includes('--dry-run');
+  const outcomesPath = argv.includes('--outcomes') ? argv[argv.indexOf('--outcomes') + 1] : null;
 
   const cfg = loadTargetOperatingPoint();
   const target = { targetSensitivity: cfg.target_sensitivity, minSpecificity: cfg.min_specificity };
@@ -84,11 +85,24 @@ async function main() {
     }
   }
 
+  // Level 3 outcome signal (optional): per-agent (confidence, correct) pairs from a masked-evidence run.
+  let outcomePairs = null;
+  if (outcomesPath) {
+    const { outcomePairsFromMaskedArtifact } = await import('./outcome-from-masked.js');
+    outcomePairs = outcomePairsFromMaskedArtifact(outcomesPath);
+  }
+
   console.log(`recalibrate: model=${model}, anchor_set=${anchorVer}, from=${from}, ${cases.length} case(s)`);
   console.log(`  target_sensitivity=${target.targetSensitivity}, min_specificity=${target.minSpecificity}`);
   if (partial) console.log(`  ⚠︎ PARTIAL feature set (${partial.source}): cannot compute ${partial.not_computable.join('; ')}`);
+  if (outcomePairs) console.log(`  Level 3 outcome signal: ${outcomePairs.length} (confidence, correct) pairs from ${outcomesPath}`);
 
-  const artifact = recalibrate(model, anchorVer, { cases, target, partial });
+  const artifact = recalibrate(model, anchorVer, { cases, target, partial, outcomePairs });
+  if (artifact.calibration_maps) {
+    const pa = artifact.calibration_maps.per_agent || {};
+    const sk = artifact.calibration_maps.skipped || {};
+    console.log(`\n  Level 3 per-agent calibration: fitted [${Object.keys(pa).join(', ') || 'none'}]${Object.keys(sk).length ? `, skipped [${Object.keys(sk).join(', ')}]` : ''}`);
+  }
   console.log(`\n  derived threshold: modal_variance>=${artifact.threshold.between_archetype_modal_variance.toFixed(4)} OR entropy>=${artifact.threshold.within_archetype_stance_entropy.toFixed(4)}`);
   console.log(`  achieved: sensitivity=${artifact.achieved_sensitivity.toFixed(3)}, specificity=${artifact.achieved_specificity.toFixed(3)} (over n=${artifact.coverage.should_contest_n} should-contest / ${artifact.coverage.settled_control_n} settled controls)`);
   console.log(`  equivalent-options lability coverage: ${artifact.coverage.equivalent_options_lability_covered}/${artifact.coverage.equivalent_options_n}`);
