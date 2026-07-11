@@ -135,7 +135,12 @@ export function level3(features, labels) {
       skipped[agent] = { n: pairs.length, reason: `below min-sample floor (${MIN_PAIRS})` };
       continue;
     }
-    per_agent[agent] = { platt: fitPlatt(pairs), isotonic: fitIsotonic(pairs), n: pairs.length };
+    // With no class variation (all correct or all wrong) a logistic/isotonic fit cannot discriminate —
+    // it collapses to a constant. Fit it anyway for shape, but flag it so consumers don't trust the curve.
+    const pos = pairs.filter((p) => p.y === 1).length;
+    const accuracy = pos / pairs.length;
+    const degenerate = pos === 0 || pos === pairs.length;
+    per_agent[agent] = { platt: fitPlatt(pairs), isotonic: fitIsotonic(pairs), n: pairs.length, accuracy, degenerate };
   }
   return { calibration_maps: { per_agent, skipped } };
 }

@@ -7,6 +7,11 @@
  * effect_direction ('A'|'B'), so on direction-eligible rows the correct stance is that direction and
  * correct = (stance === effect_direction). 'none'-direction rows have no correct pick and are dropped.
  *
+ * DEFERRALS are excluded, not scored as wrong: a defer is an abstention, not an incorrect commitment.
+ * Calibration answers "when this agent COMMITS with confidence X, how often is it right?" — counting
+ * abstentions as errors would defame a cautious agent (e.g. opus-4-8 defers on ~all masked prompts, so
+ * it simply yields too few committed pairs to calibrate and Level 3 skips it, which is the honest result).
+ *
  * This is a pure reader — it runs only once a masked-evidence run has been submitted and written to
  * artifacts/validation/masked-evidence-<batch>.json. Until then, recalibrate() gets no outcomePairs and
  * Level 3 stays inert.
@@ -31,6 +36,7 @@ export function outcomePairsFromRows(rows) {
   for (const r of rows) {
     const dir = r?.evidenceStructure?.effect_direction;
     if (dir !== 'A' && dir !== 'B') continue; // no ground-truth-correct option on 'none'
+    if (r.stance !== 'A' && r.stance !== 'B') continue; // exclude defers/unknown — abstention ≠ error
     if (typeof r.confidence !== 'number') continue;
     pairs.push({ agent: r.agent || 'unknown', confidence: r.confidence, correct: r.stance === dir ? 1 : 0 });
   }

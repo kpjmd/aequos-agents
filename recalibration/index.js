@@ -101,7 +101,14 @@ async function main() {
   if (artifact.calibration_maps) {
     const pa = artifact.calibration_maps.per_agent || {};
     const sk = artifact.calibration_maps.skipped || {};
-    console.log(`\n  Level 3 per-agent calibration: fitted [${Object.keys(pa).join(', ') || 'none'}]${Object.keys(sk).length ? `, skipped [${Object.keys(sk).join(', ')}]` : ''}`);
+    // Roster agents that produced zero committed pairs (e.g. an agent that always defers on masked
+    // evidence) never reach the fitter — record them so calibration coverage is explicit, not silent.
+    const { AGENTS } = await import('../detector/grid.js');
+    const uncalibrated = AGENTS.filter((a) => !pa[a] && !sk[a]);
+    if (uncalibrated.length) artifact.calibration_maps.uncalibrated = uncalibrated;
+    const degenerate = Object.entries(pa).filter(([, m]) => m.degenerate).map(([a]) => a);
+    console.log(`\n  Level 3 per-agent calibration: fitted [${Object.keys(pa).join(', ') || 'none'}]${Object.keys(sk).length ? `, skipped [${Object.keys(sk).join(', ')}]` : ''}${uncalibrated.length ? `, uncalibrated/no-commit [${uncalibrated.join(', ')}]` : ''}`);
+    if (degenerate.length) console.log(`  ⚠︎ DEGENERATE calibration (no error variation → P≈const, non-discriminative): [${degenerate.join(', ')}] — masked-evidence commits were ~100% correct; needs a harder outcome set to calibrate.`);
   }
   console.log(`\n  derived threshold: modal_variance>=${artifact.threshold.between_archetype_modal_variance.toFixed(4)} OR entropy>=${artifact.threshold.within_archetype_stance_entropy.toFixed(4)}`);
   console.log(`  achieved: sensitivity=${artifact.achieved_sensitivity.toFixed(3)}, specificity=${artifact.achieved_specificity.toFixed(3)} (over n=${artifact.coverage.should_contest_n} should-contest / ${artifact.coverage.settled_control_n} settled controls)`);

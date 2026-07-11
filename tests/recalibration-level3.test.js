@@ -76,6 +76,16 @@ describe('masked-evidence outcome adapter', () => {
     expect(pairs.find((p) => p.confidence === 0.9).correct).toBe(1);
     expect(pairs.find((p) => p.confidence === 0.4).correct).toBe(0);
   });
+
+  test('a deferral on a directional row is EXCLUDED, not scored as wrong', () => {
+    const withDefer = [
+      { agent: 'painWhisperer', confidence: 0.7, stance: 'defer', evidenceStructure: { effect_direction: 'A' } },
+      { agent: 'painWhisperer', confidence: 0.8, stance: 'A', evidenceStructure: { effect_direction: 'A' } },
+    ];
+    const pairs = outcomePairsFromRows(withDefer);
+    expect(pairs).toHaveLength(1); // the defer dropped, not counted as correct=0
+    expect(pairs[0].correct).toBe(1);
+  });
   test('level3FromOutcomePairs bridges to (features, labels)', () => {
     const pairs = [];
     for (let i = 0; i < 12; i++) pairs.push({ agent: 'painWhisperer', confidence: i / 12, correct: i > 6 ? 1 : 0 });
