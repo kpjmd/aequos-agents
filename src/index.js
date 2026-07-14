@@ -29,6 +29,7 @@ import { strictLimiter, mediumLimiter, looseLimiter } from './middleware/rate-li
 import { validateBody } from './schemas/validate.js';
 import { triageSchema } from './schemas/triage.js';
 import { consultationSchema } from './schemas/consultation.js';
+import { disableAgentKitTelemetry } from './utils/agentkit-telemetry.js';
 
 // Import all specialist agents
 import { TriageAgent } from './agents/triage-agent.js';
@@ -40,6 +41,31 @@ import { ResearchAgent } from './agents/research-agent.js';
 
 // Load environment variables
 dotenv.config();
+
+// --- Process-level resilience guards (registered before anything can throw async) ---
+// A long-running API server must NOT be killed by a stray fire-and-forget rejection. The
+// concrete trigger is Coinbase AgentKit's startup telemetry (see agentkit-telemetry.js): its
+// unhandled HTTP-400 rejection was crash-looping the deploy before Express could bind. Log and
+// keep serving instead of exiting. (Tradeoff: we deliberately do not exit on uncaughtException
+// either — for this server, staying up beats dying on a non-fatal async straggler; genuinely
+// fatal errors still surface loudly in the logs.)
+process.on('unhandledRejection', (reason) => {
+  const msg = reason && reason.message ? reason.message : String(reason);
+  const stack = reason && reason.stack ? reason.stack : '';
+  // Known-benign: AgentKit's analytics POST to cca-lite.coinbase.com. Log quietly.
+  if (/HTTP error! status/.test(msg) && /sendAnalyticsEvent|agentkit/i.test(stack)) {
+    logger.warn(`Ignored AgentKit telemetry rejection: ${msg}`);
+    return;
+  }
+  logger.error(`Unhandled promise rejection (server kept alive): ${msg}`, { stack });
+});
+process.on('uncaughtException', (err) => {
+  logger.error(`Uncaught exception (server kept alive): ${err.message}`, { stack: err.stack });
+});
+
+// Belt to the suspenders above: stop AgentKit's telemetry from firing at all, so the failing
+// call never even generates the rejection. Must run before any wallet provider is constructed.
+disableAgentKitTelemetry();
 
 // Fail-fast in production if auth env vars are missing
 if (process.env.NODE_ENV === 'production') {
