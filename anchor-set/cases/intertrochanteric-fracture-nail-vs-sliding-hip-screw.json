@@ -1,0 +1,40 @@
+{
+  "id": "intertrochanteric-fracture-nail-vs-sliding-hip-screw",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a stable intertrochanteric hip fracture, is cephalomedullary nailing or sliding hip screw (SHS) fixation preferred?",
+  "options": [
+    "Sliding hip screw fixation",
+    "Cephalomedullary nailing"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a stable intertrochanteric hip fracture, is cephalomedullary nailing or sliding hip screw (SHS) fixation preferred?\nOptions:\n  1. Sliding hip screw fixation\n  2. Cephalomedullary nailing",
+  "label": "equivalent_options",
+  "label_rationale": "Nailing offers theoretical biomechanical advantages but is more costly and has a risk of femoral split; sliding hip screws have a long track record of safety in stable patterns.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "intertrochanteric-fracture-nail-vs-sliding-hip-screw",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Stable intertrochanteric fractures show conflicting evidence favoring each method (nailing's biomechanical advantage vs. SHS's proven safety and lower cost), with no landmark trial definitively settling the debate, and practice varies by surgeon preference and institutional factors rather than being a famous public controversy."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: For stable patterns, decades of registry/RCT data show no functional/mortality difference; genuinely equivalent (unstable patterns mandate nail, but that's a different case). | Claude second opinion: Agree, specifically for stable patterns as scoped in the question -- large registries and RCTs really don't separate the two here."
+    }
+  ]
+}

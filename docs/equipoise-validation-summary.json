@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0.0",
+  "composition": "same_family_multi_version",
+  "cue_injection": {
+    "batch_id": "msgbatch_01YLjWkbkyw9FeAyD9EhKyhH",
+    "overall_confidence_delta": -0.039,
+    "gap_of_deltas": 0.0008,
+    "gap_of_deltas_ci": [-0.013, 0.014],
+    "cases_showing_inflation": "0/57",
+    "conclusion": "no recognition contamination — sensitivity is genuine appraisal"
+  },
+  "masked_evidence": {
+    "batch_id": "msgbatch_01BzSfDQaEeSDQQvA67ThdxM",
+    "confidence_by_grade": {
+      "low": 0.41,
+      "moderate": 0.64,
+      "high": 0.70
+    },
+    "no_difference_deferral": "100%",
+    "strong_evidence_follow": "75%",
+    "conclusion": "the panel appraises supplied evidence"
+  }
+}

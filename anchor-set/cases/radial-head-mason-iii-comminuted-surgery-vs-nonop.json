@@ -1,0 +1,33 @@
+{
+  "id": "radial-head-mason-iii-comminuted-surgery-vs-nonop",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a comminuted, displaced Mason type III radial head fracture blocking motion, is surgery (fixation or replacement) or nonoperative management preferred?",
+  "options": [
+    "Surgery (fixation or replacement)",
+    "Nonoperative management"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a comminuted, displaced Mason type III radial head fracture blocking motion, is surgery (fixation or replacement) or nonoperative management preferred?\nOptions:\n  1. Surgery (fixation or replacement)\n  2. Nonoperative management",
+  "label": "settled",
+  "label_rationale": "A displaced, motion-blocking comminuted radial head requires surgery; the fixation-versus-replacement choice is the sub-debate.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "radial-head-mason-iii-comminuted-surgery-vs-nonop",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "elbow",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

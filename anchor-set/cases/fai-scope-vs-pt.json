@@ -1,0 +1,40 @@
+{
+  "id": "fai-scope-vs-pt",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with symptomatic femoroacetabular impingement, is arthroscopic surgery or physiotherapy-led management preferred?",
+  "options": [
+    "Physiotherapy-led management",
+    "Hip arthroscopy"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with symptomatic femoroacetabular impingement, is arthroscopic surgery or physiotherapy-led management preferred?\nOptions:\n  1. Physiotherapy-led management\n  2. Hip arthroscopy",
+  "label": "patient_dependent",
+  "label_rationale": "FASHIoN favored arthroscopy on average, but the effect size and appropriate patient selection remain debated.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "fai-scope-vs-pt",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — FASHIoN trial showed arthroscopy benefit on average, but heterogeneous outcomes and ongoing debate about patient selection criteria and effect size durability make this a guideline-discordant practice variation rather than a famous editorialized controversy."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: FASHIoN trial made this a genuinely public, editorialized debate about patient selection and durability — stratum only. | Claude second opinion: Agree. FASHIoN made this a genuinely public debate about patient selection and durability of the arthroscopy benefit."
+    }
+  ]
+}

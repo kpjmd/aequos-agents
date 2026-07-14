@@ -1,0 +1,33 @@
+{
+  "id": "frozen-shoulder-physio-vs-surgical-release",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with primary frozen shoulder (adhesive capsulitis), is early structured physical therapy or surgical intervention (MUA or arthroscopic capsular release) preferred?",
+  "options": [
+    "Structured physical therapy",
+    "Surgical intervention"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with primary frozen shoulder (adhesive capsulitis), is early structured physical therapy or surgical intervention (MUA or arthroscopic capsular release) preferred?\nOptions:\n  1. Structured physical therapy\n  2. Surgical intervention",
+  "label": "settled",
+  "label_rationale": "The UK FROST trial found no patient-reported outcome advantage at 12 months for MUA or arthroscopic capsular release over early structured physical therapy; nonoperative care is first-line, surgery reserved for refractory cases. Settled conservative-first standard (MD adjudication 2026-06-27; reproducibly converged at N=3).",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "frozen-shoulder-physio-vs-surgical-release",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "md_adjudication",
+    "legacy_body_region": "shoulder",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

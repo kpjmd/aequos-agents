@@ -23,6 +23,7 @@ import { storeResearchPending, storeResearchResult, storeResearchError, getResea
 import { distributeResearchTokens } from './utils/research-tokens.js';
 import sql from './utils/db.js';
 import { getEquipoiseCardsByConsultation } from './utils/synthesizer.js';
+import { getEquipoiseStats, getEquipoiseAdminStats } from './utils/equipoise-stats.js';
 import { requireApiKey, requireAdmin } from './middleware/auth.js';
 import { requireIdentity } from './middleware/identity.js';
 import { strictLimiter, mediumLimiter, looseLimiter } from './middleware/rate-limit.js';
@@ -1052,6 +1053,28 @@ class AequOsAgentSystem {
         });
       } catch (error) {
         logger.error(`Equipoise cards API error: ${error.message}`);
+        return next(error);
+      }
+    });
+
+    // Equipoise-instrument metrics for the frontend — every number is derived at request time from
+    // the committed release artifact + anchor set (see docs/equipoise-instrument.md); nothing here is
+    // a hardcoded constant. The admin variant additionally exposes the operational health check
+    // (calibration coverage) behind requireAdmin.
+    this.app.get('/equipoise/stats', requireApiKey, looseLimiter, async (req, res, next) => {
+      try {
+        return res.json(await getEquipoiseStats({ sql }));
+      } catch (error) {
+        logger.error(`Equipoise stats API error: ${error.message}`);
+        return next(error);
+      }
+    });
+
+    this.app.get('/equipoise/stats/admin', requireApiKey, looseLimiter, requireAdmin, async (req, res, next) => {
+      try {
+        return res.json(await getEquipoiseAdminStats({ sql }));
+      } catch (error) {
+        logger.error(`Equipoise admin stats API error: ${error.message}`);
         return next(error);
       }
     });

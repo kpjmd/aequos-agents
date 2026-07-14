@@ -1,0 +1,40 @@
+{
+  "id": "patella-fracture-displaced-tension-band-vs-plate",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a displaced patellar fracture requiring surgery, is traditional tension-band wiring or low-profile plate fixation preferred?",
+  "options": [
+    "Tension-band wire fixation",
+    "Low-profile plate fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a displaced patellar fracture requiring surgery, is traditional tension-band wiring or low-profile plate fixation preferred?\nOptions:\n  1. Tension-band wire fixation\n  2. Low-profile plate fixation",
+  "label": "equivalent_options",
+  "label_rationale": "Tension-band wiring is highly established but has a hardware removal rate of up to 40% due to prominent wires; plate fixation offers superior multi-planar stability but increases cost.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "patella-fracture-displaced-tension-band-vs-plate",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Tension-band wiring remains the gold standard with decades of clinical success, but plate fixation is increasingly adopted for superior biomechanical stability and reduced hardware irritation, creating genuine practice variation without a definitive landmark trial establishing superiority of one method."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Both achieve equivalent union; differ mainly in hardware-irritation trade-off — genuinely equivalent options. | Claude second opinion: Agree. Both achieve union reliably; the real trade-off is hardware prominence/reoperation, which is a quiet equivalent-options situation."
+    }
+  ]
+}

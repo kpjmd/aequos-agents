@@ -1,0 +1,33 @@
+{
+  "id": "acute-pji-dair-vs-antibiotics-alone",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with an acute prosthetic joint infection and a well-fixed implant, is debridement with implant retention (DAIR) plus antibiotics or antibiotics alone preferred?",
+  "options": [
+    "DAIR plus antibiotics",
+    "Antibiotics alone"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with an acute prosthetic joint infection and a well-fixed implant, is debridement with implant retention (DAIR) plus antibiotics or antibiotics alone preferred?\nOptions:\n  1. DAIR plus antibiotics\n  2. Antibiotics alone",
+  "label": "settled",
+  "label_rationale": "Biofilm on hardware is not clearable by antibiotics alone.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "acute-pji-dair-vs-antibiotics-alone",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

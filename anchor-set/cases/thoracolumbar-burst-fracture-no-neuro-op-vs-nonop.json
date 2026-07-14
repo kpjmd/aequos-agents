@@ -1,0 +1,40 @@
+{
+  "id": "thoracolumbar-burst-fracture-no-neuro-op-vs-nonop",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a stable thoracolumbar burst fracture and no neurological deficit, is brace/orthosis immobilization or surgical stabilization preferred?",
+  "options": [
+    "Orthosis immobilization",
+    "Surgical stabilization"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a stable thoracolumbar burst fracture and no neurological deficit, is brace/orthosis immobilization or surgical stabilization preferred?\nOptions:\n  1. Orthosis immobilization\n  2. Surgical stabilization",
+  "label": "evidence_split",
+  "label_rationale": "Multiple RCTs show equivalent long-term functional and pain scores between brace treatment and surgery, but surgical management remains common due to faster mobilization.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "thoracolumbar-burst-fracture-no-neuro-op-vs-nonop",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — This represents guideline discordance and practice variation without a famous landmark debate—multiple RCTs demonstrate equivalent outcomes between conservative and surgical management, yet surgery remains widely adopted due to mobilization benefits, reflecting a quietly contested clinical equipoise rather than an editorialized controversy."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Multiple RCTs showing equivalent outcomes vs. continued surgical adoption is a genuine, actively-debated literature conflict, not a quiet patient-selection algorithm. | Claude second opinion: Agree, for consistency with how the AIM-trial-style cases were handled elsewhere in this set (a trial shows equivalence, but real-world practice stays genuinely divided) -- that's the same shape of debate as the ankle and calcaneus cases above."
+    }
+  ]
+}

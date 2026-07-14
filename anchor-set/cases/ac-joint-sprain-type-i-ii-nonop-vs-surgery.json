@@ -1,0 +1,33 @@
+{
+  "id": "ac-joint-sprain-type-i-ii-nonop-vs-surgery",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with an acute Rockwood grade I-II acromioclavicular joint sprain, is nonoperative management or surgical stabilization preferred?",
+  "options": [
+    "Nonoperative management",
+    "Surgical stabilization"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with an acute Rockwood grade I-II acromioclavicular joint sprain, is nonoperative management or surgical stabilization preferred?\nOptions:\n  1. Nonoperative management\n  2. Surgical stabilization",
+  "label": "settled",
+  "label_rationale": "Low-grade AC sprains reliably recover with sling and rehabilitation; surgical stabilization is reserved for high-grade injuries, so nonoperative care is settled for the typical patient.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "ac-joint-sprain-type-i-ii-nonop-vs-surgery",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "shoulder",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

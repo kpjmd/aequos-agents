@@ -1,0 +1,33 @@
+{
+  "id": "pyogenic-flexor-tenosynovitis-drainage-vs-antibiotics",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with pyogenic flexor tenosynovitis (Kanavel signs), is surgical drainage or antibiotics alone preferred?",
+  "options": [
+    "Surgical drainage plus antibiotics",
+    "Antibiotics alone"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with pyogenic flexor tenosynovitis (Kanavel signs), is surgical drainage or antibiotics alone preferred?\nOptions:\n  1. Surgical drainage plus antibiotics\n  2. Antibiotics alone",
+  "label": "settled",
+  "label_rationale": "Established purulent tenosynovitis requires drainage to prevent tendon necrosis; antibiotics alone suffice only at the earliest presentation.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "pyogenic-flexor-tenosynovitis-drainage-vs-antibiotics",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

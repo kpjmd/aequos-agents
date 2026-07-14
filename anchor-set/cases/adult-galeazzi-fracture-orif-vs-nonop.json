@@ -1,0 +1,33 @@
+{
+  "id": "adult-galeazzi-fracture-orif-vs-nonop",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a Galeazzi fracture (distal radius fracture with DRUJ injury), is ORIF or nonoperative management preferred?",
+  "options": [
+    "Open reduction internal fixation",
+    "Nonoperative management"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a Galeazzi fracture (distal radius fracture with DRUJ injury), is ORIF or nonoperative management preferred?\nOptions:\n  1. Open reduction internal fixation\n  2. Nonoperative management",
+  "label": "settled",
+  "label_rationale": "The classic fracture of necessity: nonoperative treatment reliably fails in adults.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "adult-galeazzi-fracture-orif-vs-nonop",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

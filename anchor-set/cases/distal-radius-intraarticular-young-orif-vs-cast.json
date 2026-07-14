@@ -1,0 +1,40 @@
+{
+  "id": "distal-radius-intraarticular-young-orif-vs-cast",
+  "schema_version": "1.0.0",
+  "decision_point": "In an active young adult with a displaced intra-articular distal radius fracture, is closed reduction and casting or ORIF preferred?",
+  "options": [
+    "Closed reduction and casting",
+    "Open reduction internal fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an active young adult with a displaced intra-articular distal radius fracture, is closed reduction and casting or ORIF preferred?\nOptions:\n  1. Closed reduction and casting\n  2. Open reduction internal fixation",
+  "label": "settled",
+  "label_rationale": "ORIF restores intra-articular congruency to prevent long-term arthritis, but adds perioperative complications; casting avoids surgery but carries a higher risk of displacement.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "distal-radius-intraarticular-young-orif-vs-cast",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Displaced intra-articular distal radius fractures in young active patients represent a famous debate with landmark trials (e.g., WRIST study) and well-established eponymous techniques (volar plate fixation) that have fundamentally shifted practice toward ORIF as the standard of care."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: For >2mm articular step-off in a young, high-demand patient, ORIF is mandatory/standard of care (WRIST-type data addressed lower-demand cohorts). Remove from contested list. | Claude second opinion: Agree. For a young, high-demand patient with >2mm articular step-off, ORIF is close to standard of care; most of the equipoise literature (WRIST-type studies) is about older/lower-demand cohorts."
+    }
+  ]
+}

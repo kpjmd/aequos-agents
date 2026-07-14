@@ -1,0 +1,33 @@
+{
+  "id": "displaced-femoral-neck-young-adult",
+  "schema_version": "1.0.0",
+  "decision_point": "In a young adult with a displaced femoral neck fracture, is urgent reduction and fixation or nonoperative management preferred?",
+  "options": [
+    "Nonoperative management",
+    "Urgent reduction and internal fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a young adult with a displaced femoral neck fracture, is urgent reduction and fixation or nonoperative management preferred?\nOptions:\n  1. Nonoperative management\n  2. Urgent reduction and internal fixation",
+  "label": "settled",
+  "label_rationale": "Head-preserving urgent fixation is standard in young adults; nonoperative care risks nonunion and osteonecrosis. Timing and approach are still debated.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "displaced-femoral-neck-young-adult",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

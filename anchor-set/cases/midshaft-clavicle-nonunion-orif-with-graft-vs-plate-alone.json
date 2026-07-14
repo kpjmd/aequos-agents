@@ -1,0 +1,40 @@
+{
+  "id": "midshaft-clavicle-nonunion-orif-with-graft-vs-plate-alone",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a symptomatic midshaft clavicle nonunion, is open reduction and plate fixation with bone grafting or plate fixation alone preferred?",
+  "options": [
+    "Plate fixation alone",
+    "Plate fixation with bone grafting"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a symptomatic midshaft clavicle nonunion, is open reduction and plate fixation with bone grafting or plate fixation alone preferred?\nOptions:\n  1. Plate fixation alone\n  2. Plate fixation with bone grafting",
+  "label": "settled",
+  "label_rationale": "Bone grafting provides essential osteoinductive factors to stimulate healing in a nonunion, but plate fixation alone with rigid compression is often sufficient and avoids donor site morbidity.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "midshaft-clavicle-nonunion-orif-with-graft-vs-plate-alone",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "shoulder",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "which-option label stratum via deterministic"
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Established nonunion = biology + mechanics problem; grafting alongside fixation is standard, not a genuine either/or. Remove from contested list. | Claude second opinion: Agree in general, with a minor caveat: a subset of well-vascularized hypertrophic nonunions can be fixed with rigid plating alone without grafting -- but as a default teaching point for an established symptomatic nonunion, addressing biology plus mechanics is standard."
+    }
+  ]
+}

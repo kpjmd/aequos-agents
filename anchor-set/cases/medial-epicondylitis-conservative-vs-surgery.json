@@ -1,0 +1,33 @@
+{
+  "id": "medial-epicondylitis-conservative-vs-surgery",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with medial epicondylitis (golfer's elbow), is conservative management or surgery the preferred first-line?",
+  "options": [
+    "Conservative (load management, physical therapy, with optional injection)",
+    "Surgery"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with medial epicondylitis (golfer's elbow), is conservative management or surgery the preferred first-line?\nOptions:\n  1. Conservative (load management, physical therapy, with optional injection)\n  2. Surgery",
+  "label": "settled",
+  "label_rationale": "A self-limiting tendinopathy; surgery is a late resort after prolonged failed conservative care.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "medial-epicondylitis-conservative-vs-surgery",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "elbow",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

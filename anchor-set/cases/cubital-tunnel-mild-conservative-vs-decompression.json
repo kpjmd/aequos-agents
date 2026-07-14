@@ -1,0 +1,33 @@
+{
+  "id": "cubital-tunnel-mild-conservative-vs-decompression",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with mild cubital tunnel syndrome (McGowan I: sensory symptoms without motor weakness or muscle wasting), is conservative management or surgical decompression preferred?",
+  "options": [
+    "Conservative (night extension splinting, activity modification)",
+    "Surgical decompression"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with mild cubital tunnel syndrome (McGowan I: sensory symptoms without motor weakness or muscle wasting), is conservative management or surgical decompression preferred?\nOptions:\n  1. Conservative (night extension splinting, activity modification)\n  2. Surgical decompression",
+  "label": "settled",
+  "label_rationale": "Mild disease is managed non-operatively; motor deficit or atrophy is what indicates surgery.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "cubital-tunnel-mild-conservative-vs-decompression",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "elbow",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

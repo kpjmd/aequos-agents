@@ -1,0 +1,40 @@
+{
+  "id": "distal-radius-fracture-volar-plating-vs-k-wire",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a displaced extra-articular distal radius fracture, is open reduction and volar locking plate fixation or closed reduction and percutaneous Kirschner wiring preferred?",
+  "options": [
+    "Percutaneous Kirschner wiring",
+    "Volar locking plate fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a displaced extra-articular distal radius fracture, is open reduction and volar locking plate fixation or closed reduction and percutaneous Kirschner wiring preferred?\nOptions:\n  1. Percutaneous Kirschner wiring\n  2. Volar locking plate fixation",
+  "label": "patient_dependent",
+  "label_rationale": "The DRAFFT trial demonstrated that both volar locking plates and K-wires result in equivalent functional outcomes at one year; volar plating is far more expensive but allows faster mobilization.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "distal-radius-fracture-volar-plating-vs-k-wire",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — The DRAFFT trial demonstrated equivalent functional outcomes between volar locking plates and K-wires at one year, making these genuinely equivalent options despite cost and mobilization differences; this represents practice variation without a famous public debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: DRAFFT (Lancet) was a high-profile trial, not quiet; choice also tracks bone quality and mobilization preference, not just surgeon habit. | Claude second opinion: Agree. DRAFFT was a genuinely influential, practice-shifting Lancet trial in hand/wrist surgery circles -- editorialized is fair. Bone quality and mobilization goals are real patient-level drivers."
+    }
+  ]
+}

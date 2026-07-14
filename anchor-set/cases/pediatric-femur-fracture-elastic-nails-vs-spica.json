@@ -1,0 +1,40 @@
+{
+  "id": "pediatric-femur-fracture-elastic-nails-vs-spica",
+  "schema_version": "1.0.0",
+  "decision_point": "In a young child (age 2-6) with a displaced femoral shaft fracture, is percutaneous elastic stable intramedullary nailing (ESIN) or spica casting preferred?",
+  "options": [
+    "Spica casting immobilization",
+    "Elastic stable intramedullary nailing"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a young child (age 2-6) with a displaced femoral shaft fracture, is percutaneous elastic stable intramedullary nailing (ESIN) or spica casting preferred?\nOptions:\n  1. Spica casting immobilization\n  2. Elastic stable intramedullary nailing",
+  "label": "patient_dependent",
+  "label_rationale": "ESIN allows rapid mobilization and social convenience but carries anesthetic and hardware removal risks; spica casting avoids hardware surgery but imposes profound caregiving challenges.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "pediatric-femur-fracture-elastic-nails-vs-spica",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": true
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Current pediatric literature shows genuine conflict between ESIN (faster mobilization, social convenience) and spica casting (avoids anesthesia/hardware removal) with no clear superiority established, and this debate remains a practice variation without landmark trials or eponymous controversy."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Purely a weight/age-dependent algorithm (2-6y range) rather than genuine equivalence. | Claude second opinion: Agree. Weight-based cutoffs (roughly the ~11-25kg range depending on the guideline) are explicit in pediatric orthopedic teaching."
+    }
+  ]
+}

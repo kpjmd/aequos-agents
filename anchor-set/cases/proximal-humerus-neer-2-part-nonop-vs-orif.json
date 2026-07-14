@@ -1,0 +1,40 @@
+{
+  "id": "proximal-humerus-neer-2-part-nonop-vs-orif",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a displaced Neer 2-part proximal humerus fracture, is nonoperative management or surgical fixation preferred?",
+  "options": [
+    "Nonoperative management",
+    "Surgical fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a displaced Neer 2-part proximal humerus fracture, is nonoperative management or surgical fixation preferred?\nOptions:\n  1. Nonoperative management\n  2. Surgical fixation",
+  "label": "patient_dependent",
+  "label_rationale": "Surgical fixation restores anatomy but adds complications (screws cutout, avascular necrosis); nonoperative care accepts deformity but avoids operative risks.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "proximal-humerus-neer-2-part-nonop-vs-orif",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "shoulder",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Proximal humerus fracture management shows significant practice variation and guideline discordance (some favor nonoperative for 2-part fractures in older patients, others advocate surgical fixation) without a famous landmark trial or eponymous technique defining the debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

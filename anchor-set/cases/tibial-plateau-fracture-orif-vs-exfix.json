@@ -1,0 +1,40 @@
+{
+  "id": "tibial-plateau-fracture-orif-vs-exfix",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a high-energy bicondylar tibial plateau fracture, is primary ORIF or staged external fixation followed by delayed reconstruction preferred?",
+  "options": [
+    "Primary open reduction internal fixation",
+    "Staged spanning external fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a high-energy bicondylar tibial plateau fracture, is primary ORIF or staged external fixation followed by delayed reconstruction preferred?\nOptions:\n  1. Primary open reduction internal fixation\n  2. Staged spanning external fixation",
+  "label": "patient_dependent",
+  "label_rationale": "Primary ORIF allows anatomical reduction but carries high wound complication rates in swollen tissue; staged external fixation protects soft tissues but delays anatomical reconstruction.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "tibial-plateau-fracture-orif-vs-exfix",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "lower_leg",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — High-energy bicondylar tibial plateau fractures represent a famous debate between immediate anatomical fixation versus damage-control principles, with landmark literature supporting both approaches depending on soft-tissue injury severity and surgeon expertise, making this a well-known controversy in orthopedic trauma."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Driven by soft-tissue envelope/timing, not a genuine evidence conflict. | Claude second opinion: Agree. This is a soft-tissue-envelope-driven staged protocol (Sirkin-type teaching), not an open evidence conflict."
+    }
+  ]
+}

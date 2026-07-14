@@ -1,0 +1,33 @@
+{
+  "id": "localized-high-grade-osteosarcoma-resection-vs-nonoperative",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with biopsy-proven localized high-grade osteosarcoma, is neoadjuvant chemotherapy plus wide resection or limb salvage or nonoperative management preferred?",
+  "options": [
+    "Chemotherapy plus wide resection",
+    "Nonoperative management"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with biopsy-proven localized high-grade osteosarcoma, is neoadjuvant chemotherapy plus wide resection or limb salvage or nonoperative management preferred?\nOptions:\n  1. Chemotherapy plus wide resection\n  2. Nonoperative management",
+  "label": "settled",
+  "label_rationale": "Surgical resection is integral to curative-intent treatment.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "localized-high-grade-osteosarcoma-resection-vs-nonoperative",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "which_intervention",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

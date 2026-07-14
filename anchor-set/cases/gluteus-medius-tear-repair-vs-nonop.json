@@ -1,0 +1,40 @@
+{
+  "id": "gluteus-medius-tear-repair-vs-nonop",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a chronic symptomatic gluteus medius or minimus tear, is structured physical therapy or surgical repair preferred?",
+  "options": [
+    "Structured physical therapy",
+    "Surgical repair"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a chronic symptomatic gluteus medius or minimus tear, is structured physical therapy or surgical repair preferred?\nOptions:\n  1. Structured physical therapy\n  2. Surgical repair",
+  "label": "patient_dependent",
+  "label_rationale": "Repair provides good clinical improvement in tendon integrity and pain relief, but physical therapy remains a highly effective, lower-risk first-line option.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "gluteus-medius-tear-repair-vs-nonop",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "hip",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Gluteus medius/minimus tear management lacks a famous landmark trial or eponymous debate; instead, it reflects genuine guideline discordance and practice variation between conservative and surgical approaches with no widely publicized controversy."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

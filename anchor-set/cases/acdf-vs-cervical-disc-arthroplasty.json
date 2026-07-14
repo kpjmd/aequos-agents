@@ -1,0 +1,40 @@
+{
+  "id": "acdf-vs-cervical-disc-arthroplasty",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with symptomatic single-level cervical disc disease, is ACDF or cervical artificial disc replacement (ADR) preferred?",
+  "options": [
+    "Anterior cervical discectomy and fusion",
+    "Cervical artificial disc replacement"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with symptomatic single-level cervical disc disease, is ACDF or cervical artificial disc replacement (ADR) preferred?\nOptions:\n  1. Anterior cervical discectomy and fusion\n  2. Cervical artificial disc replacement",
+  "label": "patient_dependent",
+  "label_rationale": "ADR preserves segmental cervical motion and potentially reduces adjacent segment disease, but long-term cohort survivorship data are still accumulating compared to standard ACDF.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "acdf-vs-cervical-disc-arthroplasty",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — This is a well-publicized debate in spine surgery with competing RCTs and FDA approvals supporting ADR's motion preservation benefits, yet long-term fusion data and adjacent-segment disease prevention remain incompletely resolved, creating genuine literature conflict on which approach is superior."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Merged with duplicate slug intervertebral-disc-herniation-cervical-acdf-vs-adr. Not a true evidence split: outcome depends on strict ADR eligibility (facet integrity, bone quality, no instability). | Claude second opinion: Mostly agree on the merge and on patient_dependent as the primary axis (ADR eligibility -- facets, bone quality, instability -- genuinely gates the choice). Minor nuance: even within the eligible subgroup there is real, still-unresolved argument about whether long-term adjacent-segment data justifies routine ADR over ACDF, so a thin evidence_split flavor survives inside the patient-dependent frame. Doesn't change the verdict, just a footnote."
+    }
+  ]
+}

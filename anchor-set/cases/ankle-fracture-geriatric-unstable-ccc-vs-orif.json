@@ -1,0 +1,40 @@
+{
+  "id": "ankle-fracture-geriatric-unstable-ccc-vs-orif",
+  "schema_version": "1.0.0",
+  "decision_point": "In an older adult (age >60) with an unstable ankle fracture, is close contact casting or open reduction internal fixation (ORIF) preferred?",
+  "options": [
+    "Close contact casting",
+    "Open reduction internal fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an older adult (age >60) with an unstable ankle fracture, is close contact casting or open reduction internal fixation (ORIF) preferred?\nOptions:\n  1. Close contact casting\n  2. Open reduction internal fixation",
+  "label": "evidence_split",
+  "label_rationale": "The AIM trial demonstrated clinical equivalence in ankle function (OMAS) at 6 months; ORIF has higher wound risks, whereas casting has higher malunion rates but is highly cost-effective.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "ankle-fracture-geriatric-unstable-ccc-vs-orif",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "foot_ankle",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — The AIM trial is a landmark randomized controlled trial that directly compared these two approaches and generated substantial clinical debate about the trade-off between surgical wound complications versus casting-related malunion, making this a famous and well-publicized controversy in ankle fracture management."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: AIM trial (JAMA) shows a true statistical standoff (no difference in outcomes, higher wound complications with surgery) — a genuine literature conflict, not a patient-selection algorithm. | Claude second opinion: Agree. AIM is a true landmark RCT and the specialty's continued split despite its findings is a real evidence-split situation, not a quiet patient-selection algorithm."
+    }
+  ]
+}

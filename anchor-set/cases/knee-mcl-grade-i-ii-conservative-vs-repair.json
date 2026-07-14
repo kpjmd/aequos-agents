@@ -1,0 +1,33 @@
+{
+  "id": "knee-mcl-grade-i-ii-conservative-vs-repair",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with an isolated grade I-II medial collateral ligament injury of the knee, is functional bracing and rehabilitation or surgical repair preferred?",
+  "options": [
+    "Functional rehabilitation",
+    "Surgical repair"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with an isolated grade I-II medial collateral ligament injury of the knee, is functional bracing and rehabilitation or surgical repair preferred?\nOptions:\n  1. Functional rehabilitation\n  2. Surgical repair",
+  "label": "settled",
+  "label_rationale": "Isolated low-grade MCL injuries heal reliably without surgery; repair is reserved for high-grade or combined instabilities.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "knee-mcl-grade-i-ii-conservative-vs-repair",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "subacromial-pain-syndrome-physical-therapy-vs-corticosteroid-injection",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with subacromial pain syndrome (impingement), is structured physical therapy or corticosteroid joint injection preferred?",
+  "options": [
+    "Corticosteroid joint injection",
+    "Structured physical therapy"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with subacromial pain syndrome (impingement), is structured physical therapy or corticosteroid joint injection preferred?\nOptions:\n  1. Corticosteroid joint injection\n  2. Structured physical therapy",
+  "label": "equivalent_options",
+  "label_rationale": "Corticosteroid injections provide rapid, transient pain relief but do not address mechanical deficits; physical therapy offers a durable, long-term functional cure but requires patient compliance.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "subacromial-pain-syndrome-physical-therapy-vs-corticosteroid-injection",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_intervention",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "shoulder",
+    "legacy_is_operative": false,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "which-option label stratum via deterministic"
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: At 6-12mo outcomes converge; routinely used as complementary first-line options rather than an editorialized either/or. | Claude second opinion: Agree, with a small flag: this topic also carries a fair amount of public/guideline controversy about routine steroid injection overuse and tendon-health concerns, so 'quietly contested' undersells how publicized the debate about injection-first practice has become. Wouldn't block the correction, just noting it's borderline on the stratum axis."
+    }
+  ]
+}

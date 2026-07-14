@@ -1,0 +1,14 @@
+{
+  "anchor_set_version": "0.2.0-ratified",
+  "schema_version": "1.0.0",
+  "case_count": 188,
+  "active_case_count": 178,
+  "pediatric_excluded_count": 10,
+  "label_breakdown": {
+    "patient_dependent": 44,
+    "evidence_split": 18,
+    "equivalent_options": 11,
+    "settled": 115
+  },
+  "source_git_rev": "efef604"
+}

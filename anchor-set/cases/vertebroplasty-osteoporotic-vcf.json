@@ -1,0 +1,40 @@
+{
+  "id": "vertebroplasty-osteoporotic-vcf",
+  "schema_version": "1.0.0",
+  "decision_point": "In an older adult with a painful osteoporotic vertebral compression fracture, is conservative management or vertebral augmentation preferred?",
+  "options": [
+    "Conservative management",
+    "Vertebral augmentation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an older adult with a painful osteoporotic vertebral compression fracture, is conservative management or vertebral augmentation preferred?\nOptions:\n  1. Conservative management\n  2. Vertebral augmentation",
+  "label": "evidence_split",
+  "label_rationale": "Sham-controlled trials were negative while later trials and registries dispute this; the area remains actively contested.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "vertebroplasty-osteoporotic-vcf",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Vertebral augmentation for osteoporotic compression fractures remains quietly contested despite negative sham-controlled trials, with subsequent trials and registries disputing these findings and ongoing practice variation without a famous public debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Negative sham-controlled trials (INVEST/etc.) directly conflict with subsequent trials/registries — genuine literature conflict, and it's a well-known, actively-debated topic — editorialized. | Claude second opinion: Strongly agree. The sham-controlled trial controversy (and the subsequent conflicting VAPOUR-era data) is one of the more famous, publicly-argued controversies in spine care -- 'quietly contested' clearly undersold it."
+    }
+  ]
+}

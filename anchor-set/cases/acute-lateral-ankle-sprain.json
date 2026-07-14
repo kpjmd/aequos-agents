@@ -1,0 +1,33 @@
+{
+  "id": "acute-lateral-ankle-sprain",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with an acute uncomplicated lateral ankle sprain, is functional rehabilitation or acute surgical repair preferred?",
+  "options": [
+    "Functional rehabilitation",
+    "Acute surgical repair"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with an acute uncomplicated lateral ankle sprain, is functional rehabilitation or acute surgical repair preferred?\nOptions:\n  1. Functional rehabilitation\n  2. Acute surgical repair",
+  "label": "settled",
+  "label_rationale": "Functional rehabilitation is standard; acute surgery is not indicated for uncomplicated sprains.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "acute-lateral-ankle-sprain",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "foot_ankle",
+    "legacy_is_operative": false,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

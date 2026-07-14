@@ -1,0 +1,33 @@
+{
+  "id": "knee-oa-preventative-weightloss-vs-standard-care",
+  "schema_version": "1.0.0",
+  "decision_point": "In an overweight or obese woman over the age of 50 with a high risk of knee osteoarthritis, is an intensive, structured dietary weight loss and exercise program or standard lifestyle advice preferred?",
+  "options": [
+    "Standard lifestyle advice",
+    "Intensive structured dietary weight loss"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an overweight or obese woman over the age of 50 with a high risk of knee osteoarthritis, is an intensive, structured dietary weight loss and exercise program or standard lifestyle advice preferred?\nOptions:\n  1. Standard lifestyle advice\n  2. Intensive structured dietary weight loss",
+  "label": "settled",
+  "label_rationale": "Structured dietary weight loss combined with exercise (as shown in the TOPS trial) significantly unloads the joint, reduces systemic inflammatory markers, and prevents osteoarthritis progression.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "knee-oa-preventative-weightloss-vs-standard-care",
+    "legacy_expected_equipoise": "settled_conservative",
+    "legacy_decision_type": "which_intervention",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": false,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

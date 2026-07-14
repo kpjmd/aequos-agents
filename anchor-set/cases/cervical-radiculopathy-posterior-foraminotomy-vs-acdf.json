@@ -1,0 +1,40 @@
+{
+  "id": "cervical-radiculopathy-posterior-foraminotomy-vs-acdf",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with single-level posterolateral cervical radiculopathy, is posterior foraminotomy or ACDF preferred?",
+  "options": [
+    "Posterior cervical foraminotomy",
+    "Anterior cervical discectomy and fusion"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with single-level posterolateral cervical radiculopathy, is posterior foraminotomy or ACDF preferred?\nOptions:\n  1. Posterior cervical foraminotomy\n  2. Anterior cervical discectomy and fusion",
+  "label": "patient_dependent",
+  "label_rationale": "Posterior foraminotomy avoids fusion and preserves motion but carries higher postoperative muscle pain; ACDF is highly reliable for nerve clearance but sacrifices segmental motion.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "cervical-radiculopathy-posterior-foraminotomy-vs-acdf",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Both posterior foraminotomy and ACDF have robust literature support for single-level posterolateral cervical radiculopathy with different trade-offs (motion preservation vs. fusion reliability), creating genuine clinical equipoise without a famous named debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Foraminotomy strictly contraindicated with central stenosis, kyphosis, or mechanical neck pain; anatomy-gated, not interchangeable. | Claude second opinion: Agree. Central stenosis, kyphosis, and mechanical neck pain are hard contraindications to foraminotomy, not soft preferences."
+    }
+  ]
+}

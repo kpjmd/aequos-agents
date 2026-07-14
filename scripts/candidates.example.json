@@ -1,0 +1,26 @@
+[
+  {
+    "id": "cuff-atraumatic-original",
+    "question": "For a chronic, atraumatic full-thickness rotator cuff tear with good tendon quality, is surgical repair or a structured physical therapy trial the better initial approach?",
+    "optionA": "surgical repair",
+    "optionB": "structured physical therapy trial",
+    "decisionType": null,
+    "_note": "The original converging case — atraumatic/degenerative pathology; PT-first is first-line across demand levels, so no flip."
+  },
+  {
+    "id": "cuff-acute-traumatic-reframed",
+    "question": "For a full-thickness supraspinatus tear from an acute traumatic injury with good tendon quality, is early surgical repair or non-operative management the better initial approach?",
+    "optionA": "early surgical repair",
+    "optionB": "non-operative management",
+    "decisionType": null,
+    "_note": "Reframed to fire — acute/traumatic removes the PT-first-is-always-safe convergence; demand should flip it."
+  },
+  {
+    "id": "acl-reconstruct-vs-rehab",
+    "question": "For a complete ACL rupture, is surgical reconstruction or structured rehabilitation the better initial management?",
+    "optionA": "surgical reconstruction",
+    "optionB": "structured rehabilitation",
+    "decisionType": null,
+    "_note": "Classic demand-driven flipper — pivoting athlete reconstructs, low-demand rehabs."
+  }
+]

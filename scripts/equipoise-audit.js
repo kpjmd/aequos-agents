@@ -94,7 +94,7 @@ async function main() {
   const rows = await sql`
     SELECT dp.slug, dp.absolute_indication, dp.expected_equipoise, pr.run_index, pr.detector_verdict
     FROM panel_runs pr JOIN decision_points dp ON dp.id = pr.decision_point_id
-    WHERE pr.run_kind = 'benchmark_probe'`;
+    WHERE pr.run_kind = 'benchmark_probe' AND dp.is_active`;
   if (rows.length === 0) {
     console.error('No benchmark_probe runs on this branch. Regenerate first:');
     console.error('  DATABASE_URL=$BENCH_URL npm run benchmark:probe -- --all --n 3 --batch');

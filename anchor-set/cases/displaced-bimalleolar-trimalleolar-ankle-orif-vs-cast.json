@@ -1,0 +1,33 @@
+{
+  "id": "displaced-bimalleolar-trimalleolar-ankle-orif-vs-cast",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a displaced bimalleolar or trimalleolar (unstable) ankle fracture, is ORIF or cast immobilization preferred?",
+  "options": [
+    "Open reduction internal fixation",
+    "Cast immobilization"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a displaced bimalleolar or trimalleolar (unstable) ankle fracture, is ORIF or cast immobilization preferred?\nOptions:\n  1. Open reduction internal fixation\n  2. Cast immobilization",
+  "label": "settled",
+  "label_rationale": "Talar-shift-producing instability requires anatomic fixation; stable Weber A and B fractures are the settled-nonoperative counterparts.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "displaced-bimalleolar-trimalleolar-ankle-orif-vs-cast",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "expert_consensus",
+    "legacy_body_region": "foot_ankle",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "id": "distal-biceps-rupture-op-vs-nonop",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a complete distal biceps tendon rupture, is operative repair or nonoperative management preferred?",
+  "options": [
+    "Nonoperative management",
+    "Operative repair"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a complete distal biceps tendon rupture, is operative repair or nonoperative management preferred?\nOptions:\n  1. Nonoperative management\n  2. Operative repair",
+  "label": "patient_dependent",
+  "label_rationale": "Surgery restores supination and flexion strength; lower-demand patients may accept the nonoperative strength deficits.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "distal-biceps-rupture-op-vs-nonop",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "elbow",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Distal biceps rupture management varies by patient demand and functional goals with no landmark trial or eponymous debate defining standard of care, representing guideline discordance and practice variation rather than famous controversy."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

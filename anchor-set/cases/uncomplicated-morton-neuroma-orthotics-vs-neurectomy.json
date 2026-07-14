@@ -1,0 +1,40 @@
+{
+  "id": "uncomplicated-morton-neuroma-orthotics-vs-neurectomy",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with symptomatic, uncomplicated Morton's neuroma, is orthotic offloading/corticosteroid injection or surgical neurectomy preferred?",
+  "options": [
+    "Orthotic offloading and injection",
+    "Surgical neurectomy"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with symptomatic, uncomplicated Morton's neuroma, is orthotic offloading/corticosteroid injection or surgical neurectomy preferred?\nOptions:\n  1. Orthotic offloading and injection\n  2. Surgical neurectomy",
+  "label": "settled",
+  "label_rationale": "Conservative measures manage most cases, but surgical neurectomy has a clear role in refractory neuromas that fail conservative care, so the choice is genuinely patient-dependent.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "uncomplicated-morton-neuroma-orthotics-vs-neurectomy",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "md_adjudication",
+    "legacy_body_region": "foot_ankle",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — Morton's neuroma management shows guideline discordance and practice variation between conservative-first and early-surgical approaches, with no famous landmark trial or eponymous debate defining the controversy."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Conservative measures first, surgery reserved for refractory cases, is a well-established stepwise pathway, not genuine equipoise. Remove from contested list. | Claude second opinion: Agree. Conservative-first with neurectomy reserved for refractory symptoms is a well-established stepwise pathway."
+    }
+  ]
+}

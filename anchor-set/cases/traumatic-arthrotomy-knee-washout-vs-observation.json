@@ -1,0 +1,33 @@
+{
+  "id": "traumatic-arthrotomy-knee-washout-vs-observation",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a traumatic wound demonstrating joint penetration (arthrotomy), is nonoperative wound care or urgent surgical joint washout preferred?",
+  "options": [
+    "Nonoperative wound care",
+    "Urgent surgical joint washout"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a traumatic wound demonstrating joint penetration (arthrotomy), is nonoperative wound care or urgent surgical joint washout preferred?\nOptions:\n  1. Nonoperative wound care\n  2. Urgent surgical joint washout",
+  "label": "settled",
+  "label_rationale": "Traumatic penetration introduces bacteria directly into the sterile joint space; urgent surgical debridement and irrigation are required to prevent septic arthritis.",
+  "controversy_stratum": "n_a",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "traumatic-arthrotomy-knee-washout-vs-observation",
+    "legacy_expected_equipoise": "settled_operative",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "guideline",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": true,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "deterministic",
+      "notes": "mechanical mapping"
+    }
+  ]
+}

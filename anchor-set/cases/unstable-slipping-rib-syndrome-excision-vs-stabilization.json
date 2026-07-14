@@ -1,0 +1,40 @@
+{
+  "id": "unstable-slipping-rib-syndrome-excision-vs-stabilization",
+  "schema_version": "1.0.0",
+  "decision_point": "In a patient with symptomatic slipping rib syndrome, is excision of the hypermobile costal cartilage segment or surgical plating/stabilization preferred?",
+  "options": [
+    "Excision of costal cartilage",
+    "Surgical costal stabilization"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In a patient with symptomatic slipping rib syndrome, is excision of the hypermobile costal cartilage segment or surgical plating/stabilization preferred?\nOptions:\n  1. Excision of costal cartilage\n  2. Surgical costal stabilization",
+  "label": "evidence_split",
+  "label_rationale": "Segmental excision is simple and long-established but can lead to localized chest wall flaccidity; reconstruction/stabilization preserves chest wall integrity but adds hardware risks.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "unstable-slipping-rib-syndrome-excision-vs-stabilization",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Slipping rib syndrome management lacks high-level comparative evidence; excision and stabilization represent competing philosophies (simplicity vs. structural preservation) with no landmark trials establishing clear superiority, reflecting genuine practice variation without famous public debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

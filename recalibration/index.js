@@ -1,0 +1,151 @@
+#!/usr/bin/env node
+/**
+ * Recalibration loop — the part that survives model upgrades. The threshold is DERIVED here from the
+ * anchor set, never declared in detector code. Level 1 re-fits the cutoff to recover the target
+ * operating point and ships as a RELEASE GATE.
+ *
+ *   node recalibration/index.js --model claude-sonnet-4-6 [--from artifacts|panel-runs] [--dry-run]
+ *
+ * Sources of the detector feature vectors:
+ *   --from artifacts   (default) read artifacts/detector/*.json (fresh detector runs)
+ *   --from panel-runs  rehearse on stored benchmark_probe runs (PARTIAL feature set — see replay.js)
+ *
+ * On success, persists {threshold, reference_distribution, calibration_maps, gate_passed,
+ * achieved_*} keyed by (model_version, anchor_set_version). On gate failure it throws loudly.
+ */
+import dotenv from 'dotenv';
+import { loadTargetOperatingPoint, anchorSetVersion } from '../anchor-set/index.js';
+import { deriveThreshold } from './levels/level1.js';
+import { buildLevel2Reference } from './levels/level2.js';
+import { level3FromOutcomePairs } from './levels/level3.js';
+import { buildReport } from './report.js';
+import { assertGate, GateError } from './gate.js';
+import { saveArtifact } from './artifacts.js';
+import { loadDetectorFeatureCases } from './detector-cases.js';
+
+dotenv.config();
+
+/**
+ * Core entry point (also unit-testable): derive + gate + assemble the artifact.
+ *
+ * Level 1 (deriveThreshold) is the GATE and is always run. Level 2 (percentile/z-score reference) is
+ * additive and always persisted so a live case can be percentile-mapped against this model version.
+ * Level 3 (per-agent Platt/isotonic) is only populated when an outcome signal is supplied via
+ * `outcomePairs` (e.g. from a masked-evidence run) — until then calibration_maps stays null. Neither
+ * Level 2 nor Level 3 touches the threshold or the gate.
+ * @param {string} modelVersion
+ * @param {string} anchorSetVer
+ * @param {{cases:Array, target:object, partial?:object, outcomePairs?:Array}} inputs - cases already carry {label, absolute, pediatric, features}
+ * @returns {{threshold, reference_distribution, percentile_reference, calibration_maps, gate_passed, achieved_sensitivity, achieved_specificity, model_version, anchor_set_version, partial}}
+ */
+export function recalibrate(modelVersion, anchorSetVer, { cases, target, partial = null, outcomePairs = null }) {
+  const derived = deriveThreshold(cases, target);
+  const report = buildReport(cases, derived.threshold, target);
+  const artifact = {
+    model_version: modelVersion,
+    anchor_set_version: anchorSetVer,
+    threshold: derived.threshold,
+    reference_distribution: derived.reference_distribution,
+    percentile_reference: buildLevel2Reference(derived.reference_distribution), // Level 2: pooled per-feature reference
+    calibration_maps: outcomePairs ? level3FromOutcomePairs(outcomePairs).calibration_maps : null, // Level 3: needs an outcome signal
+    gate_passed: derived.gate_passed,
+    achieved_sensitivity: derived.achieved_sensitivity,
+    achieved_specificity: derived.achieved_specificity,
+    coverage: derived.coverage,
+    sweep_size: derived.sweep_size,
+    report, // per-class sensitivity + Wilson CIs + entropy-lift ablation (reporting, not gating)
+    partial,
+  };
+  return artifact;
+}
+
+async function main() {
+  const argv = process.argv.slice(2);
+  const model = argv.includes('--model') ? argv[argv.indexOf('--model') + 1] : (process.env.CLAUDE_MODEL || 'claude-sonnet-4-6');
+  const from = argv.includes('--from') ? argv[argv.indexOf('--from') + 1] : 'artifacts';
+  const dryRun = argv.includes('--dry-run');
+  const outcomesPath = argv.includes('--outcomes') ? argv[argv.indexOf('--outcomes') + 1] : null;
+
+  const cfg = loadTargetOperatingPoint();
+  const target = { targetSensitivity: cfg.target_sensitivity, minSpecificity: cfg.min_specificity };
+  const anchorVer = anchorSetVersion();
+
+  let cases;
+  let partial = null;
+  if (from === 'panel-runs') {
+    const sql = (await import('../src/utils/db.js')).default;
+    if (!sql) { console.error('DATABASE_URL not set — --from panel-runs needs the DB.'); process.exit(1); }
+    const { replayFromPanelRuns } = await import('./replay.js');
+    ({ cases, partial } = await replayFromPanelRuns(sql));
+  } else {
+    cases = loadDetectorFeatureCases();
+    if (cases.length === 0) {
+      console.error('no detector artifacts in artifacts/detector/ — run `node detector/index.js --submit …` first, or use --from panel-runs.');
+      process.exit(1);
+    }
+  }
+
+  // Level 3 outcome signal (optional): per-agent (confidence, correct) pairs from a masked-evidence run.
+  let outcomePairs = null;
+  if (outcomesPath) {
+    const { outcomePairsFromMaskedArtifact } = await import('./outcome-from-masked.js');
+    outcomePairs = outcomePairsFromMaskedArtifact(outcomesPath);
+  }
+
+  console.log(`recalibrate: model=${model}, anchor_set=${anchorVer}, from=${from}, ${cases.length} case(s)`);
+  console.log(`  target_sensitivity=${target.targetSensitivity}, min_specificity=${target.minSpecificity}`);
+  if (partial) console.log(`  ⚠︎ PARTIAL feature set (${partial.source}): cannot compute ${partial.not_computable.join('; ')}`);
+  if (outcomePairs) console.log(`  Level 3 outcome signal: ${outcomePairs.length} (confidence, correct) pairs from ${outcomesPath}`);
+
+  const artifact = recalibrate(model, anchorVer, { cases, target, partial, outcomePairs });
+  if (artifact.calibration_maps) {
+    const pa = artifact.calibration_maps.per_agent || {};
+    const sk = artifact.calibration_maps.skipped || {};
+    // Roster agents that produced zero committed pairs (e.g. an agent that always defers on masked
+    // evidence) never reach the fitter — record them so calibration coverage is explicit, not silent.
+    const { AGENTS } = await import('../detector/grid.js');
+    const uncalibrated = AGENTS.filter((a) => !pa[a] && !sk[a]);
+    if (uncalibrated.length) artifact.calibration_maps.uncalibrated = uncalibrated;
+    const degenerate = Object.entries(pa).filter(([, m]) => m.degenerate).map(([a]) => a);
+    console.log(`\n  Level 3 per-agent calibration: fitted [${Object.keys(pa).join(', ') || 'none'}]${Object.keys(sk).length ? `, skipped [${Object.keys(sk).join(', ')}]` : ''}${uncalibrated.length ? `, uncalibrated/no-commit [${uncalibrated.join(', ')}]` : ''}`);
+    if (degenerate.length) console.log(`  ⚠︎ DEGENERATE calibration (no error variation → P≈const, non-discriminative): [${degenerate.join(', ')}] — masked-evidence commits were ~100% correct; needs a harder outcome set to calibrate.`);
+  }
+  console.log(`\n  derived threshold: modal_variance>=${artifact.threshold.between_archetype_modal_variance.toFixed(4)} OR entropy>=${artifact.threshold.within_archetype_stance_entropy.toFixed(4)}`);
+  console.log(`  achieved: sensitivity=${artifact.achieved_sensitivity.toFixed(3)}, specificity=${artifact.achieved_specificity.toFixed(3)} (over n=${artifact.coverage.should_contest_n} should-contest / ${artifact.coverage.settled_control_n} settled controls)`);
+  console.log(`  equivalent-options lability coverage: ${artifact.coverage.equivalent_options_lability_covered}/${artifact.coverage.equivalent_options_n}`);
+
+  const rep = artifact.report;
+  const pct = (x) => (x * 100).toFixed(1);
+  const ci = (w) => `${pct(w.p)}% [${pct(w.lo)}–${pct(w.hi)}], n=${w.n}`;
+  console.log('\n  per-class sensitivity (Wilson 95% CI):');
+  console.log(`    patient_dependent: ${ci(rep.per_class_sensitivity.patient_dependent)}`);
+  console.log(`    evidence_split:    ${ci(rep.per_class_sensitivity.evidence_split)}`);
+  console.log(`    specificity (settled controls): ${ci(rep.specificity)}`);
+  const el = rep.entropy_lift.evidence_split_at_operating_point;
+  console.log(`  entropy lift on evidence_split: recall_full=${pct(el.recall_full)}% vs modal_only=${pct(el.recall_modal_only)}% — entropy uniquely catches ${el.entropy_unique_count} case(s)${el.entropy_unique_count ? ` [${el.entropy_unique_ids.join(', ')}]` : ''}`);
+  const mo = rep.entropy_lift.modal_only_gate;
+  console.log(`  modal-only gate: ${mo.reaches_target ? 'reaches target' : 'CANNOT reach target'} (best-Youden sens=${pct(mo.best_youden.sens)}%/spec=${pct(mo.best_youden.spec)}%)`);
+
+  if (!dryRun) {
+    const p = saveArtifact(model, anchorVer, artifact);
+    console.log(`  ✓ artifact saved: ${p}`);
+  } else {
+    console.log('  (dry-run — artifact not persisted)');
+  }
+
+  try {
+    assertGate(artifact, target, { modelVersion: model, anchorSetVersion: anchorVer });
+    console.log('\nGATE PASSED ✅ — this model version meets the target on the anchor set.');
+    process.exit(0);
+  } catch (e) {
+    if (e instanceof GateError) {
+      console.error(`\n${e.message}`);
+      process.exit(2);
+    }
+    throw e;
+  }
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => { console.error('\nRECALIBRATION FAILED ❌', err); process.exit(1); });
+}

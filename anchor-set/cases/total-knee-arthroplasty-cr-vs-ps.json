@@ -1,0 +1,40 @@
+{
+  "id": "total-knee-arthroplasty-cr-vs-ps",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult undergoing total knee arthroplasty, is a cruciate-retaining (CR) or posterior-stabilized (PS) design preferred?",
+  "options": [
+    "Cruciate-retaining design",
+    "Posterior-stabilized design"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult undergoing total knee arthroplasty, is a cruciate-retaining (CR) or posterior-stabilized (PS) design preferred?\nOptions:\n  1. Cruciate-retaining design\n  2. Posterior-stabilized design",
+  "label": "equivalent_options",
+  "label_rationale": "CR preserves natural kinematics and bone stock, while PS provides predictable stability and easier balancing; long-term functional and implant survival outcomes are equivalent.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "total-knee-arthroplasty-cr-vs-ps",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "knee",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — CR versus PS in TKA represents a genuine equipoise with equivalent long-term outcomes and implant survival, yet lacks a famous landmark trial or public controversy—instead reflecting persistent practice variation and guideline discordance among experienced surgeons."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

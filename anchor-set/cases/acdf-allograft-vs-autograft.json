@@ -1,0 +1,40 @@
+{
+  "id": "acdf-allograft-vs-autograft",
+  "schema_version": "1.0.0",
+  "decision_point": "During ACDF, is structural allograft bone with plating or autogenous iliac crest bone graft (ICBG) preferred?",
+  "options": [
+    "Structural allograft bone graft",
+    "Autogenous iliac crest bone graft"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: During ACDF, is structural allograft bone with plating or autogenous iliac crest bone graft (ICBG) preferred?\nOptions:\n  1. Structural allograft bone graft\n  2. Autogenous iliac crest bone graft",
+  "label": "equivalent_options",
+  "label_rationale": "Autograft (ICBG) provides the highest fusion rate but is associated with severe, chronic donor-site pain; allograft avoids harvest morbidity but has a slightly higher nonunion rate.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "acdf-allograft-vs-autograft",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "spine",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Both options represent genuine trade-offs (autograft superior fusion rates vs. allograft avoidance of donor-site morbidity) with no landmark trial definitively settling the question, making this a quietly contested practice variation where randomization would be ethically defensible."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "ratified",
+      "proposed_by": "human",
+      "notes": "ratified as proposed"
+    }
+  ]
+}

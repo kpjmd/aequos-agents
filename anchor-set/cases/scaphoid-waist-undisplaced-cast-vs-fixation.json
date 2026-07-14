@@ -1,0 +1,40 @@
+{
+  "id": "scaphoid-waist-undisplaced-cast-vs-fixation",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with an acute scan-confirmed undisplaced scaphoid waist fracture, is cast immobilization or percutaneous screw fixation preferred?",
+  "options": [
+    "Cast immobilization",
+    "Percutaneous screw fixation"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with an acute scan-confirmed undisplaced scaphoid waist fracture, is cast immobilization or percutaneous screw fixation preferred?\nOptions:\n  1. Cast immobilization\n  2. Percutaneous screw fixation",
+  "label": "evidence_split",
+  "label_rationale": "The SWIFT trial showed no difference in long-term functional recovery or nonunion rates between groups, making initial cast immobilization highly cost-effective; surgery provides faster early mobilization but adds surgical risks.",
+  "controversy_stratum": "editorialized",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "scaphoid-waist-undisplaced-cast-vs-fixation",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "conservative_vs_operative",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "stratum via llm_haiku — The SWIFT trial demonstrated equipoise between cast immobilization and percutaneous screw fixation for undisplaced scaphoid waist fractures with equivalent long-term outcomes, but this represents guideline discordance and practice variation rather than a famous editorialized debate."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: SWIFT trial is a genuine head-to-head equipoise trial that generated real practice controversy — editorialized, and arguably evidence_split given the direct RCT. | Claude second opinion: Partial disagree. SWIFT showed equipoise/no meaningful difference in union outcomes rather than two trials pointing in opposite directions -- by the logic used elsewhere in this set (e.g., DRAFFT -> equivalent_options), that pattern usually maps to equivalent_options or patient_dependent (occupation/sport timeline vs. cast tolerance), not evidence_split. I'd suggest patient_dependent · editorialized as a better fit than evidence_split · editorialized, though I agree the topic is more publicized than 'quiet.'"
+    }
+  ]
+}

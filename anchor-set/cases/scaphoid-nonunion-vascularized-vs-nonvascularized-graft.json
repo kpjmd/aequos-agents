@@ -1,0 +1,40 @@
+{
+  "id": "scaphoid-nonunion-vascularized-vs-nonvascularized-graft",
+  "schema_version": "1.0.0",
+  "decision_point": "In an adult with a scaphoid proximal pole nonunion, is vascularized or non-vascularized bone grafting preferred?",
+  "options": [
+    "Non-vascularized bone graft",
+    "Vascularized bone graft"
+  ],
+  "clinical_vignette": "Typical adult patient for whom this decision arises (no atypical comorbidities or contraindications).\n\nDecision: In an adult with a scaphoid proximal pole nonunion, is vascularized or non-vascularized bone grafting preferred?\nOptions:\n  1. Non-vascularized bone graft\n  2. Vascularized bone graft",
+  "label": "patient_dependent",
+  "label_rationale": "Vascularized grafts theoretically enhance healing in avascular segments, but clinical trials show variable benefit over traditional non-vascularized grafting techniques.",
+  "controversy_stratum": "quietly_contested",
+  "source_citations": [],
+  "provenance": {
+    "legacy_slug": "scaphoid-nonunion-vascularized-vs-nonvascularized-graft",
+    "legacy_expected_equipoise": "genuine_equipoise",
+    "legacy_decision_type": "which_operation",
+    "legacy_label_provenance": "literature",
+    "legacy_body_region": "wrist_hand",
+    "legacy_is_operative": true,
+    "absolute_indication": false,
+    "is_pediatric": false
+  },
+  "reviews": [
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": null,
+      "review_status": "provisional",
+      "proposed_by": "llm_haiku",
+      "notes": "which-option label stratum via llm_haiku — Vascularized grafts have theoretical advantages for proximal pole nonunions due to compromised blood supply, but clinical trial evidence shows variable and inconsistent superiority over non-vascularized grafting, creating genuine uncertainty about which approach yields better outcomes."
+    },
+    {
+      "reviewer": "kpjohnsonmd",
+      "review_date": "2026-07-09",
+      "review_status": "corrected",
+      "proposed_by": "human",
+      "notes": "auditor reasoning: Choice is dictated by documented proximal-pole vascularity (MRI/intraop bleeding), not an unresolved literature conflict. | Claude second opinion: Agree. Documented AVN status on imaging or intraoperative bleeding is the concrete decision driver, not an open question."
+    }
+  ]
+}
