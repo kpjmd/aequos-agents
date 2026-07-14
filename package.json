@@ -11,6 +11,7 @@
     "seed:equipoise": "node scripts/seed-equipoise.js",
     "seed:anchor-overlay": "node scripts/seed-anchor-overlay.js",
     "benchmark:probe": "node scripts/benchmark-probe.js",
+    "screen:vignette": "node scripts/screen-vignette.js",
     "anchor-set:migrate": "node anchor-set/scripts/migrate-from-csv.mjs",
     "anchor-set:validate": "node anchor-set/scripts/validate.mjs",
     "anchor-set:manifest": "node anchor-set/scripts/build-manifest.mjs",
